@@ -31,6 +31,7 @@ const cadastrosSub = [
   { slug: "cadastros-funcoes", label: "Funções", icon: UserCog, href: "/cadastros/funcoes" },
   { slug: "cadastros-procedimentos", label: "Procedimentos", icon: BookOpen, href: "/cadastros/procedimentos" },
   { slug: "cadastros-categorias-os", label: "Categorias de OS", icon: ClipboardList, href: "/cadastros/categorias-os" },
+  { slug: "cadastros-turnos", label: "Turnos de trabalho", icon: Clock, href: "/cadastros/turnos" },
   { slug: "cadastros-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/cadastros/escalas" },
   { slug: "cadastros-usuarios", label: "Usuários", icon: ShieldCheck, href: "/usuarios" },
   { slug: "cadastros-perfis", label: "Perfis de acesso", icon: Shield, href: "/perfis" },

@@ -1352,3 +1352,127 @@ export async function updatePunchAction(
   if (!response.ok) return { ok: false, error: "Erro ao corrigir batida." };
   return { ok: true, data: await response.json() };
 }
+
+// ── Turnos e Calendário de Escala ──
+
+export interface Shift {
+  id: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  break_start: string | null;
+  break_end: string | null;
+  tolerance_minutes: number;
+  color: string;
+  active: boolean;
+}
+
+export interface CalendarEntry {
+  date: string;
+  user_id: number;
+  user_name: string;
+  sector_id: number | null;
+  sector_name: string | null;
+  shift_id: number | null;
+  shift_name: string | null;
+  shift_color: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  source: string;
+}
+
+export async function fetchShifts(): Promise<Shift[]> {
+  const response = await authedFetch("/timeclock/shifts");
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createShiftAction(body: {
+  name: string;
+  start_time: string;
+  end_time: string;
+  break_start?: string | null;
+  break_end?: string | null;
+  tolerance_minutes?: number;
+  color?: string;
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/shifts", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao criar turno." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function updateShiftAction(
+  id: number,
+  body: Partial<{
+    name: string;
+    start_time: string;
+    end_time: string;
+    break_start: string | null;
+    break_end: string | null;
+    tolerance_minutes: number;
+    color: string;
+    active: boolean;
+  }>,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/shifts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao atualizar turno." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteShiftAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/shifts/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir turno." };
+  return { ok: true };
+}
+
+export async function fetchCalendar(params: {
+  start: string;
+  end: string;
+  userId?: number;
+  sectorId?: number;
+  shiftId?: number;
+}): Promise<CalendarEntry[]> {
+  const qs = new URLSearchParams();
+  qs.set("start", params.start);
+  qs.set("end", params.end);
+  if (params.userId) qs.set("user_id", String(params.userId));
+  if (params.sectorId) qs.set("sector_id", String(params.sectorId));
+  if (params.shiftId) qs.set("shift_id", String(params.shiftId));
+  const response = await authedFetch(`/timeclock/schedule?${qs.toString()}`);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function setScheduleDayAction(
+  userId: number,
+  date: string,
+  body: { shift_id?: number | null; notes?: string },
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/schedule/${userId}/${date}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao atualizar dia." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function generateScheduleAction(body: {
+  user_ids: number[];
+  shift_id: number;
+  start_date: string;
+  end_date: string;
+  pattern: { type: "weekly"; weekdays: number[] } | { type: "rotating"; work_days: number; off_days: number };
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/schedule/generate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao gerar escala." };
+  return { ok: true, data: await response.json() };
+}

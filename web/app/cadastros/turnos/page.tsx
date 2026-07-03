@@ -1,9 +1,9 @@
 import { AppLayout } from "@/components/app-layout";
 import { currentTenantUser } from "@/lib/api";
 import { redirect } from "next/navigation";
-import { ScheduleManager } from "./manager";
+import { ShiftManager } from "./manager";
 
-export default async function EscalasPage() {
+export default async function TurnosPage() {
   try {
     const user = await currentTenantUser();
     return (
@@ -11,11 +11,11 @@ export default async function EscalasPage() {
         <header className="module-heading">
           <div>
             <p className="eyebrow">Cadastros</p>
-            <h1>Escalas de trabalho</h1>
-            <p>Defina o horário previsto de cada funcionário por dia da semana.</p>
+            <h1>Turnos de trabalho</h1>
+            <p>Defina templates de turnos (Manhã, Tarde, Noite, etc.) para usar na escala.</p>
           </div>
         </header>
-        <ScheduleManager user={user} />
+        <ShiftManager user={user} />
       </AppLayout>
     );
   } catch (error) {
