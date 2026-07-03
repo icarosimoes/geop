@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -11,8 +11,10 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -775,3 +777,80 @@ class LegacyImportRun(Base):
     report: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ---------------------------------------------------------------------------
+# Ponto eletrônico / Escala de trabalho
+# ---------------------------------------------------------------------------
+
+
+class WorkSchedule(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "work_schedules"
+    __table_args__ = (
+        UniqueConstraint("company_id", "user_id", "weekday", name="uq_work_schedules_user_day"),
+        Index("ix_work_schedules_user", "company_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    weekday: Mapped[int] = mapped_column(SmallInteger)  # 0=segunda ... 6=domingo
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+    break_start: Mapped[time | None] = mapped_column(Time)
+    break_end: Mapped[time | None] = mapped_column(Time)
+    tolerance_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class TimeClockDevice(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "time_clock_devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255))
+    model: Mapped[str] = mapped_column(String(40), default="control_id")
+    serial_number: Mapped[str | None] = mapped_column(String(120))
+    location_id: Mapped[int | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="SET NULL"),
+    )
+    webhook_token: Mapped[str] = mapped_column(String(64), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class TimeClockEnrollment(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "time_clock_enrollments"
+    __table_args__ = (
+        UniqueConstraint("company_id", "external_id", name="uq_timeclock_enrollment_external"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    external_id: Mapped[str] = mapped_column(String(80))
+
+
+class TimePunch(Base, TenantMixin):
+    __tablename__ = "time_punches"
+    __table_args__ = (
+        Index("ix_time_punches_user_date", "company_id", "user_id", "punched_at"),
+        UniqueConstraint(
+            "device_id", "external_event_id", name="uq_time_punches_device_event"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("time_clock_devices.id", ondelete="SET NULL"),
+    )
+    punched_at: Mapped[datetime] = mapped_column(DateTime)
+    punch_type: Mapped[str | None] = mapped_column(String(10))
+    source: Mapped[str] = mapped_column(String(20), default="device")
+    external_event_id: Mapped[str | None] = mapped_column(String(120))
+    status: Mapped[str | None] = mapped_column(String(20))
+    raw_payload: Mapped[dict | None] = mapped_column(JSON)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

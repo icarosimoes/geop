@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  Bell, BookOpen, Building2, ChevronDown,
-  ClipboardCheck, ClipboardList, FileClock, FileText, Home,
-  MapPin, Menu, Package, PanelLeftClose, PanelLeftOpen,
+  Bell, BookOpen, Building2, CalendarClock, ChevronDown,
+  ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileText, Home,
+  Link2, MapPin, Menu, Package, PanelLeftClose, PanelLeftOpen,
   Receipt, Settings, Shield, ShieldCheck, Timer, UserCog, Users, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,8 +31,15 @@ const cadastrosSub = [
   { slug: "cadastros-funcoes", label: "Funções", icon: UserCog, href: "/cadastros/funcoes" },
   { slug: "cadastros-procedimentos", label: "Procedimentos", icon: BookOpen, href: "/cadastros/procedimentos" },
   { slug: "cadastros-categorias-os", label: "Categorias de OS", icon: ClipboardList, href: "/cadastros/categorias-os" },
+  { slug: "cadastros-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/cadastros/escalas" },
   { slug: "cadastros-usuarios", label: "Usuários", icon: ShieldCheck, href: "/usuarios" },
   { slug: "cadastros-perfis", label: "Perfis de acesso", icon: Shield, href: "/perfis" },
+];
+
+const pontoSub = [
+  { slug: "ponto-batidas", label: "Batidas", icon: Clock, href: "/ponto" },
+  { slug: "ponto-dispositivos", label: "Dispositivos", icon: Cpu, href: "/ponto/dispositivos" },
+  { slug: "ponto-vinculos", label: "Vínculos", icon: Link2, href: "/ponto/vinculos" },
 ];
 
 export function AppLayout({ user, children }: { user: TenantUser; children: ReactNode }) {
@@ -47,8 +54,11 @@ export function AppLayout({ user, children }: { user: TenantUser; children: Reac
     : currentSlug === "cadastros" && pathParts[1]
     ? `cadastros-${pathParts[1]}`
     : currentSlug === "cadastros" ? "cadastros" : "";
+  const isPontoPage = currentSlug === "ponto";
+  const pontoSubSlug = isPontoPage ? `ponto-${pathParts[1] ?? "batidas"}` : "";
   const [collapsed, setCollapsed] = useState(false);
   const [cadastrosOpen, setCadastrosOpen] = useState(isCadastrosPage);
+  const [pontoOpen, setPontoOpen] = useState(isPontoPage);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [panel, setPanel] = useState<"notifications" | "profile" | null>(null);
 
@@ -88,6 +98,20 @@ export function AppLayout({ user, children }: { user: TenantUser; children: Reac
           {cadastrosOpen && !collapsed && cadastrosSub.map(({ slug, label, icon: SubIcon, href }) => (
             <Link key={slug} href={href} className={`nav-item nav-sub-item ${cadastrosSubSlug === slug ? "active" : ""}`} onClick={() => setMobileMenu(false)}>
               {SubIcon ? <SubIcon size={16} aria-hidden="true" /> : <span className="nav-sub-dot" />}
+              <span>{label}</span>
+            </Link>
+          ))}
+          <button
+            className={`nav-item ${isPontoPage ? "active" : ""}`}
+            onClick={() => setPontoOpen((v) => !v)}
+            title={collapsed ? "Ponto" : undefined}
+          >
+            <Clock size={19} aria-hidden="true" />
+            {!collapsed && <><span>Ponto</span><ChevronDown size={14} className={`nav-chevron ${pontoOpen ? "open" : ""}`} /></>}
+          </button>
+          {pontoOpen && !collapsed && pontoSub.map(({ slug, label, icon: SubIcon, href }) => (
+            <Link key={slug} href={href} className={`nav-item nav-sub-item ${pontoSubSlug === slug ? "active" : ""}`} onClick={() => setMobileMenu(false)}>
+              <SubIcon size={16} aria-hidden="true" />
               <span>{label}</span>
             </Link>
           ))}

@@ -1170,3 +1170,185 @@ export async function deleteCategoryAction(name: string): Promise<MutationResult
   if (!response.ok) return { ok: false, error: "Erro ao excluir categoria." };
   return { ok: true };
 }
+
+// --- Ponto eletrônico / Escala de trabalho ---
+
+export interface WorkScheduleEntry {
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  break_start?: string | null;
+  break_end?: string | null;
+  tolerance_minutes: number;
+}
+
+export interface WorkScheduleWeek {
+  user_id: number;
+  entries: WorkScheduleEntry[];
+}
+
+export async function fetchWorkSchedule(userId: number): Promise<WorkScheduleWeek | null> {
+  const response = await authedFetch(`/timeclock/schedules/${userId}`);
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function saveWorkScheduleAction(
+  userId: number,
+  entries: WorkScheduleEntry[],
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/schedules/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify({ entries }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao salvar escala." };
+  return { ok: true, data: await response.json() };
+}
+
+export interface TimeClockDevice {
+  id: number;
+  name: string;
+  model: string;
+  serial_number: string | null;
+  location_id: number | null;
+  location: string | null;
+  webhook_token: string;
+  active: boolean;
+}
+
+export interface DevicePayload {
+  name: string;
+  model?: string;
+  serial_number?: string | null;
+  location_id?: number | null;
+}
+
+export async function fetchDevices(): Promise<TimeClockDevice[]> {
+  const response = await authedFetch("/timeclock/devices");
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createDeviceAction(body: DevicePayload): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/devices", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao criar dispositivo." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function updateDeviceAction(
+  id: number,
+  body: Partial<DevicePayload> & { active?: boolean },
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/devices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao atualizar dispositivo." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteDeviceAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/devices/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir dispositivo." };
+  return { ok: true };
+}
+
+export interface TimeClockEnrollment {
+  id: number;
+  user_id: number;
+  user_name: string;
+  external_id: string;
+}
+
+export async function fetchEnrollments(): Promise<TimeClockEnrollment[]> {
+  const response = await authedFetch("/timeclock/enrollments");
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createEnrollmentAction(
+  userId: number,
+  externalId: string,
+): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/enrollments", {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId, external_id: externalId }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao criar vínculo." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteEnrollmentAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/enrollments/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir vínculo." };
+  return { ok: true };
+}
+
+export interface TimePunch {
+  id: number;
+  user_id: number | null;
+  user_name: string | null;
+  device_id: number | null;
+  device_name: string | null;
+  punched_at: string;
+  punch_type: string | null;
+  source: string;
+  status: string | null;
+  notes: string | null;
+}
+
+export interface TimePunchListResponse {
+  items: TimePunch[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchPunches(params: {
+  page?: number;
+  pageSize?: number;
+  userId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+}): Promise<TimePunchListResponse> {
+  const qs = new URLSearchParams();
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.pageSize ?? 20));
+  if (params.userId) qs.set("user_id", String(params.userId));
+  if (params.dateFrom) qs.set("date_from", params.dateFrom);
+  if (params.dateTo) qs.set("date_to", params.dateTo);
+  if (params.status) qs.set("status", params.status);
+  const response = await authedFetch(`/timeclock/punches?${qs.toString()}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  return response.json();
+}
+
+export async function createManualPunchAction(body: {
+  user_id: number;
+  punched_at: string;
+  punch_type?: string;
+  notes?: string;
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/punches", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao lançar batida." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function updatePunchAction(
+  id: number,
+  body: { punched_at?: string; punch_type?: string; notes?: string },
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/punches/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao corrigir batida." };
+  return { ok: true, data: await response.json() };
+}

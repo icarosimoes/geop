@@ -36,12 +36,16 @@ from app.models.operations import (
     ShiftReport,
     StockItem,
     StockMovement,
+    TimeClockDevice,
+    TimeClockEnrollment,
+    TimePunch,
     WorkDiary,
     WorkDiaryActivity,
     WorkDiaryEquipment,
     WorkDiaryObservation,
     WorkDiaryTeam,
     WorkOrder,
+    WorkSchedule,
 )
 from app.models.platform import (
     CompanySetting,
@@ -99,6 +103,9 @@ __all__ = [
     "StockMovement",
     "Subscription",
     "Sector",
+    "TimeClockDevice",
+    "TimeClockEnrollment",
+    "TimePunch",
     "User",
     "WebhookEvent",
     "WorkDiary",
@@ -107,5 +114,6 @@ __all__ = [
     "WorkDiaryObservation",
     "WorkDiaryTeam",
     "WorkOrder",
+    "WorkSchedule",
     "role_permissions",
 ]
