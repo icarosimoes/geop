@@ -1,24 +1,82 @@
 from datetime import date, datetime, time
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class WorkScheduleEntry(BaseModel):
-    weekday: int
+class ShiftCreate(BaseModel):
+    name: str
     start_time: time
     end_time: time
     break_start: time | None = None
     break_end: time | None = None
     tolerance_minutes: int = 10
+    color: str = "#2563eb"
 
 
-class WorkScheduleWeek(BaseModel):
+class ShiftUpdate(BaseModel):
+    name: str | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    break_start: time | None = None
+    break_end: time | None = None
+    tolerance_minutes: int | None = None
+    color: str | None = None
+    active: bool | None = None
+
+
+class ShiftSummary(BaseModel):
+    id: int
+    name: str
+    start_time: time
+    end_time: time
+    break_start: time | None
+    break_end: time | None
+    tolerance_minutes: int
+    color: str
+    active: bool
+
+
+class CalendarEntry(BaseModel):
+    date: date
     user_id: int
-    entries: list[WorkScheduleEntry]
+    user_name: str
+    sector_id: int | None
+    sector_name: str | None
+    shift_id: int | None
+    shift_name: str | None
+    shift_color: str | None
+    start_time: time | None
+    end_time: time | None
+    source: str
 
 
-class WorkScheduleUpsert(BaseModel):
-    entries: list[WorkScheduleEntry]
+class ScheduleDayUpsert(BaseModel):
+    shift_id: int | None = None
+    notes: str | None = None
+
+
+class WeeklyPattern(BaseModel):
+    type: Literal["weekly"] = "weekly"
+    weekdays: list[int]
+
+
+class RotatingPattern(BaseModel):
+    type: Literal["rotating"] = "rotating"
+    work_days: int
+    off_days: int
+
+
+class ScheduleGenerateRequest(BaseModel):
+    user_ids: list[int]
+    shift_id: int
+    start_date: date
+    end_date: date
+    pattern: Annotated[WeeklyPattern | RotatingPattern, Field(discriminator="type")]
+
+
+class ScheduleGenerateResponse(BaseModel):
+    affected: int
 
 
 class TimeClockDeviceCreate(BaseModel):
@@ -89,19 +147,3 @@ class PunchUpdate(BaseModel):
     punched_at: datetime | None = None
     punch_type: str | None = None
     notes: str | None = None
-
-
-class MonthlySummaryDay(BaseModel):
-    date: date
-    expected_start: time | None
-    expected_end: time | None
-    punches: list[datetime]
-    status: str
-    worked_minutes: int | None
-    delay_minutes: int | None
-
-
-class MonthlySummaryResponse(BaseModel):
-    user_id: int
-    month: str
-    days: list[MonthlySummaryDay]

@@ -31,7 +31,9 @@ from app.models.operations import (
     OccurrenceParticipant,
     PreventivePlan,
     Procedure,
+    ScheduleEntry,
     Sector,
+    Shift,
     ShiftHandoff,
     ShiftReport,
     StockItem,
@@ -45,7 +47,6 @@ from app.models.operations import (
     WorkDiaryObservation,
     WorkDiaryTeam,
     WorkOrder,
-    WorkSchedule,
 )
 from app.models.platform import (
     CompanySetting,
@@ -97,6 +98,8 @@ __all__ = [
     "PreventivePlan",
     "Procedure",
     "Role",
+    "ScheduleEntry",
+    "Shift",
     "ShiftHandoff",
     "ShiftReport",
     "StockItem",
@@ -114,6 +117,5 @@ __all__ = [
     "WorkDiaryObservation",
     "WorkDiaryTeam",
     "WorkOrder",
-    "WorkSchedule",
     "role_permissions",
 ]

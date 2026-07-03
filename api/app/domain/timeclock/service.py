@@ -7,100 +7,290 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
+from app.domain.timeclock.schemas import RotatingPattern, WeeklyPattern
 from app.models import (
     Location,
+    ScheduleEntry,
+    Sector,
+    Shift,
     TimeClockDevice,
     TimeClockEnrollment,
     TimePunch,
     User,
-    WorkSchedule,
 )
 
 WEEKDAY_LABELS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 
 # ---------------------------------------------------------------------------
-# Escala de trabalho
+# Turnos
 # ---------------------------------------------------------------------------
 
 
-async def get_schedule_for_user(
-    session: AsyncSession, company_id: int, user_id: int
-) -> list[WorkSchedule]:
+async def list_shifts(session: AsyncSession, company_id: int) -> list[Shift]:
     rows = (
         await session.execute(
-            select(WorkSchedule)
-            .where(
-                WorkSchedule.company_id == company_id,
-                WorkSchedule.user_id == user_id,
-                WorkSchedule.deleted_at.is_(None),
-            )
-            .order_by(WorkSchedule.weekday)
+            select(Shift)
+            .where(Shift.company_id == company_id, Shift.deleted_at.is_(None))
+            .order_by(Shift.name)
         )
     ).scalars()
     return list(rows)
 
 
-async def upsert_week(
+async def create_shift(
     session: AsyncSession,
     company_id: int,
     actor_id: int,
-    user_id: int,
-    entries: list[dict],
-) -> list[WorkSchedule]:
-    # Inclui linhas com soft delete: a constraint única em
-    # (company_id, user_id, weekday) não distingue deleted_at, então um dia
-    # reativado precisa reaproveitar a linha existente em vez de inserir uma
-    # nova (que colidiria com a linha antiga apagada).
-    all_rows = (
-        await session.execute(
-            select(WorkSchedule).where(
-                WorkSchedule.company_id == company_id, WorkSchedule.user_id == user_id
-            )
-        )
-    ).scalars()
-    existing = {row.weekday: row for row in all_rows}
-    before = {
-        weekday: f"{row.start_time}-{row.end_time}"
-        for weekday, row in existing.items()
-        if row.deleted_at is None
-    }
-    seen_weekdays = set()
-    for entry in entries:
-        weekday = entry["weekday"]
-        seen_weekdays.add(weekday)
-        row = existing.get(weekday)
-        if row is None:
-            row = WorkSchedule(company_id=company_id, user_id=user_id, weekday=weekday)
-            session.add(row)
-        row.start_time = entry["start_time"]
-        row.end_time = entry["end_time"]
-        row.break_start = entry.get("break_start")
-        row.break_end = entry.get("break_end")
-        row.tolerance_minutes = entry.get("tolerance_minutes", 10)
-        row.active = True
-        row.deleted_at = None
-    for weekday, row in existing.items():
-        if weekday not in seen_weekdays and row.deleted_at is None:
-            row.deleted_at = datetime.now()
-
+    *,
+    name: str,
+    start_time: time,
+    end_time: time,
+    break_start: time | None,
+    break_end: time | None,
+    tolerance_minutes: int,
+    color: str,
+) -> Shift:
+    record = Shift(
+        company_id=company_id,
+        name=name,
+        start_time=start_time,
+        end_time=end_time,
+        break_start=break_start,
+        break_end=break_end,
+        tolerance_minutes=tolerance_minutes,
+        color=color,
+    )
+    session.add(record)
     await session.flush()
-    after = {
-        entry["weekday"]: f"{entry['start_time']}-{entry['end_time']}" for entry in entries
-    }
-    diff = compute_diff(before, after)
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="shift",
+        entity_id=record.id,
+        event_type="create",
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record
+
+
+async def update_shift(
+    session: AsyncSession, company_id: int, actor_id: int, shift_id: int, updates: dict
+) -> Shift | None:
+    record = await session.scalar(
+        select(Shift).where(
+            Shift.id == shift_id, Shift.company_id == company_id, Shift.deleted_at.is_(None)
+        )
+    )
+    if record is None:
+        return None
+    before = {k: str(getattr(record, k)) for k in updates}
+    for field, value in updates.items():
+        setattr(record, field, value)
+    diff = compute_diff(before, {k: str(v) for k, v in updates.items()})
     if diff:
         await record_event(
             session,
             company_id=company_id,
             user_id=actor_id,
-            entity_type="work_schedule",
-            entity_id=user_id,
+            entity_type="shift",
+            entity_id=record.id,
             event_type="update",
             diff=diff,
         )
     await session.commit()
-    return await get_schedule_for_user(session, company_id, user_id)
+    await session.refresh(record)
+    return record
+
+
+async def delete_shift(
+    session: AsyncSession, company_id: int, actor_id: int, shift_id: int
+) -> bool:
+    record = await session.scalar(
+        select(Shift).where(
+            Shift.id == shift_id, Shift.company_id == company_id, Shift.deleted_at.is_(None)
+        )
+    )
+    if record is None:
+        return False
+    record.deleted_at = datetime.now()
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="shift",
+        entity_id=record.id,
+        event_type="delete",
+    )
+    await session.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Calendário de escala
+# ---------------------------------------------------------------------------
+
+
+async def get_calendar(
+    session: AsyncSession,
+    company_id: int,
+    start: date,
+    end: date,
+    *,
+    user_id: int | None = None,
+    sector_id: int | None = None,
+    shift_id: int | None = None,
+) -> list[tuple]:
+    filters = [
+        ScheduleEntry.company_id == company_id,
+        ScheduleEntry.date >= start,
+        ScheduleEntry.date <= end,
+    ]
+    if user_id is not None:
+        filters.append(ScheduleEntry.user_id == user_id)
+    if sector_id is not None:
+        filters.append(User.sector_id == sector_id)
+    if shift_id is not None:
+        filters.append(ScheduleEntry.shift_id == shift_id)
+
+    rows = await session.execute(
+        select(ScheduleEntry, User.name, User.sector_id, Sector.name, Shift)
+        .join(User, User.id == ScheduleEntry.user_id)
+        .outerjoin(Sector, Sector.id == User.sector_id)
+        .outerjoin(Shift, Shift.id == ScheduleEntry.shift_id)
+        .where(*filters)
+        .order_by(ScheduleEntry.date, User.name)
+    )
+    return rows.all()
+
+
+async def set_schedule_day(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    user_id: int,
+    target_date: date,
+    shift_id: int | None,
+    notes: str | None,
+) -> ScheduleEntry:
+    record = await session.scalar(
+        select(ScheduleEntry).where(
+            ScheduleEntry.company_id == company_id,
+            ScheduleEntry.user_id == user_id,
+            ScheduleEntry.date == target_date,
+        )
+    )
+    before = f"{record.shift_id}" if record else None
+    if record is None:
+        record = ScheduleEntry(company_id=company_id, user_id=user_id, date=target_date)
+        session.add(record)
+    record.shift_id = shift_id
+    record.source = "manual"
+    record.notes = notes
+    await session.flush()
+    diff = compute_diff({"shift_id": before}, {"shift_id": f"{shift_id}"})
+    if diff:
+        await record_event(
+            session,
+            company_id=company_id,
+            user_id=actor_id,
+            entity_type="schedule_entry",
+            entity_id=record.id,
+            event_type="update",
+            diff=diff,
+        )
+    await session.commit()
+    await session.refresh(record)
+    return record
+
+
+def _is_working_day(
+    pattern: WeeklyPattern | RotatingPattern, start_date: date, target_date: date
+) -> bool:
+    if isinstance(pattern, WeeklyPattern):
+        return target_date.weekday() in pattern.weekdays
+    cycle = pattern.work_days + pattern.off_days
+    offset = (target_date - start_date).days % cycle
+    return offset < pattern.work_days
+
+
+async def generate_schedule(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    *,
+    user_ids: list[int],
+    shift_id: int,
+    start_date: date,
+    end_date: date,
+    pattern: WeeklyPattern | RotatingPattern,
+) -> int:
+    affected = 0
+    for uid in user_ids:
+        existing_rows = (
+            await session.execute(
+                select(ScheduleEntry).where(
+                    ScheduleEntry.company_id == company_id,
+                    ScheduleEntry.user_id == uid,
+                    ScheduleEntry.date >= start_date,
+                    ScheduleEntry.date <= end_date,
+                )
+            )
+        ).scalars()
+        existing = {row.date: row for row in existing_rows}
+
+        current = start_date
+        while current <= end_date:
+            record = existing.get(current)
+            if record is not None and record.source == "manual":
+                current += timedelta(days=1)
+                continue
+            on_shift = _is_working_day(pattern, start_date, current)
+            if record is None:
+                record = ScheduleEntry(company_id=company_id, user_id=uid, date=current)
+                session.add(record)
+            record.shift_id = shift_id if on_shift else None
+            record.source = "generated"
+            affected += 1
+            current += timedelta(days=1)
+
+    if affected:
+        await record_event(
+            session,
+            company_id=company_id,
+            user_id=actor_id,
+            entity_type="schedule_entry",
+            entity_id=shift_id,
+            event_type="generate",
+            diff={
+                "user_ids": {"from": None, "to": user_ids},
+                "period": {"from": str(start_date), "to": str(end_date)},
+            },
+        )
+    await session.commit()
+    return affected
+
+
+async def _resolve_schedule_for_date(
+    session: AsyncSession, company_id: int, user_id: int, target_date: date
+) -> tuple[Shift | None, str | None]:
+    entry = await session.scalar(
+        select(ScheduleEntry).where(
+            ScheduleEntry.company_id == company_id,
+            ScheduleEntry.user_id == user_id,
+            ScheduleEntry.date == target_date,
+        )
+    )
+    if entry is None:
+        return None, "unscheduled"
+    if entry.shift_id is None:
+        return None, "day_off"
+    shift = await session.scalar(
+        select(Shift).where(Shift.id == entry.shift_id, Shift.deleted_at.is_(None))
+    )
+    return shift, None
 
 
 # ---------------------------------------------------------------------------
@@ -108,16 +298,14 @@ async def upsert_week(
 # ---------------------------------------------------------------------------
 
 
-def evaluate_status(
-    entry: WorkSchedule | None, punched_at: datetime, punch_type: str | None
-) -> str:
-    if entry is None:
+def evaluate_status(shift: Shift | None, punched_at: datetime, punch_type: str | None) -> str:
+    if shift is None:
         return "unscheduled"
 
-    tolerance = timedelta(minutes=entry.tolerance_minutes)
+    tolerance = timedelta(minutes=shift.tolerance_minutes)
     punch_dt = datetime.combine(punched_at.date(), punched_at.time())
-    start_dt = datetime.combine(punched_at.date(), entry.start_time)
-    end_dt = datetime.combine(punched_at.date(), entry.end_time)
+    start_dt = datetime.combine(punched_at.date(), shift.start_time)
+    end_dt = datetime.combine(punched_at.date(), shift.end_time)
 
     if punch_type == "out":
         return "early_leave" if punch_dt < end_dt - tolerance else "on_time"
@@ -311,20 +499,6 @@ async def delete_enrollment(
 # ---------------------------------------------------------------------------
 
 
-async def _schedule_entry_for(
-    session: AsyncSession, company_id: int, user_id: int, punched_at: datetime
-) -> WorkSchedule | None:
-    return await session.scalar(
-        select(WorkSchedule).where(
-            WorkSchedule.company_id == company_id,
-            WorkSchedule.user_id == user_id,
-            WorkSchedule.weekday == punched_at.weekday(),
-            WorkSchedule.active.is_(True),
-            WorkSchedule.deleted_at.is_(None),
-        )
-    )
-
-
 async def ingest_punch(
     session: AsyncSession,
     *,
@@ -354,8 +528,10 @@ async def ingest_punch(
     )
     status = "unscheduled"
     if user_id:
-        entry = await _schedule_entry_for(session, company_id, user_id, punched_at)
-        status = evaluate_status(entry, punched_at, punch_type)
+        shift, forced_status = await _resolve_schedule_for_date(
+            session, company_id, user_id, punched_at.date()
+        )
+        status = forced_status or evaluate_status(shift, punched_at, punch_type)
 
     record = TimePunch(
         company_id=company_id,
@@ -397,8 +573,10 @@ async def create_manual_punch(
     punch_type: str | None,
     notes: str | None,
 ) -> TimePunch:
-    entry = await _schedule_entry_for(session, company_id, user_id, punched_at)
-    status = evaluate_status(entry, punched_at, punch_type)
+    shift, forced_status = await _resolve_schedule_for_date(
+        session, company_id, user_id, punched_at.date()
+    )
+    status = forced_status or evaluate_status(shift, punched_at, punch_type)
     record = TimePunch(
         company_id=company_id,
         user_id=user_id,
@@ -438,8 +616,13 @@ async def update_punch(
     for field, value in updates.items():
         setattr(record, field, value)
     if record.user_id:
-        entry = await _schedule_entry_for(session, company_id, record.user_id, record.punched_at)
-        record.status = evaluate_status(entry, record.punched_at, record.punch_type)
+        shift, forced_status = await _resolve_schedule_for_date(
+            session, company_id, record.user_id, record.punched_at.date()
+        )
+        record.status = (
+            forced_status
+            or evaluate_status(shift, record.punched_at, record.punch_type)
+        )
     diff = compute_diff(before, {k: str(v) for k, v in updates.items()})
     if diff:
         await record_event(
@@ -493,58 +676,3 @@ async def list_punches(
         )
     ).all()
     return rows, total
-
-
-async def monthly_summary(
-    session: AsyncSession, company_id: int, user_id: int, year: int, month: int
-) -> list[dict]:
-    from calendar import monthrange
-
-    schedule_rows = await get_schedule_for_user(session, company_id, user_id)
-    schedule = {row.weekday: row for row in schedule_rows}
-    days_in_month = monthrange(year, month)[1]
-
-    first_day = date(year, month, 1)
-    last_day = date(year, month, days_in_month)
-    rows = (
-        await session.execute(
-            select(TimePunch)
-            .where(
-                TimePunch.company_id == company_id,
-                TimePunch.user_id == user_id,
-                TimePunch.punched_at >= datetime.combine(first_day, time.min),
-                TimePunch.punched_at <= datetime.combine(last_day, time.max),
-            )
-            .order_by(TimePunch.punched_at)
-        )
-    ).scalars()
-    punches_by_day: dict[date, list[TimePunch]] = {}
-    for punch in rows:
-        punches_by_day.setdefault(punch.punched_at.date(), []).append(punch)
-
-    summary = []
-    for day_num in range(1, days_in_month + 1):
-        current = date(year, month, day_num)
-        entry = schedule.get(current.weekday())
-        day_punches = punches_by_day.get(current, [])
-        if entry is None and not day_punches:
-            continue
-        statuses = {p.status for p in day_punches if p.status}
-        if not day_punches:
-            day_status = "absent" if entry else "unscheduled"
-        elif "late" in statuses or "early_leave" in statuses:
-            day_status = "late" if "late" in statuses else "early_leave"
-        else:
-            day_status = "on_time"
-        summary.append(
-            {
-                "date": current,
-                "expected_start": entry.start_time if entry else None,
-                "expected_end": entry.end_time if entry else None,
-                "punches": [p.punched_at for p in day_punches],
-                "status": day_status,
-                "worked_minutes": None,
-                "delay_minutes": None,
-            }
-        )
-    return summary

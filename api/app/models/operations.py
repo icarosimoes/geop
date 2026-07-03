@@ -11,7 +11,6 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
-    SmallInteger,
     String,
     Text,
     Time,
@@ -784,23 +783,39 @@ class LegacyImportRun(Base):
 # ---------------------------------------------------------------------------
 
 
-class WorkSchedule(Base, TenantMixin, TimestampMixin):
-    __tablename__ = "work_schedules"
-    __table_args__ = (
-        UniqueConstraint("company_id", "user_id", "weekday", name="uq_work_schedules_user_day"),
-        Index("ix_work_schedules_user", "company_id", "user_id"),
-    )
+class Shift(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "shifts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    weekday: Mapped[int] = mapped_column(SmallInteger)  # 0=segunda ... 6=domingo
+    name: Mapped[str] = mapped_column(String(80))
     start_time: Mapped[time] = mapped_column(Time)
     end_time: Mapped[time] = mapped_column(Time)
     break_start: Mapped[time | None] = mapped_column(Time)
     break_end: Mapped[time | None] = mapped_column(Time)
     tolerance_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    color: Mapped[str] = mapped_column(String(7), default="#2563eb")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ScheduleEntry(Base, TenantMixin):
+    __tablename__ = "schedule_entries"
+    __table_args__ = (
+        UniqueConstraint("company_id", "user_id", "date", name="uq_schedule_entries_user_date"),
+        Index("ix_schedule_entries_date", "company_id", "date"),
+        Index("ix_schedule_entries_user_date", "company_id", "user_id", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"))
+    source: Mapped[str] = mapped_column(String(20), default="manual")
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class TimeClockDevice(Base, TenantMixin, TimestampMixin):

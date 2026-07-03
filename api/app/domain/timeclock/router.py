@@ -8,10 +8,15 @@ from app.core.dependencies import require_session
 from app.core.permissions import require_permission
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.timeclock.schemas import (
+    CalendarEntry,
     ManualPunchCreate,
-    MonthlySummaryDay,
-    MonthlySummaryResponse,
     PunchUpdate,
+    ScheduleDayUpsert,
+    ScheduleGenerateRequest,
+    ScheduleGenerateResponse,
+    ShiftCreate,
+    ShiftSummary,
+    ShiftUpdate,
     TimeClockDeviceCreate,
     TimeClockDeviceSummary,
     TimeClockDeviceUpdate,
@@ -19,76 +24,181 @@ from app.domain.timeclock.schemas import (
     TimeClockEnrollmentSummary,
     TimePunchListResponse,
     TimePunchSummary,
-    WorkScheduleEntry,
-    WorkScheduleUpsert,
-    WorkScheduleWeek,
 )
 from app.domain.timeclock.service import (
     create_device,
     create_enrollment,
     create_manual_punch,
+    create_shift,
     delete_device,
     delete_enrollment,
-    get_schedule_for_user,
+    delete_shift,
+    generate_schedule,
+    get_calendar,
     list_devices,
     list_enrollments,
     list_punches,
-    monthly_summary,
+    list_shifts,
+    set_schedule_day,
     update_device,
     update_punch,
-    upsert_week,
+    update_shift,
 )
 
 router = APIRouter(prefix="/timeclock", tags=["timeclock"])
 
 
-@router.get("/schedules/{user_id}", response_model=WorkScheduleWeek)
-async def get_schedule_endpoint(
-    user_id: int,
-    user: Annotated[AuthenticatedUser, require_permission("work_schedule.view")],
-    session: Annotated[AsyncSession, Depends(require_session)],
-) -> WorkScheduleWeek:
-    rows = await get_schedule_for_user(session, user.company_id, user_id)
-    return WorkScheduleWeek(
-        user_id=user_id,
-        entries=[
-            WorkScheduleEntry(
-                weekday=row.weekday,
-                start_time=row.start_time,
-                end_time=row.end_time,
-                break_start=row.break_start,
-                break_end=row.break_end,
-                tolerance_minutes=row.tolerance_minutes,
-            )
-            for row in rows
-        ],
+def _shift_summary(shift) -> ShiftSummary:
+    return ShiftSummary(
+        id=shift.id,
+        name=shift.name,
+        start_time=shift.start_time,
+        end_time=shift.end_time,
+        break_start=shift.break_start,
+        break_end=shift.break_end,
+        tolerance_minutes=shift.tolerance_minutes,
+        color=shift.color,
+        active=shift.active,
     )
 
 
-@router.put("/schedules/{user_id}", response_model=WorkScheduleWeek)
-async def put_schedule_endpoint(
-    user_id: int,
-    body: WorkScheduleUpsert,
-    user: Annotated[AuthenticatedUser, require_permission("work_schedule.manage")],
+@router.get("/shifts", response_model=list[ShiftSummary])
+async def list_shifts_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("shift.view")],
     session: Annotated[AsyncSession, Depends(require_session)],
-) -> WorkScheduleWeek:
-    rows = await upsert_week(
-        session, user.company_id, user.id, user_id, [e.model_dump() for e in body.entries]
+) -> list[ShiftSummary]:
+    rows = await list_shifts(session, user.company_id)
+    return [_shift_summary(row) for row in rows]
+
+
+@router.post("/shifts", response_model=ShiftSummary, status_code=201)
+async def create_shift_endpoint(
+    body: ShiftCreate,
+    user: Annotated[AuthenticatedUser, require_permission("shift.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ShiftSummary:
+    record = await create_shift(
+        session,
+        user.company_id,
+        user.id,
+        name=body.name,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        break_start=body.break_start,
+        break_end=body.break_end,
+        tolerance_minutes=body.tolerance_minutes,
+        color=body.color,
     )
-    return WorkScheduleWeek(
+    return _shift_summary(record)
+
+
+@router.patch("/shifts/{shift_id}", response_model=ShiftSummary)
+async def update_shift_endpoint(
+    shift_id: int,
+    body: ShiftUpdate,
+    user: Annotated[AuthenticatedUser, require_permission("shift.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ShiftSummary:
+    updates = body.model_dump(exclude_none=True)
+    record = await update_shift(session, user.company_id, user.id, shift_id, updates)
+    if record is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return _shift_summary(record)
+
+
+@router.delete("/shifts/{shift_id}", status_code=204)
+async def delete_shift_endpoint(
+    shift_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("shift.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    deleted = await delete_shift(session, user.company_id, user.id, shift_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+@router.get("/schedule", response_model=list[CalendarEntry])
+async def get_calendar_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("schedule.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    start: date,
+    end: date,
+    user_id: int | None = None,
+    sector_id: int | None = None,
+    shift_id: int | None = None,
+) -> list[CalendarEntry]:
+    rows = await get_calendar(
+        session,
+        user.company_id,
+        start,
+        end,
         user_id=user_id,
-        entries=[
-            WorkScheduleEntry(
-                weekday=row.weekday,
-                start_time=row.start_time,
-                end_time=row.end_time,
-                break_start=row.break_start,
-                break_end=row.break_end,
-                tolerance_minutes=row.tolerance_minutes,
-            )
-            for row in rows
-        ],
+        sector_id=sector_id,
+        shift_id=shift_id,
     )
+    return [
+        CalendarEntry(
+            date=entry.date,
+            user_id=entry.user_id,
+            user_name=user_name,
+            sector_id=sector_id_val,
+            sector_name=sector_name,
+            shift_id=shift.id if shift else None,
+            shift_name=shift.name if shift else None,
+            shift_color=shift.color if shift else None,
+            start_time=shift.start_time if shift else None,
+            end_time=shift.end_time if shift else None,
+            source=entry.source,
+        )
+        for entry, user_name, sector_id_val, sector_name, shift in rows
+    ]
+
+
+@router.put("/schedule/{user_id}/{target_date}", response_model=CalendarEntry)
+async def set_schedule_day_endpoint(
+    user_id: int,
+    target_date: date,
+    body: ScheduleDayUpsert,
+    user: Annotated[AuthenticatedUser, require_permission("schedule.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> CalendarEntry:
+    await set_schedule_day(
+        session, user.company_id, user.id, user_id, target_date, body.shift_id, body.notes
+    )
+    rows = await get_calendar(session, user.company_id, target_date, target_date, user_id=user_id)
+    entry, user_name, sector_id_val, sector_name, shift = rows[0]
+    return CalendarEntry(
+        date=entry.date,
+        user_id=entry.user_id,
+        user_name=user_name,
+        sector_id=sector_id_val,
+        sector_name=sector_name,
+        shift_id=shift.id if shift else None,
+        shift_name=shift.name if shift else None,
+        shift_color=shift.color if shift else None,
+        start_time=shift.start_time if shift else None,
+        end_time=shift.end_time if shift else None,
+        source=entry.source,
+    )
+
+
+@router.post("/schedule/generate", response_model=ScheduleGenerateResponse)
+async def generate_schedule_endpoint(
+    body: ScheduleGenerateRequest,
+    user: Annotated[AuthenticatedUser, require_permission("schedule.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ScheduleGenerateResponse:
+    affected = await generate_schedule(
+        session,
+        user.company_id,
+        user.id,
+        user_ids=body.user_ids,
+        shift_id=body.shift_id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        pattern=body.pattern,
+    )
+    return ScheduleGenerateResponse(affected=affected)
 
 
 @router.get("/devices", response_model=list[TimeClockDeviceSummary])
@@ -309,20 +419,4 @@ async def update_punch_endpoint(
         source=record.source,
         status=record.status,
         notes=record.notes,
-    )
-
-
-@router.get("/summary/{user_id}", response_model=MonthlySummaryResponse)
-async def monthly_summary_endpoint(
-    user_id: int,
-    user: Annotated[AuthenticatedUser, require_permission("timeclock.view")],
-    session: Annotated[AsyncSession, Depends(require_session)],
-    year: int,
-    month: Annotated[int, Query(ge=1, le=12)],
-) -> MonthlySummaryResponse:
-    days = await monthly_summary(session, user.company_id, user_id, year, month)
-    return MonthlySummaryResponse(
-        user_id=user_id,
-        month=f"{year:04d}-{month:02d}",
-        days=[MonthlySummaryDay(**day) for day in days],
     )
