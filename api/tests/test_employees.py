@@ -13,13 +13,13 @@ EMPLOYEES_URL = "/api/v1/employees"
 async def test_create_and_get_employee(client):
     r = await client.post(
         EMPLOYEES_URL,
-        json={"name": "Maria Souza", "cpf": "11122233344", "phone": "11988887777"},
+        json={"name": "Maria Souza", "cpf": "11122233396", "phone": "11988887777"},
         headers=HEADERS_A,
     )
     assert r.status_code == 201
     employee = r.json()
     assert employee["name"] == "Maria Souza"
-    assert employee["cpf"] == "11122233344"
+    assert employee["cpf"] == "11122233396"
     assert employee["status"] == "active"
     employee_id = employee["id"]
 
@@ -81,14 +81,14 @@ async def test_delete_employee_is_soft_delete(client):
 async def test_cpf_unique_per_company(client):
     r = await client.post(
         EMPLOYEES_URL,
-        json={"name": "Ana Costa", "cpf": "99988877766"},
+        json={"name": "Ana Costa", "cpf": "99988877714"},
         headers=HEADERS_A,
     )
     assert r.status_code == 201
 
     r = await client.post(
         EMPLOYEES_URL,
-        json={"name": "Ana Costa Duplicada", "cpf": "99988877766"},
+        json={"name": "Ana Costa Duplicada", "cpf": "99988877714"},
         headers=HEADERS_A,
     )
     assert r.status_code in (400, 409, 422)
@@ -98,14 +98,14 @@ async def test_cpf_unique_per_company(client):
 async def test_cpf_can_repeat_across_companies(client):
     r = await client.post(
         EMPLOYEES_URL,
-        json={"name": "Funcionário Tenant A", "cpf": "55566677788"},
+        json={"name": "Funcionário Tenant A", "cpf": "55566677720"},
         headers=HEADERS_A,
     )
     assert r.status_code == 201
 
     r = await client.post(
         EMPLOYEES_URL,
-        json={"name": "Funcionário Tenant B", "cpf": "55566677788"},
+        json={"name": "Funcionário Tenant B", "cpf": "55566677720"},
         headers=HEADERS_B,
     )
     assert r.status_code == 201
@@ -200,6 +200,60 @@ async def test_delete_external_id_scoped_to_owning_employee(client):
 
     r = await client.get(f"{EMPLOYEES_URL}/{employee_a_id}", headers=HEADERS_A)
     assert any(e["id"] == external_id_id for e in r.json()["external_ids"])
+
+
+@pytest.mark.asyncio
+async def test_create_employee_invalid_cpf_checksum(client):
+    r = await client.post(
+        EMPLOYEES_URL,
+        json={"name": "CPF Inválido", "cpf": "11122233344"},
+        headers=HEADERS_A,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_employee_invalid_birth_date_format(client):
+    r = await client.post(
+        EMPLOYEES_URL,
+        json={"name": "Data Inválida", "birth_date": "01/01/1990"},
+        headers=HEADERS_A,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_employee_invalid_address_zip(client):
+    r = await client.post(
+        EMPLOYEES_URL,
+        json={"name": "CEP Inválido", "address_zip": "123"},
+        headers=HEADERS_A,
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_employee_normalizes_address_zip(client):
+    r = await client.post(
+        EMPLOYEES_URL,
+        json={"name": "CEP Válido", "address_zip": "01310100"},
+        headers=HEADERS_A,
+    )
+    assert r.status_code == 201
+    employee_id = r.json()["id"]
+
+    r = await client.get(f"{EMPLOYEES_URL}/{employee_id}", headers=HEADERS_A)
+    assert r.json()["address_zip"] == "01310-100"
+
+
+@pytest.mark.asyncio
+async def test_create_employee_invalid_status(client):
+    r = await client.post(
+        EMPLOYEES_URL,
+        json={"name": "Status Inválido", "status": "on_vacation"},
+        headers=HEADERS_A,
+    )
+    assert r.status_code == 422
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,60 @@
+import re
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.validators import normalize_doc, validate_cpf
+
+EmployeeStatus = Literal["active", "inactive", "terminated"]
 
 
-class EmployeeCreate(BaseModel):
+def _validate_cpf(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return value
+    digits = normalize_doc(value)
+    if len(digits) != 11 or not validate_cpf(digits):
+        raise ValueError("CPF inválido")
+    return digits
+
+
+def _validate_birth_date(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return value
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("birth_date deve estar no formato YYYY-MM-DD") from exc
+    return value
+
+
+def _validate_address_zip(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return value
+    digits = re.sub(r"\D", "", value)
+    if len(digits) != 8:
+        raise ValueError("address_zip deve ter 8 dígitos (CEP)")
+    return f"{digits[:5]}-{digits[5:]}"
+
+
+class _EmployeeFieldValidators(BaseModel):
+    @field_validator("cpf", check_fields=False)
+    @classmethod
+    def _check_cpf(cls, v: str | None) -> str | None:
+        return _validate_cpf(v)
+
+    @field_validator("birth_date", check_fields=False)
+    @classmethod
+    def _check_birth_date(cls, v: str | None) -> str | None:
+        return _validate_birth_date(v)
+
+    @field_validator("address_zip", check_fields=False)
+    @classmethod
+    def _check_address_zip(cls, v: str | None) -> str | None:
+        return _validate_address_zip(v)
+
+
+class EmployeeCreate(_EmployeeFieldValidators):
     name: str
     cpf: str | None = None
     rg: str | None = None
@@ -17,11 +68,11 @@ class EmployeeCreate(BaseModel):
     address_city: str | None = None
     address_state: str | None = None
     address_zip: str | None = None
-    status: str = "active"
+    status: EmployeeStatus = "active"
     user_id: int | None = None
 
 
-class EmployeeUpdate(BaseModel):
+class EmployeeUpdate(_EmployeeFieldValidators):
     name: str | None = None
     cpf: str | None = None
     rg: str | None = None
@@ -35,7 +86,7 @@ class EmployeeUpdate(BaseModel):
     address_city: str | None = None
     address_state: str | None = None
     address_zip: str | None = None
-    status: str | None = None
+    status: EmployeeStatus | None = None
     user_id: int | None = None
 
 
