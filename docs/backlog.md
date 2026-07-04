@@ -266,10 +266,10 @@ Itens identificados no levantamento do WIP não commitado de `employees`, `timec
 - [x] **[E4] Falha de isolamento em `delete_employee_external_id`** — ✅ service e router agora exigem `employee_id` também no delete; deletar external-id de outro funcionário retorna 404.
 - [x] **[E5] Auditoria ausente em `EmployeeExternalId`** — ✅ create/delete geram `AuditEvent` (`entity_type="employee_external_id"`), igual ao restante do domínio.
 
-### Média — qualidade de dados
+### Média — corrigido
 
-- [ ] **[E6] `status` do Employee sem enum/Literal** — campo `str` livre no schema Pydantic, sem validar `active|inactive|terminated`; risco de dado inconsistente.
-- [ ] **[E7] Sem validação de formato para `cpf`/`birth_date`/`address_zip`** — validação de duplicidade fica só a cargo da constraint do banco; adicionar validators Pydantic.
+- [x] **[E6] `status` do Employee sem enum/Literal** — ✅ `Literal["active", "inactive", "terminated"]` em `EmployeeCreate`/`EmployeeUpdate`, alinhado com `STATUS_LABELS` do frontend.
+- [x] **[E7] Sem validação de formato para `cpf`/`birth_date`/`address_zip`** — ✅ CPF valida dígito verificador (reaproveitando `app.core.validators`) e normaliza para 11 dígitos; `birth_date` valida `YYYY-MM-DD`; `address_zip` valida CEP de 8 dígitos e normaliza para `XXXXX-XXX`.
 - [x] **[E8] Testes faltando** — ✅ adicionados: payload malformado em `external-ids` (422), delete cross-employee (cobre E4, 404), paginação com `page_size` acima do limite (422).
 - [ ] **[E9] `fetchEmployees`/`fetchEmployee` sem validação Zod** — inconsistente com `searchEmployees` (que já usa `EmployeeOptionSchema.safeParse`); pré-existente no projeto, vale unificar.
 
