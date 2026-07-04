@@ -251,6 +251,36 @@ Itens identificados na auditoria completa de sistema. Documentação detalhada e
 - [x] **[T6] Testes unitários de service layer** — ✅ 45 testes em `test_storage_service.py`, `test_security.py` (novos), `test_audit.py` (novos): validate_file, magic bytes, token encode/decode, compute_diff edge cases.
 - [x] **[T7] Testes de negative path** — ✅ 55 testes em `test_negative_paths.py`: auth (12), occurrences (12), fiscal_requests (11), users (12), attachments (8), work_orders (11), general (5). Cobrem 422, 404, 401, 403, validação e edge cases.
 
+## P9 — auditoria do domínio employees/timeclock/escalas (2026-07-04)
+
+Itens identificados no levantamento do WIP não commitado de `employees`, `timeclock` e escalas.
+
+### Critical — corrigido
+
+- [x] **[E1] Índice duplicado em `Employee.status`** — ✅ `index=True` redundante removido da coluna; colidia com `ix_employees_status` (composto) e derrubava a criação de tabelas em toda a suíte de testes (482 testes afetados).
+- [x] **[E2] Backfill incorreto de `employee_id` na migration 0044** — ✅ `upgrade()`/`downgrade()` reescritos para resolver `employee_id` via `JOIN` em `employees.user_id` (+ `company_id`), em vez de copiar `user_id` direto assumindo `employees.id == users.id`.
+
+### Alta — corrigido
+
+- [x] **[E3] `external-ids` sem schema Pydantic** — ✅ `EmployeeExternalIdCreate` criado e usado no router; payload inválido agora retorna 422.
+- [x] **[E4] Falha de isolamento em `delete_employee_external_id`** — ✅ service e router agora exigem `employee_id` também no delete; deletar external-id de outro funcionário retorna 404.
+- [x] **[E5] Auditoria ausente em `EmployeeExternalId`** — ✅ create/delete geram `AuditEvent` (`entity_type="employee_external_id"`), igual ao restante do domínio.
+
+### Média — qualidade de dados
+
+- [ ] **[E6] `status` do Employee sem enum/Literal** — campo `str` livre no schema Pydantic, sem validar `active|inactive|terminated`; risco de dado inconsistente.
+- [ ] **[E7] Sem validação de formato para `cpf`/`birth_date`/`address_zip`** — validação de duplicidade fica só a cargo da constraint do banco; adicionar validators Pydantic.
+- [x] **[E8] Testes faltando** — ✅ adicionados: payload malformado em `external-ids` (422), delete cross-employee (cobre E4, 404), paginação com `page_size` acima do limite (422).
+- [ ] **[E9] `fetchEmployees`/`fetchEmployee` sem validação Zod** — inconsistente com `searchEmployees` (que já usa `EmployeeOptionSchema.safeParse`); pré-existente no projeto, vale unificar.
+
+### Baixa — próximos passos já mapeados em `docs/cadastro-funcionarios.md`
+
+- [ ] **[E10] Cargo/admissão/matrícula** no cadastro de funcionário.
+- [ ] **[E11] Setor/departamento** vinculado ao funcionário.
+- [ ] **[E12] Upload de avatar**.
+- [ ] **[E13] Histórico de mudança de status**.
+- [ ] **[E14] Importação em lote** de funcionários.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
