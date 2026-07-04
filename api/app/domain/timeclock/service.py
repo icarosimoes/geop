@@ -9,14 +9,13 @@ from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
 from app.domain.timeclock.schemas import RotatingPattern, WeeklyPattern
 from app.models import (
+    Employee,
     Location,
     ScheduleEntry,
-    Sector,
     Shift,
     TimeClockDevice,
     TimeClockEnrollment,
     TimePunch,
-    User,
 )
 
 WEEKDAY_LABELS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
@@ -105,16 +104,36 @@ async def update_shift(
     return record
 
 
+async def count_shift_usage(
+    session: AsyncSession, company_id: int, shift_id: int
+) -> int:
+    """Count how many schedule entries reference this shift."""
+    from sqlalchemy import func
+    count = await session.scalar(
+        select(func.count(ScheduleEntry.id)).where(
+            ScheduleEntry.company_id == company_id,
+            ScheduleEntry.shift_id == shift_id,
+        )
+    )
+    return count or 0
+
+
 async def delete_shift(
     session: AsyncSession, company_id: int, actor_id: int, shift_id: int
-) -> bool:
+) -> tuple[bool, str | None]:
+    """Delete a shift. Returns (success, error_message)."""
     record = await session.scalar(
         select(Shift).where(
             Shift.id == shift_id, Shift.company_id == company_id, Shift.deleted_at.is_(None)
         )
     )
     if record is None:
-        return False
+        return False, None
+
+    usage_count = await count_shift_usage(session, company_id, shift_id)
+    if usage_count > 0:
+        return False, f"Turno em uso em {usage_count} entrada(s) de escala"
+
     record.deleted_at = datetime.now()
     await record_event(
         session,
@@ -125,7 +144,7 @@ async def delete_shift(
         event_type="delete",
     )
     await session.commit()
-    return True
+    return True, None
 
 
 # ---------------------------------------------------------------------------
@@ -139,8 +158,7 @@ async def get_calendar(
     start: date,
     end: date,
     *,
-    user_id: int | None = None,
-    sector_id: int | None = None,
+    employee_id: int | None = None,
     shift_id: int | None = None,
 ) -> list[tuple]:
     filters = [
@@ -148,20 +166,18 @@ async def get_calendar(
         ScheduleEntry.date >= start,
         ScheduleEntry.date <= end,
     ]
-    if user_id is not None:
-        filters.append(ScheduleEntry.user_id == user_id)
-    if sector_id is not None:
-        filters.append(User.sector_id == sector_id)
+    if employee_id is not None:
+        filters.append(ScheduleEntry.employee_id == employee_id)
     if shift_id is not None:
         filters.append(ScheduleEntry.shift_id == shift_id)
 
     rows = await session.execute(
-        select(ScheduleEntry, User.name, User.sector_id, Sector.name, Shift)
-        .join(User, User.id == ScheduleEntry.user_id)
-        .outerjoin(Sector, Sector.id == User.sector_id)
+        select(ScheduleEntry, Employee.name, Shift)
+        .join(Employee, Employee.id == ScheduleEntry.employee_id)
         .outerjoin(Shift, Shift.id == ScheduleEntry.shift_id)
         .where(*filters)
-        .order_by(ScheduleEntry.date, User.name)
+        .where(Shift.deleted_at.is_(None) | (Shift.id.is_(None)))  # Filter out deleted shifts
+        .order_by(ScheduleEntry.date, Employee.name)
     )
     return rows.all()
 
@@ -170,7 +186,7 @@ async def set_schedule_day(
     session: AsyncSession,
     company_id: int,
     actor_id: int,
-    user_id: int,
+    employee_id: int,
     target_date: date,
     shift_id: int | None,
     notes: str | None,
@@ -178,13 +194,13 @@ async def set_schedule_day(
     record = await session.scalar(
         select(ScheduleEntry).where(
             ScheduleEntry.company_id == company_id,
-            ScheduleEntry.user_id == user_id,
+            ScheduleEntry.employee_id == employee_id,
             ScheduleEntry.date == target_date,
         )
     )
     before = f"{record.shift_id}" if record else None
     if record is None:
-        record = ScheduleEntry(company_id=company_id, user_id=user_id, date=target_date)
+        record = ScheduleEntry(company_id=company_id, employee_id=employee_id, date=target_date)
         session.add(record)
     record.shift_id = shift_id
     record.source = "manual"
@@ -221,19 +237,19 @@ async def generate_schedule(
     company_id: int,
     actor_id: int,
     *,
-    user_ids: list[int],
+    employee_ids: list[int],
     shift_id: int,
     start_date: date,
     end_date: date,
     pattern: WeeklyPattern | RotatingPattern,
 ) -> int:
     affected = 0
-    for uid in user_ids:
+    for eid in employee_ids:
         existing_rows = (
             await session.execute(
                 select(ScheduleEntry).where(
                     ScheduleEntry.company_id == company_id,
-                    ScheduleEntry.user_id == uid,
+                    ScheduleEntry.employee_id == eid,
                     ScheduleEntry.date >= start_date,
                     ScheduleEntry.date <= end_date,
                 )
@@ -241,6 +257,7 @@ async def generate_schedule(
         ).scalars()
         existing = {row.date: row for row in existing_rows}
 
+        employee_affected = 0
         current = start_date
         while current <= end_date:
             record = existing.get(current)
@@ -249,37 +266,40 @@ async def generate_schedule(
                 continue
             on_shift = _is_working_day(pattern, start_date, current)
             if record is None:
-                record = ScheduleEntry(company_id=company_id, user_id=uid, date=current)
+                record = ScheduleEntry(company_id=company_id, employee_id=eid, date=current)
                 session.add(record)
             record.shift_id = shift_id if on_shift else None
             record.source = "generated"
+            employee_affected += 1
             affected += 1
             current += timedelta(days=1)
 
-    if affected:
-        await record_event(
-            session,
-            company_id=company_id,
-            user_id=actor_id,
-            entity_type="schedule_entry",
-            entity_id=shift_id,
-            event_type="generate",
-            diff={
-                "user_ids": {"from": None, "to": user_ids},
-                "period": {"from": str(start_date), "to": str(end_date)},
-            },
-        )
+        # Record audit event per employee (Bug 4 fix)
+        if employee_affected > 0:
+            await record_event(
+                session,
+                company_id=company_id,
+                user_id=actor_id,
+                entity_type="schedule_entry",
+                entity_id=eid,
+                event_type="generate",
+                diff={
+                    "period": {"from": str(start_date), "to": str(end_date)},
+                    "affected_days": employee_affected,
+                },
+            )
+
     await session.commit()
     return affected
 
 
 async def _resolve_schedule_for_date(
-    session: AsyncSession, company_id: int, user_id: int, target_date: date
+    session: AsyncSession, company_id: int, employee_id: int, target_date: date
 ) -> tuple[Shift | None, str | None]:
     entry = await session.scalar(
         select(ScheduleEntry).where(
             ScheduleEntry.company_id == company_id,
-            ScheduleEntry.user_id == user_id,
+            ScheduleEntry.employee_id == employee_id,
             ScheduleEntry.date == target_date,
         )
     )
@@ -293,6 +313,36 @@ async def _resolve_schedule_for_date(
     return shift, None
 
 
+async def _resolve_schedule_for_punch(
+    session: AsyncSession, company_id: int, employee_id: int, punched_at: datetime
+) -> tuple[Shift | None, str | None]:
+    """Resolve a escala aplicável a uma batida, considerando turnos noturnos.
+
+    Uma batida de madrugada (ex.: 06:10) pode pertencer ao turno noturno agendado
+    no dia anterior (ex.: 22:00-06:00 de ontem). Se não houver escala para a data
+    da própria batida, verifica o dia anterior antes de concluir "unscheduled".
+    """
+    target_date = punched_at.date()
+    shift, forced_status = await _resolve_schedule_for_date(
+        session, company_id, employee_id, target_date
+    )
+    if shift is not None or forced_status == "day_off":
+        return shift, forced_status
+
+    previous_date = target_date - timedelta(days=1)
+    prev_shift, _ = await _resolve_schedule_for_date(
+        session, company_id, employee_id, previous_date
+    )
+    if (
+        prev_shift is not None
+        and prev_shift.end_time < prev_shift.start_time
+        and punched_at.time() < prev_shift.start_time
+    ):
+        return prev_shift, None
+
+    return shift, forced_status
+
+
 # ---------------------------------------------------------------------------
 # Comparação ponto x escala
 # ---------------------------------------------------------------------------
@@ -304,8 +354,31 @@ def evaluate_status(shift: Shift | None, punched_at: datetime, punch_type: str |
 
     tolerance = timedelta(minutes=shift.tolerance_minutes)
     punch_dt = datetime.combine(punched_at.date(), punched_at.time())
-    start_dt = datetime.combine(punched_at.date(), shift.start_time)
-    end_dt = datetime.combine(punched_at.date(), shift.end_time)
+
+    # Detectar turnos noturnos (que atravessam a meia-noite)
+    is_overnight = shift.end_time < shift.start_time
+
+    if is_overnight:
+        # Turno noturno: ajustar datas
+        # Se a batida está próxima ao início (noite), usa mesma data.
+        # Se está próxima ao fim (madrugada do dia seguinte), usa dia seguinte.
+        # Heurística: se a hora batida é menor que meio-dia E maior que start_time,
+        # ela é provavelmente do início. Senão, é da saída no dia seguinte.
+
+        if punch_dt.time() < shift.start_time:
+            # Batida está entre 00:00 e start_time (ex: 06:00)
+            # É provável que seja saída da noite anterior
+            start_dt = datetime.combine(punched_at.date() - timedelta(days=1), shift.start_time)
+            end_dt = datetime.combine(punched_at.date(), shift.end_time)
+        else:
+            # Batida está entre start_time (ex: 22:00) e 23:59
+            # É entrada ou saída da noite
+            start_dt = datetime.combine(punched_at.date(), shift.start_time)
+            end_dt = datetime.combine(punched_at.date() + timedelta(days=1), shift.end_time)
+    else:
+        # Turno diurno normal
+        start_dt = datetime.combine(punched_at.date(), shift.start_time)
+        end_dt = datetime.combine(punched_at.date(), shift.end_time)
 
     if punch_type == "out":
         return "early_leave" if punch_dt < end_dt - tolerance else "on_time"
@@ -443,18 +516,20 @@ async def get_device_by_token(session: AsyncSession, webhook_token: str) -> Time
 
 async def list_enrollments(session: AsyncSession, company_id: int) -> list[tuple]:
     rows = await session.execute(
-        select(TimeClockEnrollment, User.name)
-        .join(User, User.id == TimeClockEnrollment.user_id)
+        select(TimeClockEnrollment, Employee.name)
+        .join(Employee, Employee.id == TimeClockEnrollment.employee_id)
         .where(TimeClockEnrollment.company_id == company_id)
-        .order_by(User.name)
+        .order_by(Employee.name)
     )
     return rows.all()
 
 
 async def create_enrollment(
-    session: AsyncSession, company_id: int, actor_id: int, *, user_id: int, external_id: str
+    session: AsyncSession, company_id: int, actor_id: int, *, employee_id: int, external_id: str
 ) -> TimeClockEnrollment:
-    record = TimeClockEnrollment(company_id=company_id, user_id=user_id, external_id=external_id)
+    record = TimeClockEnrollment(
+        company_id=company_id, employee_id=employee_id, external_id=external_id
+    )
     session.add(record)
     await session.flush()
     await record_event(
@@ -520,22 +595,22 @@ async def ingest_punch(
         if existing is not None:
             return existing
 
-    user_id = await session.scalar(
-        select(TimeClockEnrollment.user_id).where(
+    employee_id = await session.scalar(
+        select(TimeClockEnrollment.employee_id).where(
             TimeClockEnrollment.company_id == company_id,
             TimeClockEnrollment.external_id == external_id,
         )
     )
     status = "unscheduled"
-    if user_id:
-        shift, forced_status = await _resolve_schedule_for_date(
-            session, company_id, user_id, punched_at.date()
+    if employee_id:
+        shift, forced_status = await _resolve_schedule_for_punch(
+            session, company_id, employee_id, punched_at
         )
         status = forced_status or evaluate_status(shift, punched_at, punch_type)
 
     record = TimePunch(
         company_id=company_id,
-        user_id=user_id,
+        employee_id=employee_id,
         device_id=device.id,
         punched_at=punched_at,
         punch_type=punch_type,
@@ -568,18 +643,18 @@ async def create_manual_punch(
     company_id: int,
     actor_id: int,
     *,
-    user_id: int,
+    employee_id: int,
     punched_at: datetime,
     punch_type: str | None,
     notes: str | None,
 ) -> TimePunch:
-    shift, forced_status = await _resolve_schedule_for_date(
-        session, company_id, user_id, punched_at.date()
+    shift, forced_status = await _resolve_schedule_for_punch(
+        session, company_id, employee_id, punched_at
     )
     status = forced_status or evaluate_status(shift, punched_at, punch_type)
     record = TimePunch(
         company_id=company_id,
-        user_id=user_id,
+        employee_id=employee_id,
         device_id=None,
         punched_at=punched_at,
         punch_type=punch_type,
@@ -615,9 +690,9 @@ async def update_punch(
     before = {k: str(getattr(record, k)) for k in updates}
     for field, value in updates.items():
         setattr(record, field, value)
-    if record.user_id:
-        shift, forced_status = await _resolve_schedule_for_date(
-            session, company_id, record.user_id, record.punched_at.date()
+    if record.employee_id:
+        shift, forced_status = await _resolve_schedule_for_punch(
+            session, company_id, record.employee_id, record.punched_at
         )
         record.status = (
             forced_status
@@ -646,7 +721,7 @@ async def list_punches(
     page: int,
     page_size: int,
     *,
-    user_id: int | None = None,
+    employee_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     status: str | None = None,
@@ -654,8 +729,8 @@ async def list_punches(
     from sqlalchemy import func
 
     filters = [TimePunch.company_id == company_id]
-    if user_id is not None:
-        filters.append(TimePunch.user_id == user_id)
+    if employee_id is not None:
+        filters.append(TimePunch.employee_id == employee_id)
     if date_from is not None:
         filters.append(TimePunch.punched_at >= datetime.combine(date_from, time.min))
     if date_to is not None:
@@ -666,8 +741,8 @@ async def list_punches(
     total = await session.scalar(select(func.count(TimePunch.id)).where(*filters)) or 0
     rows = (
         await session.execute(
-            select(TimePunch, User.name, TimeClockDevice.name)
-            .outerjoin(User, User.id == TimePunch.user_id)
+            select(TimePunch, Employee.name, TimeClockDevice.name)
+            .outerjoin(Employee, Employee.id == TimePunch.employee_id)
             .outerjoin(TimeClockDevice, TimeClockDevice.id == TimePunch.device_id)
             .where(*filters)
             .order_by(TimePunch.punched_at.desc())

@@ -39,10 +39,8 @@ class ShiftSummary(BaseModel):
 
 class CalendarEntry(BaseModel):
     date: date
-    user_id: int
-    user_name: str
-    sector_id: int | None
-    sector_name: str | None
+    employee_id: int
+    employee_name: str
     shift_id: int | None
     shift_name: str | None
     shift_color: str | None
@@ -68,7 +66,7 @@ class RotatingPattern(BaseModel):
 
 
 class ScheduleGenerateRequest(BaseModel):
-    user_ids: list[int]
+    employee_ids: list[int]
     shift_id: int
     start_date: date
     end_date: date
@@ -105,21 +103,21 @@ class TimeClockDeviceSummary(BaseModel):
 
 
 class TimeClockEnrollmentCreate(BaseModel):
-    user_id: int
+    employee_id: int
     external_id: str
 
 
 class TimeClockEnrollmentSummary(BaseModel):
     id: int
-    user_id: int
-    user_name: str
+    employee_id: int
+    employee_name: str
     external_id: str
 
 
 class TimePunchSummary(BaseModel):
     id: int
-    user_id: int | None
-    user_name: str | None
+    employee_id: int | None
+    employee_name: str | None
     device_id: int | None
     device_name: str | None
     punched_at: datetime
@@ -137,7 +135,7 @@ class TimePunchListResponse(BaseModel):
 
 
 class ManualPunchCreate(BaseModel):
-    user_id: int
+    employee_id: int
     punched_at: datetime
     punch_type: str | None = None
     notes: str | None = None

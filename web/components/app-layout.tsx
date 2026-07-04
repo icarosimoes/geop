@@ -26,6 +26,7 @@ const navOperation = [
 ];
 
 const cadastrosSub = [
+  { slug: "cadastros-funcionarios", label: "Funcionários", icon: Users, href: "/cadastros/funcionarios" },
   { slug: "cadastros-setores", label: "Setores", icon: Building2, href: "/cadastros/setores" },
   { slug: "cadastros-locais", label: "Locais", icon: MapPin, href: "/cadastros/locais" },
   { slug: "cadastros-funcoes", label: "Funções", icon: UserCog, href: "/cadastros/funcoes" },

@@ -39,18 +39,20 @@ CREATE TABLE shifts (
 CREATE TABLE schedule_entries (
   id INTEGER PRIMARY KEY,
   company_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
+  employee_id INTEGER NOT NULL,
   date DATE NOT NULL,
   shift_id INTEGER,
   source VARCHAR(20) DEFAULT 'manual',  -- 'manual' ou 'generated'
   notes TEXT,
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now(),
-  UNIQUE (company_id, user_id, date)
+  UNIQUE (company_id, employee_id, date)
 );
 ```
 
-**Exemplo**: `{ user_id: 1, date: "2026-07-06", shift_id: 5, source: "generated" }`
+**Exemplo**: `{ employee_id: 1, date: "2026-07-06", shift_id: 5, source: "generated" }`
+
+> **Nota (2026-07-04)**: até a migração `20260703_0044`, esta tabela usava `user_id` (conta de login). Agora referencia `employee_id` (cadastro de RH). Veja [docs/cadastro-funcionarios.md](cadastro-funcionarios.md) para o motivo da separação.
 
 **source="manual"**: Protegido contra sobrescrita por `generate`. Ideal para exceções (folga pontual, troca de turno).  
 **source="generated"**: Vem de um padrão recorrente. Pode ser sobrescrito se você gerar novamente.  
@@ -100,6 +102,12 @@ Atualiza um turno (campos opcionais).
 #### DELETE `/timeclock/shifts/{id}`
 Marca um turno como deletado (soft delete).
 
+**Correção (2026-07-04)**: se o turno estiver referenciado em algum `ScheduleEntry` (ativo ou passado), a exclusão é **bloqueada** com `409 Conflict`:
+```json
+{ "code": "shift_in_use", "message": "Turno usado em N entradas de escala" }
+```
+Isso evita órfãos onde `schedule_entries.shift_id` aponta para um turno inexistente/deletado.
+
 ---
 
 ### Calendário de escala
@@ -111,19 +119,18 @@ Lista entradas de escala para um intervalo de datas com joins automáticos.
 **Query params**:
 - `start` (obrigatório): data início (YYYY-MM-DD)
 - `end` (obrigatório): data fim (YYYY-MM-DD)
-- `user_id` (opcional): filtrar por funcionário
-- `sector_id` (opcional): filtrar por setor
+- `employee_id` (opcional): filtrar por funcionário
 - `shift_id` (opcional): filtrar por turno
+
+> **Nota**: o filtro `sector_id` foi removido junto com a migração para `employee_id` — o cadastro de Funcionários ainda não tem vínculo organizacional (setor). Ver "Próximas melhorias possíveis".
 
 **Resposta**:
 ```json
 [
   {
     "date": "2026-07-06",
-    "user_id": 1,
-    "user_name": "João Silva",
-    "sector_id": 2,
-    "sector_name": "Recepção",
+    "employee_id": 1,
+    "employee_name": "João Silva",
     "shift_id": 1,
     "shift_name": "Manhã",
     "shift_color": "#2563eb",
@@ -134,7 +141,7 @@ Lista entradas de escala para um intervalo de datas com joins automáticos.
 ]
 ```
 
-#### PUT `/timeclock/schedule/{user_id}/{date}`
+#### PUT `/timeclock/schedule/{employee_id}/{date}`
 
 Edita um dia específico (cria ou atualiza entrada).
 
@@ -155,7 +162,7 @@ Gera escala em lote para um intervalo de datas com um padrão recorrente.
 **Body**:
 ```json
 {
-  "user_ids": [1, 2, 3],
+  "employee_ids": [1, 2, 3],
   "shift_id": 1,
   "start_date": "2026-07-01",
   "end_date": "2026-07-31",
@@ -169,7 +176,7 @@ Gera escala em lote para um intervalo de datas com um padrão recorrente.
 Ou padrão rotativo:
 ```json
 {
-  "user_ids": [1],
+  "employee_ids": [1],
   "shift_id": 2,
   "start_date": "2026-07-01",
   "end_date": "2026-07-31",
@@ -189,10 +196,11 @@ Ou padrão rotativo:
 ```
 
 **Comportamento**:
-- Para cada dia no intervalo, verifica se há entrada com `source="manual"` para esse (user, date)
+- Para cada dia no intervalo, verifica se há entrada com `source="manual"` para esse (employee, date)
 - Se houver entrada manual, **pula** (não sobrescreve)
 - Senão, calcula se o dia é "trabalhado" pelo padrão e insere/atualiza com `source="generated"`
 - Retorna quantidade de linhas afetadas
+- **Auditoria (correção 2026-07-04)**: registra um `AuditEvent` por `employee_id` afetado (`entity_type="schedule_entry"`, `entity_id=employee_id`), com diff dos dias alterados — não um evento genérico único por chamada
 
 ---
 
@@ -214,15 +222,15 @@ Calendário mensal de escala por funcionário.
 
 **Funcionalidades**:
 - Seleção de mês (prev/next)
-- Seleção de funcionário
+- Seleção de funcionário (busca via `searchEmployees`, cadastro de RH — não mais usuários do sistema)
 - Visualização de turnos como caixas coloridas no calendário
 - Click em dia para editar (popover com select de turno/folga)
 - Campos de edição com "Folga" como opção padrão
 
 **Estruturado para expansão** (não implementadas ainda):
-- Vista por Setor: agrupa funcionários por setor, mostra calendário única
 - Vista por Turno: agrupa funcionários escalados em um turno específico
-- Vista Empresa: todos os funcionários, agrupados por setor
+- Vista Empresa: todos os funcionários
+- Vista por Setor: depende do cadastro de Funcionários ganhar vínculo organizacional (setor) — hoje removido do calendário, ver "Próximas melhorias"
 
 ---
 
@@ -237,8 +245,11 @@ deleteShiftAction(id): Promise<MutationResult>
 
 // Calendário
 fetchCalendar(params): Promise<CalendarEntry[]>
-setScheduleDayAction(userId, date, body): Promise<MutationResult>
+setScheduleDayAction(employeeId, date, body): Promise<MutationResult>
 generateScheduleAction(body): Promise<MutationResult>
+
+// Funcionários (seletor usado por calendário e vínculos de ponto)
+searchEmployees(query): Promise<EmployeeOption[]>
 ```
 
 Todas utilizam `authedFetch()` com token Bearer em cookies.
@@ -300,12 +311,12 @@ Na tela `/cadastros/turnos`, crie:
 
 ### 2. Gerar escala base
 
-Na tela `/cadastros/escalas`, selecione funcionários e use o botão "Gerar escala" (ainda não implementado no UI, mas o endpoint existe):
+O endpoint já existe e está migrado para `employee_id`; falta o botão/formulário "Gerar escala" na tela `/cadastros/escalas` (ver "Próximas melhorias possíveis"). Por ora, chame diretamente:
 
 ```json
 POST /timeclock/schedule/generate
 {
-  "user_ids": [1, 2, 3, 4],
+  "employee_ids": [1, 2, 3, 4],
   "shift_id": 1,
   "start_date": "2026-07-01",
   "end_date": "2026-07-31",
@@ -336,6 +347,15 @@ Quando um funcionário bate ponto, a API compara:
 - Senão, calcula `on_time` / `late` / `early_leave`
 
 Veja `/api/v1/timeclock/punches` para ver os status.
+
+#### Turnos noturnos (atravessam meia-noite)
+
+**Correção (2026-07-04)**: `evaluate_status()` detecta turnos onde `end_time < start_time` (ex.: 22:00–06:00) e ajusta a data de referência conforme o tipo de batida:
+- **Entrada** (22:00–23:59): compara contra `start_dt` no dia agendado
+- **Saída** (00:00–06:00 do dia seguinte): compara contra `end_dt` = dia agendado + 1
+- **Tipo não informado**: infere pela hora do relógio (madrugada → saída do turno anterior; noite → entrada do turno do dia)
+
+Antes da correção, uma batida de saída às 06:10 do dia seguinte a um turno 22:00–06:00 era comparada contra o `end_time` do mesmo dia da escala, gerando status incorreto (`unscheduled` ou `late` com atraso de quase 24h).
 
 ---
 
@@ -389,8 +409,7 @@ Garante que um usuário da empresa A nunca vê dados da empresa B.
 ### Índices
 
 ```sql
-CREATE INDEX ix_schedule_entries_date ON schedule_entries(company_id, date);
-CREATE INDEX ix_schedule_entries_user_date ON schedule_entries(company_id, user_id, date);
+CREATE INDEX ix_schedule_entries_employee_date ON schedule_entries(company_id, employee_id, date);
 ```
 
 Otimizam queries de calendário (`GET /timeclock/schedule`).
@@ -406,8 +425,8 @@ Ambos são idempotentes: gerar duas vezes o mesmo período com o mesmo padrão n
 
 ## Próximas melhorias possíveis
 
-1. **UI de geração**: Botão "Gerar escala" na tela `/cadastros/escalas` com form
-2. **Vistas por Setor/Turno/Empresa**: Expandir `ScheduleManager` com abas
+1. **UI de geração** (pendente): Botão "Gerar escala" na tela `/cadastros/escalas` com form (endpoint já pronto e migrado para `employee_id`)
+2. **Vistas por Turno/Empresa/Setor**: Expandir `ScheduleManager` com abas (Vista por Setor depende do cadastro de Funcionários ganhar vínculo organizacional)
 3. **Histórico**: Auditar mudanças em escalas (já temos `AuditEvent`)
 4. **Publicação de período**: Congelar escala de julho e marcar como "oficial"
 5. **Conflitos automáticos**: Alertar se 2 funcionários do mesmo turno estão de folga no mesmo dia

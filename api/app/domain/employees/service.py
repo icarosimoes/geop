@@ -1,12 +1,37 @@
 from datetime import datetime
 from typing import NamedTuple
 
+from pydantic import ValidationError
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
-from app.models import Employee, EmployeeExternalId
+from app.core.config import get_settings
+from app.core.storage import build_object_key, upload_file, validate_file
+from app.domain.employees.schemas import EmployeeCreate
+from app.models import Employee, EmployeeExternalId, Sector
+
+IMPORT_FIELDS = (
+    "name",
+    "cpf",
+    "rg",
+    "birth_date",
+    "phone",
+    "personal_email",
+    "address_street",
+    "address_number",
+    "address_complement",
+    "address_neighborhood",
+    "address_city",
+    "address_state",
+    "address_zip",
+    "status",
+    "job_title",
+    "hire_date",
+    "termination_date",
+    "registration_number",
+)
 
 
 class EmployeeRow(NamedTuple):
@@ -54,6 +79,14 @@ async def get_employee(
     )
 
 
+async def get_sector_name(session: AsyncSession, sector_id: int | None) -> str | None:
+    if not sector_id:
+        return None
+    return await session.scalar(
+        select(Sector.name).where(Sector.id == sector_id, Sector.deleted_at.is_(None))
+    )
+
+
 async def create_employee(
     session: AsyncSession,
     company_id: int,
@@ -74,6 +107,11 @@ async def create_employee(
     address_zip: str | None = None,
     status: str = "active",
     user_id: int | None = None,
+    job_title: str | None = None,
+    hire_date: str | None = None,
+    termination_date: str | None = None,
+    registration_number: str | None = None,
+    sector_id: int | None = None,
 ) -> Employee:
     record = Employee(
         company_id=company_id,
@@ -92,6 +130,11 @@ async def create_employee(
         address_zip=address_zip,
         status=status,
         user_id=user_id,
+        job_title=job_title,
+        hire_date=hire_date,
+        termination_date=termination_date,
+        registration_number=registration_number,
+        sector_id=sector_id,
     )
     session.add(record)
     try:
@@ -237,6 +280,48 @@ async def create_employee_external_id(
     return record
 
 
+async def upload_avatar(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    employee_id: int,
+    *,
+    data: bytes,
+    filename: str,
+    content_type: str,
+) -> Employee | None:
+    record = await get_employee(session, company_id, employee_id)
+    if record is None:
+        return None
+
+    error = validate_file(filename, content_type, len(data), data)
+    if error:
+        raise ValueError(error)
+
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise ValueError("Avatar deve ser JPEG, PNG ou WebP")
+
+    settings = get_settings()
+    key = build_object_key(company_id, "employee-avatar", employee_id, filename)
+    upload_file(data, key, content_type)
+
+    old_url = record.avatar_url
+    record.avatar_url = f"{settings.s3_public_url}/{settings.s3_bucket}/{key}"
+
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="employee",
+        entity_id=record.id,
+        event_type="update",
+        diff={"avatar_url": {"from": old_url or "", "to": record.avatar_url}},
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record
+
+
 async def delete_employee_external_id(
     session: AsyncSession, company_id: int, actor_id: int, employee_id: int, external_id_id: int
 ) -> bool:
@@ -261,3 +346,52 @@ async def delete_employee_external_id(
     )
     await session.commit()
     return True
+
+
+async def import_employees(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    rows: list[dict[str, str]],
+) -> tuple[int, int, list[dict]]:
+    """Cria funcionários a partir de linhas de CSV já parseadas.
+
+    Cada linha é validada com o mesmo schema `EmployeeCreate` usado pelo
+    endpoint de criação individual (CPF, datas e CEP passam pelas mesmas
+    regras). Uma linha inválida não interrompe as demais.
+    """
+    created = 0
+    failed = 0
+    results: list[dict] = []
+
+    for index, raw_row in enumerate(rows, start=1):
+        row = {
+            field: raw_row[field].strip()
+            for field in IMPORT_FIELDS
+            if raw_row.get(field, "").strip()
+        }
+        name = row.get("name")
+        try:
+            payload = EmployeeCreate(**row)
+        except ValidationError as exc:
+            failed += 1
+            message = "; ".join(err["msg"] for err in exc.errors())
+            results.append({"row": index, "ok": False, "name": name, "error": message})
+            continue
+
+        try:
+            record = await create_employee(
+                session,
+                company_id,
+                actor_id,
+                **payload.model_dump(),
+            )
+        except ValueError as exc:
+            failed += 1
+            results.append({"row": index, "ok": False, "name": name, "error": str(exc)})
+            continue
+
+        created += 1
+        results.append({"row": index, "ok": True, "name": record.name, "id": record.id})
+
+    return created, failed, results

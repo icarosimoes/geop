@@ -2,12 +2,14 @@
 
 Quando um funcionário bate ponto (via dispositivo Control iD ou manualmente), a API compara o horário batido com a escala prevista e atribui um **status** à batida.
 
+> **Nota (2026-07-04)**: este fluxo referenciava `User` (conta de login) como "funcionário". Após a migração `20260703_0044`, todas as tabelas (`ScheduleEntry`, `TimeClockEnrollment`, `TimePunch`) usam `employee_id`, referenciando o cadastro de RH. Veja [docs/cadastro-funcionarios.md](cadastro-funcionarios.md). `TimePunch.created_by_user_id` continua sendo `User` — é quem lançou uma batida manual, não quem bateu o ponto.
+
 ## Fluxo de ingesta
 
 ```
 Device/Manual → POST /integrations/control-id/{token}/punches
               ↓
-    resolve_schedule_for_date(user_id, date)
+    resolve_schedule_for_date(employee_id, date)
               ↓
         evaluate_status(shift, punched_at, punch_type)
               ↓
@@ -24,27 +26,19 @@ Busca a entrada de escala para a data/funcionário e retorna um tupla: `(Shift |
 
 ```python
 async def _resolve_schedule_for_date(
-    session: AsyncSession,
-    company_id: int,
-    user_id: int,
-    target_date: date,
+    session: AsyncSession, company_id: int, employee_id: int, target_date: date
 ) -> tuple[Shift | None, str | None]:
     entry = await session.scalar(
         select(ScheduleEntry).where(
             ScheduleEntry.company_id == company_id,
-            ScheduleEntry.user_id == user_id,
+            ScheduleEntry.employee_id == employee_id,
             ScheduleEntry.date == target_date,
         )
     )
-    # Sem linha na tabela
     if entry is None:
         return None, "unscheduled"
-    
-    # Linha existe com shift_id = NULL (folga)
     if entry.shift_id is None:
         return None, "day_off"
-    
-    # Linha existe com turno
     shift = await session.scalar(
         select(Shift).where(Shift.id == entry.shift_id, Shift.deleted_at.is_(None))
     )
@@ -67,27 +61,34 @@ async def _resolve_schedule_for_date(
 Compara o horário batido com o turno para decidir on_time / late / early_leave.
 
 ```python
-def evaluate_status(
-    shift: Shift | None,
-    punched_at: datetime,
-    punch_type: str | None,
-) -> str:
+def evaluate_status(shift: Shift | None, punched_at: datetime, punch_type: str | None) -> str:
     if shift is None:
         return "unscheduled"
-    
+
     tolerance = timedelta(minutes=shift.tolerance_minutes)
     punch_dt = datetime.combine(punched_at.date(), punched_at.time())
-    start_dt = datetime.combine(punched_at.date(), shift.start_time)
-    end_dt = datetime.combine(punched_at.date(), shift.end_time)
-    
-    # Saída: compara com fim do turno
+
+    # Detectar turnos noturnos (que atravessam a meia-noite)
+    is_overnight = shift.end_time < shift.start_time
+
+    if is_overnight:
+        if punch_dt.time() < shift.start_time:
+            # Batida entre 00:00 e start_time (ex: 06:00): saída da noite anterior
+            start_dt = datetime.combine(punched_at.date() - timedelta(days=1), shift.start_time)
+            end_dt = datetime.combine(punched_at.date(), shift.end_time)
+        else:
+            # Batida entre start_time (ex: 22:00) e 23:59: entrada ou saída da noite
+            start_dt = datetime.combine(punched_at.date(), shift.start_time)
+            end_dt = datetime.combine(punched_at.date() + timedelta(days=1), shift.end_time)
+    else:
+        start_dt = datetime.combine(punched_at.date(), shift.start_time)
+        end_dt = datetime.combine(punched_at.date(), shift.end_time)
+
     if punch_type == "out":
         return "early_leave" if punch_dt < end_dt - tolerance else "on_time"
-    
-    # Entrada: compara com início do turno
     if punch_type == "in":
         return "late" if punch_dt > start_dt + tolerance else "on_time"
-    
+
     # Tipo não informado: assume o limite mais próximo
     distance_to_start = abs((punch_dt - start_dt).total_seconds())
     distance_to_end = abs((punch_dt - end_dt).total_seconds())
@@ -95,6 +96,8 @@ def evaluate_status(
         return "late" if punch_dt > start_dt + tolerance else "on_time"
     return "early_leave" if punch_dt < end_dt - tolerance else "on_time"
 ```
+
+**Correção (2026-07-04)**: antes desta mudança, `evaluate_status()` sempre comparava a batida contra `start_time`/`end_time` no mesmo dia calendário do `punched_at`, quebrando turnos que atravessam a meia-noite (ex.: 22:00–06:00). Uma saída às 06:10 do dia seguinte era comparada contra `end_time` do mesmo dia da batida (06:00), o que coincidentemente funcionava para a saída — mas uma **entrada** às 22:15 era comparada corretamente, enquanto o problema real aparecia ao resolver a **escala** (`ScheduleEntry.date`): a saída de madrugada pertence à escala do dia anterior, não à do dia em que ela ocorre. A correção detecta `end_time < start_time` e ajusta `start_dt`/`end_dt` com `timedelta(days=1)` conforme a posição da batida em relação ao `start_time` do turno.
 
 ### Resultados possíveis:
 
@@ -128,12 +131,12 @@ def evaluate_status(
 
 2. **Escala gerada**:
    ```
-   2026-07-06 (seg), user_id=1, shift_id=1, source="generated"
+   2026-07-06 (seg), employee_id=1, shift_id=1, source="generated"
    ```
 
 3. **Dispositivo configurado**:
    - Token: `abc123`
-   - Vinculado: user_id=1, external_id="0001"
+   - Vinculado: employee_id=1, external_id="0001"
 
 ### Batida recebida
 
@@ -150,9 +153,9 @@ POST /integrations/control-id/abc123/punches
 ### Processamento
 
 1. **Autenticação**: `device.webhook_token = "abc123"` ✓
-2. **Resolução de usuário**: `TimeClockEnrollment.external_id = "0001"` → `user_id = 1` ✓
+2. **Resolução de usuário**: `TimeClockEnrollment.external_id = "0001"` → `employee_id = 1` ✓
 3. **Resolução de escala**:
-   - `ScheduleEntry.date = 2026-07-06, user_id = 1` encontrado
+   - `ScheduleEntry.date = 2026-07-06, employee_id = 1` encontrado
    - `shift_id = 1`, `Shift.start_time = 08:00`, `tolerance = 10` ✓
    - `forced_status = None` (não é folga/unscheduled)
 4. **Avaliação**:
@@ -161,7 +164,7 @@ POST /integrations/control-id/abc123/punches
 5. **Inserção**:
    ```json
    TimePunch {
-     user_id: 1,
+     employee_id: 1,
      device_id: X,
      punched_at: "2026-07-06T08:15:00",
      punch_type: "in",
@@ -183,7 +186,7 @@ Na tela `/ponto` (Batidas), aparece:
 
 ### Sem escala definida
 
-**Entrada**: 09:00, user_id=1, data=2026-07-06 (sem ScheduleEntry)
+**Entrada**: 09:00, employee_id=1, data=2026-07-06 (sem ScheduleEntry)
 
 → `resolve_schedule_for_date()` retorna `(None, "unscheduled")`  
 → `evaluate_status(None, ...)` retorna `"unscheduled"`  
@@ -193,9 +196,9 @@ Na tela `/ponto` (Batidas), aparece:
 
 ### Folga explícita
 
-**Escala**: 2026-07-06, user_id=1, shift_id=NULL
+**Escala**: 2026-07-06, employee_id=1, shift_id=NULL
 
-**Entrada**: 09:00, user_id=1, data=2026-07-06
+**Entrada**: 09:00, employee_id=1, data=2026-07-06
 
 → `resolve_schedule_for_date()` retorna `(None, "day_off")`  
 → `ingest_punch()` força status = `"day_off"`  
@@ -212,6 +215,24 @@ Na tela `/ponto` (Batidas), aparece:
 → Status: **unscheduled**
 
 (Note: a escala não desaparece, só o turno é marcado como inativo. Se restaurar o turno, a batida continua "unscheduled".)
+
+### Turno noturno (atravessa meia-noite)
+
+**Turno**: "Noite", 22:00–06:00, tolerance=10 min
+
+**Escala**: 2026-07-06 (dom), employee_id=1, shift_id=turno-noite
+
+**Entrada**: 22:05, employee_id=1, data=2026-07-06
+
+→ `punch_dt.time() >= start_time` → `start_dt = 2026-07-06 22:00`, `end_dt = 2026-07-07 06:00`  
+→ `punch_type="in"`, `22:05 <= 22:10` (start + tolerance) → **on_time**
+
+**Saída**: 06:10, employee_id=1, data=2026-07-07 (dia seguinte à escala)
+
+→ `punch_dt.time() < start_time (22:00)` → `start_dt = 2026-07-06 22:00`, `end_dt = 2026-07-07 06:00`  
+→ `punch_type="out"`, `06:10 >= 06:00 - tolerance (05:50)` → **on_time**
+
+Sem a correção, a saída de madrugada era comparada contra o turno do próprio dia (07/07), que não tem `ScheduleEntry` — resultando em `unscheduled` mesmo com o funcionário cumprindo o turno corretamente.
 
 ### Deduplica por event_id
 

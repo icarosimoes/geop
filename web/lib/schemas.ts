@@ -74,6 +74,65 @@ export const UserOptionSchema = z.object({
   email: z.string(),
 });
 
+export const EmployeeOptionSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+});
+
+export const EmployeeSummarySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  cpf: z.string().nullable(),
+  personal_email: z.string().nullable(),
+  phone: z.string().nullable(),
+  status: z.string(),
+  user_id: z.number().nullable(),
+  avatar_url: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const EmployeeDetailedSchema = EmployeeSummarySchema.extend({
+  rg: z.string().nullable(),
+  birth_date: z.string().nullable(),
+  address_street: z.string().nullable(),
+  address_number: z.string().nullable(),
+  address_complement: z.string().nullable(),
+  address_neighborhood: z.string().nullable(),
+  address_city: z.string().nullable(),
+  address_state: z.string().nullable(),
+  address_zip: z.string().nullable(),
+  job_title: z.string().nullable(),
+  hire_date: z.string().nullable(),
+  termination_date: z.string().nullable(),
+  registration_number: z.string().nullable(),
+  sector_id: z.number().nullable(),
+  sector_name: z.string().nullable(),
+  external_ids: z.array(
+    z.object({
+      id: z.number(),
+      employee_id: z.number(),
+      system: z.string(),
+      external_id: z.string(),
+    }),
+  ),
+});
+
+export const EmployeeImportRowResultSchema = z.object({
+  row: z.number(),
+  ok: z.boolean(),
+  name: z.string().nullable(),
+  id: z.number().nullable(),
+  error: z.string().nullable(),
+});
+
+export const EmployeeImportResultSchema = z.object({
+  total: z.number(),
+  created: z.number(),
+  failed: z.number(),
+  results: z.array(EmployeeImportRowResultSchema),
+});
+
 export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {

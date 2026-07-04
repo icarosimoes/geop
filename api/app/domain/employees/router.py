@@ -1,6 +1,8 @@
+import csv
+import io
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_session
@@ -11,6 +13,7 @@ from app.domain.employees.schemas import (
     EmployeeDetailedSummary,
     EmployeeExternalIdCreate,
     EmployeeExternalIdSummary,
+    EmployeeImportResult,
     EmployeeListResponse,
     EmployeeOption,
     EmployeeSummary,
@@ -23,9 +26,12 @@ from app.domain.employees.service import (
     delete_employee_external_id,
     get_employee,
     get_employee_external_ids,
+    get_sector_name,
+    import_employees,
     list_employees,
     search_employees,
     update_employee,
+    upload_avatar,
 )
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -46,7 +52,7 @@ def _to_summary(employee) -> EmployeeSummary:
     )
 
 
-def _to_detailed_summary(employee, external_ids=None) -> EmployeeDetailedSummary:
+def _to_detailed_summary(employee, external_ids=None, sector_name=None) -> EmployeeDetailedSummary:
     return EmployeeDetailedSummary(
         id=employee.id,
         name=employee.name,
@@ -65,6 +71,12 @@ def _to_detailed_summary(employee, external_ids=None) -> EmployeeDetailedSummary
         address_city=employee.address_city,
         address_state=employee.address_state,
         address_zip=employee.address_zip,
+        job_title=employee.job_title,
+        hire_date=employee.hire_date,
+        termination_date=employee.termination_date,
+        registration_number=employee.registration_number,
+        sector_id=employee.sector_id,
+        sector_name=sector_name,
         created_at=employee.created_at,
         updated_at=employee.updated_at,
         external_ids=[
@@ -118,7 +130,8 @@ async def get_employee_endpoint(
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     external_ids = await get_employee_external_ids(session, user.company_id, employee_id)
-    return _to_detailed_summary(record, external_ids)
+    sector_name = await get_sector_name(session, record.sector_id)
+    return _to_detailed_summary(record, external_ids, sector_name)
 
 
 @router.post("", response_model=EmployeeSummary, status_code=201)
@@ -146,6 +159,11 @@ async def create_employee_endpoint(
         address_zip=body.address_zip,
         status=body.status,
         user_id=body.user_id,
+        job_title=body.job_title,
+        hire_date=body.hire_date,
+        termination_date=body.termination_date,
+        registration_number=body.registration_number,
+        sector_id=body.sector_id,
     )
     return _to_summary(record)
 
@@ -162,6 +180,62 @@ async def update_employee_endpoint(
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return _to_summary(record)
+
+
+@router.post("/{employee_id}/avatar", response_model=EmployeeSummary)
+async def upload_avatar_endpoint(
+    employee_id: int,
+    file: UploadFile,
+    user: Annotated[AuthenticatedUser, require_permission("employee.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeeSummary:
+    data = await file.read()
+    max_size = 2 * 1024 * 1024
+    if len(data) > max_size:
+        raise HTTPException(status_code=400, detail={"code": "file_too_large"})
+    try:
+        record = await upload_avatar(
+            session,
+            user.company_id,
+            user.id,
+            employee_id,
+            data=data,
+            filename=file.filename or "avatar.jpg",
+            content_type=file.content_type or "image/jpeg",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail={"code": "invalid_file", "message": str(e)}
+        ) from e
+    if record is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return _to_summary(record)
+
+
+@router.post("/import", response_model=EmployeeImportResult)
+async def import_employees_endpoint(
+    file: UploadFile,
+    user: Annotated[AuthenticatedUser, require_permission("employee.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeeImportResult:
+    if file.content_type not in {"text/csv", "application/vnd.ms-excel", "text/plain"} and not (
+        file.filename or ""
+    ).lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail={"code": "invalid_file_type"})
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_encoding"}) from exc
+
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+    if not rows:
+        raise HTTPException(status_code=400, detail={"code": "empty_file"})
+
+    created, failed, results = await import_employees(session, user.company_id, user.id, rows)
+    return EmployeeImportResult(total=len(rows), created=created, failed=failed, results=results)
 
 
 @router.delete("/{employee_id}", status_code=204)

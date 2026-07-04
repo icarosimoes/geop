@@ -801,13 +801,15 @@ class Shift(Base, TenantMixin, TimestampMixin):
 class ScheduleEntry(Base, TenantMixin):
     __tablename__ = "schedule_entries"
     __table_args__ = (
-        UniqueConstraint("company_id", "user_id", "date", name="uq_schedule_entries_user_date"),
+        UniqueConstraint(
+            "company_id", "employee_id", "date", name="uq_schedule_entries_employee_date"
+        ),
         Index("ix_schedule_entries_date", "company_id", "date"),
-        Index("ix_schedule_entries_user_date", "company_id", "user_id", "date"),
+        Index("ix_schedule_entries_employee_date", "company_id", "employee_id", "date"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
     date: Mapped[date] = mapped_column(Date)
     shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"))
     source: Mapped[str] = mapped_column(String(20), default="manual")
@@ -840,21 +842,21 @@ class TimeClockEnrollment(Base, TenantMixin, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
     external_id: Mapped[str] = mapped_column(String(80))
 
 
 class TimePunch(Base, TenantMixin):
     __tablename__ = "time_punches"
     __table_args__ = (
-        Index("ix_time_punches_user_date", "company_id", "user_id", "punched_at"),
+        Index("ix_time_punches_employee_date", "company_id", "employee_id", "punched_at"),
         UniqueConstraint(
             "device_id", "external_event_id", name="uq_time_punches_device_event"
         ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    employee_id: Mapped[int | None] = mapped_column(ForeignKey("employees.id", ondelete="SET NULL"))
     device_id: Mapped[int | None] = mapped_column(
         ForeignKey("time_clock_devices.id", ondelete="SET NULL"),
     )

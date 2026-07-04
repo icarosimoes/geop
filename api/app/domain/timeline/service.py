@@ -8,6 +8,7 @@ from app.core.pagination import CursorPage, decode_cursor, encode_cursor
 from app.integrations.notifications import notify_record_event
 from app.models import (
     AuditEvent,
+    Employee,
     FiscalRequest,
     Meeting,
     ModuleRecord,
@@ -27,6 +28,7 @@ VALID_ENTITY_TYPES = {
     "diarios-obra",
     "manutencao",
     "mural",
+    "employee",
 }
 
 ENTITY_MODEL_MAP: dict[str, Any] = {
@@ -35,6 +37,7 @@ ENTITY_MODEL_MAP: dict[str, Any] = {
     "procedure": Procedure,
     "meeting": Meeting,
     "shift_report": ShiftReport,
+    "employee": Employee,
 }
 
 MODULE_SLUG_ENTITY_TYPES = {

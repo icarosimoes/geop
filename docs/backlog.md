@@ -269,17 +269,17 @@ Itens identificados no levantamento do WIP não commitado de `employees`, `timec
 ### Média — corrigido
 
 - [x] **[E6] `status` do Employee sem enum/Literal** — ✅ `Literal["active", "inactive", "terminated"]` em `EmployeeCreate`/`EmployeeUpdate`, alinhado com `STATUS_LABELS` do frontend.
-- [x] **[E7] Sem validação de formato para `cpf`/`birth_date`/`address_zip`** — ✅ CPF valida dígito verificador (reaproveitando `app.core.validators`) e normaliza para 11 dígitos; `birth_date` valida `YYYY-MM-DD`; `address_zip` valida CEP de 8 dígitos e normaliza para `XXXXX-XXX`.
+- [x] **[E7] Sem validação de formato para `cpf`/`birth_date`/`address_zip`** — ✅ CPF valida dígito verificador (reaproveitando `app.core.validators`) e normaliza para 11 dígitos; `birth_date` valida `YYYY-MM-DD`; `address_zip` valida CEP de 8 dígitos e normaliza para `XXXXX-XXX`. CPF agora é **obrigatório** em `EmployeeCreate` (backend) e no formulário (frontend), com as mesmas validações replicadas no cliente (`web/lib/validators.ts`) e busca automática de endereço por CEP via ViaCEP (server action `lookupCepAction`).
 - [x] **[E8] Testes faltando** — ✅ adicionados: payload malformado em `external-ids` (422), delete cross-employee (cobre E4, 404), paginação com `page_size` acima do limite (422).
-- [ ] **[E9] `fetchEmployees`/`fetchEmployee` sem validação Zod** — inconsistente com `searchEmployees` (que já usa `EmployeeOptionSchema.safeParse`); pré-existente no projeto, vale unificar.
+- [x] **[E9] `fetchEmployees`/`fetchEmployee` sem validação Zod** — ✅ `EmployeeSummarySchema`/`EmployeeDetailedSchema` criados em `web/lib/schemas.ts`; `Employee`/`EmployeeDetailed` agora são `z.infer` desses schemas e `fetchEmployees`/`fetchEmployee` usam `safeParse`, igual a `searchEmployees`.
 
-### Baixa — próximos passos já mapeados em `docs/cadastro-funcionarios.md`
+### Baixa — implementado em 2026-07-04
 
-- [ ] **[E10] Cargo/admissão/matrícula** no cadastro de funcionário.
-- [ ] **[E11] Setor/departamento** vinculado ao funcionário.
-- [ ] **[E12] Upload de avatar**.
-- [ ] **[E13] Histórico de mudança de status**.
-- [ ] **[E14] Importação em lote** de funcionários.
+- [x] **[E10] Cargo/admissão/matrícula** no cadastro de funcionário — ✅ `job_title`, `hire_date`, `termination_date`, `registration_number` (migration `20260704_0046`), com as mesmas validações de formato de data já usadas em `birth_date`. Salário/dados bancários ficaram fora de propósito (dados sensíveis, tratamento à parte).
+- [x] **[E11] Setor/departamento** vinculado ao funcionário — ✅ `sector_id` reaproveitando o cadastro de Setor já usado por `User` (`registries` categoria `"Setor"`), sem duplicar conceito. `EmployeeDetailedSummary.sector_name` traz o nome resolvido.
+- [x] **[E12] Upload de avatar** — ✅ `POST /employees/{id}/avatar`, mesmo fluxo de `POST /users/{id}/avatar` (MinIO/S3, validação de assinatura de arquivo).
+- [x] **[E13] Histórico de mudança de status** — ✅ `"employee"` registrado em `VALID_ENTITY_TYPES`/`ENTITY_MODEL_MAP` do domínio de timeline; `GET /timeline/employee/{id}` já funciona reaproveitando os `AuditEvent`s existentes, sem tabela de histórico dedicada.
+- [x] **[E14] Importação em lote** de funcionários — ✅ `POST /employees/import`, CSV validado linha a linha com o mesmo schema `EmployeeCreate` do cadastro manual; uma linha inválida não interrompe as demais, resposta traz resultado por linha.
 
 ## Definition of Done por módulo
 

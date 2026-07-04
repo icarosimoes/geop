@@ -6,16 +6,16 @@ import {
   createEnrollmentAction,
   deleteEnrollmentAction,
   fetchEnrollments,
-  searchUsers,
+  searchEmployees,
+  type EmployeeOption,
   type TimeClockEnrollment,
-  type UserOption,
 } from "@/app/actions";
 
 export function EnrollmentManager() {
   const [enrollments, setEnrollments] = useState<TimeClockEnrollment[]>([]);
-  const [users, setUsers] = useState<UserOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
   const [externalId, setExternalId] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
@@ -31,17 +31,17 @@ export function EnrollmentManager() {
 
   useEffect(() => {
     reload();
-    searchUsers("").then(setUsers);
+    searchEmployees("").then(setEmployees);
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!userId || !externalId.trim()) return;
+    if (!employeeId || !externalId.trim()) return;
     setSaving(true);
-    const result = await createEnrollmentAction(Number(userId), externalId.trim());
+    const result = await createEnrollmentAction(Number(employeeId), externalId.trim());
     setSaving(false);
     if (result.ok) {
-      setUserId("");
+      setEmployeeId("");
       setExternalId("");
       showToast("Vínculo criado.");
       reload();
@@ -51,7 +51,7 @@ export function EnrollmentManager() {
   }
 
   async function handleDelete(enrollment: TimeClockEnrollment) {
-    if (!confirm(`Remover o vínculo de "${enrollment.user_name}"?`)) return;
+    if (!confirm(`Remover o vínculo de "${enrollment.employee_name}"?`)) return;
     const result = await deleteEnrollmentAction(enrollment.id);
     if (result.ok) {
       showToast("Vínculo removido.");
@@ -72,11 +72,11 @@ export function EnrollmentManager() {
           borderBottom: "1px solid var(--field-border)",
         }}
       >
-        <select value={userId} onChange={(e) => setUserId(e.target.value)} required style={{ flex: 1 }}>
+        <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required style={{ flex: 1 }}>
           <option value="">Selecione o funcionário...</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
+          {employees.map((emp) => (
+            <option key={emp.id} value={emp.id}>
+              {emp.name}
             </option>
           ))}
         </select>
@@ -113,7 +113,7 @@ export function EnrollmentManager() {
               {enrollments.map((enrollment) => (
                 <tr key={enrollment.id}>
                   <td>
-                    <strong>{enrollment.user_name}</strong>
+                    <strong>{enrollment.employee_name}</strong>
                   </td>
                   <td>{enrollment.external_id}</td>
                   <td>

@@ -39,6 +39,15 @@ CREATE TABLE employees (
   status VARCHAR(20) DEFAULT 'active',  -- active | inactive | terminated
   avatar_url VARCHAR(500),
 
+  -- Dados contratuais (migration 20260704_0046)
+  job_title VARCHAR(120),
+  hire_date VARCHAR(10),          -- YYYY-MM-DD
+  termination_date VARCHAR(10),   -- YYYY-MM-DD
+  registration_number VARCHAR(40),
+
+  -- Setor/departamento (migration 20260704_0046)
+  sector_id INTEGER REFERENCES sectors(id) ON DELETE SET NULL,
+
   -- Vínculo opcional com User (nem todo employee loga no sistema)
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
 
@@ -50,13 +59,19 @@ CREATE TABLE employees (
 );
 ```
 
-**Escopo atual (MVP)**: dados pessoais básicos + status. Campos contratuais (cargo, admissão, salário, matrícula, banco, documentos) ficam fora por enquanto — o modelo deixa espaço para crescer.
+**Escopo atual**: dados pessoais, endereço, status, cargo/admissão/matrícula e setor. Salário, dados bancários e documentos anexados seguem fora do MVP — são dados sensíveis que merecem tratamento à parte (permissão dedicada, criptografia em repouso) e não foram pedidos no backlog atual.
 
-**CPF**: opcional (nem todo funcionário precisa ter CPF cadastrado de imediato), mas único por empresa quando informado. Validado no schema Pydantic com dígito verificador real (mesmo algoritmo de `app.core.validators.validate_cpf`, usado em `fiscal_requests`) e normalizado para 11 dígitos sem pontuação antes de persistir.
+**job_title / hire_date / termination_date / registration_number** (`[E10]`): cargo, datas de admissão/desligamento e matrícula. `hire_date`/`termination_date` seguem a mesma validação de formato `YYYY-MM-DD` de `birth_date`. Nenhum é obrigatório — o desligamento típico é: `PATCH` com `status: "terminated"` e `termination_date` preenchida.
+
+**sector_id** (`[E11]`): reaproveita o cadastro de Setor já usado por `User` (`/cadastros/setores`, categoria `"Setor"` no domínio `registries`) em vez de criar um conceito de departamento paralelo. `EmployeeDetailedSummary.sector_name` traz o nome resolvido (join simples, mesmo padrão de `get_sector_name` em `app/domain/users/service.py`) para a UI não precisar de uma segunda chamada.
+
+**CPF**: obrigatório na criação (`EmployeeCreate.cpf: str`), único por empresa. Validado no schema Pydantic com dígito verificador real (mesmo algoritmo de `app.core.validators.validate_cpf`, usado em `fiscal_requests`) e normalizado para 11 dígitos sem pontuação antes de persistir. Em `EmployeeUpdate` o campo continua opcional (patch parcial), mas quando informado passa pela mesma validação. A coluna no banco (`VARCHAR(11)`) permanece `nullable` porque o backfill da migração `20260703_0043` criou `Employee` sem CPF para `User`s existentes — a obrigatoriedade vale para novos cadastros feitos via API/UI, não retroativamente.
+
+No frontend (`web/app/cadastros/funcionarios/manager.tsx`), o CPF é campo obrigatório do formulário e validado no cliente (dígito verificador via `web/lib/validators.ts`) antes do submit, evitando round-trip para erros óbvios.
 
 **birth_date**: validado no formato `YYYY-MM-DD`; qualquer outro formato retorna `422`.
 
-**address_zip**: validado como CEP brasileiro de 8 dígitos e normalizado para `XXXXX-XXX` (coluna `VARCHAR(10)` desde a migration `20260704_0045`, que corrigiu o tamanho original de 8 caracteres — insuficiente para o hífen).
+**address_zip**: validado como CEP brasileiro de 8 dígitos e normalizado para `XXXXX-XXX` (coluna `VARCHAR(10)` desde a migration `20260704_0045`, que corrigiu o tamanho original de 8 caracteres — insuficiente para o hífen). No frontend, ao preencher os 8 dígitos do CEP o formulário consulta a API pública [ViaCEP](https://viacep.com.br) via server action (`lookupCepAction` em `web/app/actions.ts`) e preenche automaticamente logradouro, bairro, cidade e UF — a chamada é feita no servidor (Server Action), não no navegador, porque o CSP do app (`web/next.config.ts`) restringe `connect-src` e não inclui domínios externos.
 
 **status**: `Literal["active", "inactive", "terminated"]` no schema Pydantic (não é mais string livre) — alinhado com `STATUS_LABELS` do frontend em `web/app/cadastros/funcionarios/manager.tsx`.
 
@@ -174,6 +189,31 @@ Adiciona um identificador externo. Validado por schema Pydantic (`EmployeeExtern
 
 Remove um identificador externo. A busca do registro é escopada por `employee_id` **e** `company_id` — deletar um `external_id_id` que pertence a outro funcionário da mesma empresa retorna `404`, mesmo que o ID exista.
 
+### POST `/employees/{id}/avatar` (`[E12]`)
+
+Upload de avatar do funcionário, mesmo fluxo de `POST /users/{id}/avatar`: `multipart/form-data` com campo `file` (máx. 2MB, JPEG/PNG/WebP), validação de assinatura de conteúdo (`app.core.storage.validate_file`) e persistência no bucket MinIO/S3 configurado (`app.core.storage.build_object_key` com `entity_type="employee-avatar"`). Atualiza `avatar_url` e gera `AuditEvent` com o diff da URL.
+
+### POST `/employees/import` (`[E14]`)
+
+Importação em lote via CSV (`multipart/form-data`, campo `file`). Colunas aceitas (cabeçalho na primeira linha): `name, cpf, rg, birth_date, phone, personal_email, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, address_zip, status, job_title, hire_date, termination_date, registration_number`. `sector_id` não é suportado no CSV — setor é atribuído depois, individualmente.
+
+Cada linha passa pelo mesmo schema `EmployeeCreate` do endpoint de criação (CPF, datas e CEP com as mesmas validações), garantindo que uma importação e um cadastro manual nunca divirjam nas regras. Uma linha inválida (CPF ruim, CPF duplicado no lote ou já existente, data mal formatada) não interrompe as demais — a resposta traz o resultado linha a linha:
+
+```json
+{
+  "total": 3,
+  "created": 2,
+  "failed": 1,
+  "results": [
+    { "row": 1, "ok": true, "name": "João Silva", "id": 42 },
+    { "row": 2, "ok": true, "name": "Maria Souza", "id": 43 },
+    { "row": 3, "ok": false, "name": "CPF Ruim", "error": "CPF inválido" }
+  ]
+}
+```
+
+Arquivos que não terminam em `.csv` (e cujo `Content-Type` não é CSV/texto) são rejeitados com `400` antes de qualquer parsing.
+
 ## Permissões
 
 - `employee.view`: Visualizar funcionários
@@ -181,11 +221,13 @@ Remove um identificador externo. A busca do registro é escopada por `employee_i
 
 Concedidas ao role `admin` por padrão.
 
-## Auditoria
+## Auditoria e histórico (`[E13]`)
 
 Toda mutação (`create`, `update`, `delete`) de `Employee` gera um `AuditEvent` via `record_event()`, com diff campo a campo, seguindo o padrão dos demais domínios (`users`, `shifts`, etc.).
 
 Criação e remoção de `EmployeeExternalId` também geram `AuditEvent` (`entity_type="employee_external_id"`), igualando a convenção.
+
+`"employee"` foi adicionado a `VALID_ENTITY_TYPES`/`ENTITY_MODEL_MAP` em `app/domain/timeline/service.py`, então o endpoint genérico `GET /timeline/employee/{id}` já funciona sem nenhum código novo no domínio de funcionários — reaproveita os `AuditEvent`s de auditoria já registrados. É assim que o frontend mostra o histórico de mudança de status (e de qualquer outro campo) na aba "Ver histórico" do formulário de edição.
 
 ## RLS (Row-Level Security)
 
@@ -204,6 +246,8 @@ A migração `20260703_0044` trocou `user_id` → `employee_id` em `schedule_ent
 **Importante**: `TimePunch.created_by_user_id` não muda — continua sendo o operador/gestor (`User`) que lançou a batida manual, um conceito diferente de quem bateu o ponto (`employee_id`).
 
 A migração `20260704_0045` corrigiu o tamanho da coluna `address_zip` de `VARCHAR(8)` para `VARCHAR(10)`, necessário para acomodar o formato de CEP com hífen (`XXXXX-XXX`, 9 caracteres).
+
+A migração `20260704_0046` adicionou `job_title`, `hire_date`, `termination_date`, `registration_number` e `sector_id` (`[E10]`/`[E11]`), todos `nullable` — não exige backfill.
 
 ## Relação com integração de sistemas externos
 
@@ -224,10 +268,12 @@ Levantamento do domínio recém-implementado encontrou e corrigiu:
 
 Itens ainda pendentes: ver `docs/backlog.md`, seção P9.
 
-## Próximas melhorias possíveis
+## Melhorias implementadas em 2026-07-04 (E10-E14)
 
-1. **Campos contratuais**: cargo, data de admissão/desligamento, salário, matrícula, dados bancários, documentos anexados
-2. **Vínculo organizacional**: setor/departamento (hoje removido do calendário de escala por não existir ainda)
-3. **Upload de avatar**: já existe o campo `avatar_url`, falta o fluxo de upload (padrão S3/MinIO já usado em `attachments`)
-4. **Histórico de status**: registrar quando e por que um funcionário foi desligado
-5. **Importação em lote**: CSV/planilha para cadastro inicial de funcionários existentes
+Depois do MVP inicial, o backlog (`docs/backlog.md`) tinha cinco itens de baixa prioridade mapeados a partir da seção "Próximas melhorias possíveis" desta doc. Todos foram implementados:
+
+- **[E10] Campos contratuais**: `job_title`, `hire_date`, `termination_date`, `registration_number` (cargo, admissão, desligamento, matrícula). Salário e dados bancários ficaram de fora — dados sensíveis o suficiente para merecer um tratamento próprio (permissão dedicada, possível criptografia) em vez de entrar juntos.
+- **[E11] Vínculo organizacional**: `sector_id`, reaproveitando o cadastro de Setor já usado por `User`, sem duplicar o conceito de departamento.
+- **[E12] Upload de avatar**: `POST /employees/{id}/avatar`, mesmo fluxo de `POST /users/{id}/avatar` (MinIO/S3, validação de assinatura de arquivo).
+- **[E13] Histórico de status**: reaproveitado o domínio de timeline genérico (`GET /timeline/employee/{id}`) em vez de criar uma tabela de histórico dedicada — os `AuditEvent`s de `update_employee` já carregavam o diff campo a campo, faltava só registrar `"employee"` como entity type válido.
+- **[E14] Importação em lote**: `POST /employees/import`, CSV validado linha a linha com o mesmo schema `EmployeeCreate` do cadastro manual.

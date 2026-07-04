@@ -39,6 +39,19 @@ class Employee(Base, TenantMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="active")
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Dados contratuais (MVP: cargo, admissão/desligamento, matrícula)
+    job_title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    hire_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
+    termination_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
+    registration_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    # Setor/departamento (reaproveita o cadastro de Setor usado por User/Ocorrências)
+    sector_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sectors.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Vínculo opcional com User (nem todo employee loga no sistema)
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),

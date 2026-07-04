@@ -5,9 +5,9 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   createManualPunchAction,
   fetchPunches,
-  searchUsers,
+  searchEmployees,
+  type EmployeeOption,
   type TimePunch,
-  type UserOption,
 } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 
@@ -33,14 +33,14 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 20;
-  const [users, setUsers] = useState<UserOption[]>([]);
-  const [userId, setUserId] = useState("");
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [employeeId, setEmployeeId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formUserId, setFormUserId] = useState("");
+  const [formEmployeeId, setFormEmployeeId] = useState("");
   const [formDateTime, setFormDateTime] = useState("");
   const [formType, setFormType] = useState("");
   const [formNotes, setFormNotes] = useState("");
@@ -59,7 +59,7 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
     fetchPunches({
       page,
       pageSize,
-      userId: userId ? Number(userId) : undefined,
+      employeeId: employeeId ? Number(employeeId) : undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       status: status || undefined,
@@ -72,20 +72,20 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
   }
 
   useEffect(() => {
-    searchUsers("").then(setUsers);
+    searchEmployees("").then(setEmployees);
   }, []);
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, userId, dateFrom, dateTo, status]);
+  }, [page, employeeId, dateFrom, dateTo, status]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!formUserId || !formDateTime) return;
+    if (!formEmployeeId || !formDateTime) return;
     setSaving(true);
     const result = await createManualPunchAction({
-      user_id: Number(formUserId),
+      employee_id: Number(formEmployeeId),
       punched_at: formDateTime,
       punch_type: formType || undefined,
       notes: formNotes || undefined,
@@ -93,7 +93,7 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
     setSaving(false);
     if (result.ok) {
       setShowForm(false);
-      setFormUserId("");
+      setFormEmployeeId("");
       setFormDateTime("");
       setFormType("");
       setFormNotes("");
@@ -112,11 +112,11 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
         className="module-toolbar"
         style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap", alignItems: "center" }}
       >
-        <select value={userId} onChange={(e) => { setUserId(e.target.value); setPage(1); }}>
+        <select value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setPage(1); }}>
           <option value="">Todos os funcionários</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
+          {employees.map((emp) => (
+            <option key={emp.id} value={emp.id}>
+              {emp.name}
             </option>
           ))}
         </select>
@@ -152,11 +152,11 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
             flexWrap: "wrap",
           }}
         >
-          <select value={formUserId} onChange={(e) => setFormUserId(e.target.value)} required>
+          <select value={formEmployeeId} onChange={(e) => setFormEmployeeId(e.target.value)} required>
             <option value="">Funcionário...</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name}
               </option>
             ))}
           </select>
@@ -207,7 +207,7 @@ export function PunchDashboard({ user }: { user: TenantUser }) {
               {punches.map((punch) => (
                 <tr key={punch.id}>
                   <td>{new Date(punch.punched_at).toLocaleString("pt-BR")}</td>
-                  <td>{punch.user_name ?? "Sem vínculo"}</td>
+                  <td>{punch.employee_name ?? "Sem vínculo"}</td>
                   <td>{punch.source === "manual" ? "Manual" : punch.device_name ?? "Relógio"}</td>
                   <td>{punch.punch_type === "in" ? "Entrada" : punch.punch_type === "out" ? "Saída" : "—"}</td>
                   <td>

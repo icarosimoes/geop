@@ -18,13 +18,19 @@ def _validate_cpf(value: str | None) -> str | None:
     return digits
 
 
-def _validate_birth_date(value: str | None) -> str | None:
+def _validate_cpf_required(value: str) -> str:
+    if not value or not value.strip():
+        raise ValueError("CPF é obrigatório")
+    return _validate_cpf(value)
+
+
+def _validate_date_format(value: str | None, field_name: str) -> str | None:
     if value is None or not value.strip():
         return value
     try:
         datetime.strptime(value, "%Y-%m-%d")
     except ValueError as exc:
-        raise ValueError("birth_date deve estar no formato YYYY-MM-DD") from exc
+        raise ValueError(f"{field_name} deve estar no formato YYYY-MM-DD") from exc
     return value
 
 
@@ -38,15 +44,10 @@ def _validate_address_zip(value: str | None) -> str | None:
 
 
 class _EmployeeFieldValidators(BaseModel):
-    @field_validator("cpf", check_fields=False)
-    @classmethod
-    def _check_cpf(cls, v: str | None) -> str | None:
-        return _validate_cpf(v)
-
     @field_validator("birth_date", check_fields=False)
     @classmethod
     def _check_birth_date(cls, v: str | None) -> str | None:
-        return _validate_birth_date(v)
+        return _validate_date_format(v, "birth_date")
 
     @field_validator("address_zip", check_fields=False)
     @classmethod
@@ -56,7 +57,7 @@ class _EmployeeFieldValidators(BaseModel):
 
 class EmployeeCreate(_EmployeeFieldValidators):
     name: str
-    cpf: str | None = None
+    cpf: str
     rg: str | None = None
     birth_date: str | None = None
     phone: str | None = None
@@ -70,6 +71,26 @@ class EmployeeCreate(_EmployeeFieldValidators):
     address_zip: str | None = None
     status: EmployeeStatus = "active"
     user_id: int | None = None
+    job_title: str | None = None
+    hire_date: str | None = None
+    termination_date: str | None = None
+    registration_number: str | None = None
+    sector_id: int | None = None
+
+    @field_validator("cpf")
+    @classmethod
+    def _check_cpf(cls, v: str) -> str:
+        return _validate_cpf_required(v)
+
+    @field_validator("hire_date")
+    @classmethod
+    def _check_hire_date(cls, v: str | None) -> str | None:
+        return _validate_date_format(v, "hire_date")
+
+    @field_validator("termination_date")
+    @classmethod
+    def _check_termination_date(cls, v: str | None) -> str | None:
+        return _validate_date_format(v, "termination_date")
 
 
 class EmployeeUpdate(_EmployeeFieldValidators):
@@ -88,6 +109,26 @@ class EmployeeUpdate(_EmployeeFieldValidators):
     address_zip: str | None = None
     status: EmployeeStatus | None = None
     user_id: int | None = None
+    job_title: str | None = None
+    hire_date: str | None = None
+    termination_date: str | None = None
+    registration_number: str | None = None
+    sector_id: int | None = None
+
+    @field_validator("cpf")
+    @classmethod
+    def _check_cpf(cls, v: str | None) -> str | None:
+        return _validate_cpf(v)
+
+    @field_validator("hire_date")
+    @classmethod
+    def _check_hire_date(cls, v: str | None) -> str | None:
+        return _validate_date_format(v, "hire_date")
+
+    @field_validator("termination_date")
+    @classmethod
+    def _check_termination_date(cls, v: str | None) -> str | None:
+        return _validate_date_format(v, "termination_date")
 
 
 class EmployeeSummary(BaseModel):
@@ -137,4 +178,25 @@ class EmployeeDetailedSummary(EmployeeSummary):
     address_city: str | None
     address_state: str | None
     address_zip: str | None
+    job_title: str | None
+    hire_date: str | None
+    termination_date: str | None
+    registration_number: str | None
+    sector_id: int | None
+    sector_name: str | None
     external_ids: list[EmployeeExternalIdSummary] = Field(default_factory=list)
+
+
+class EmployeeImportRowResult(BaseModel):
+    row: int
+    ok: bool
+    name: str | None = None
+    id: int | None = None
+    error: str | None = None
+
+
+class EmployeeImportResult(BaseModel):
+    total: int
+    created: int
+    failed: int
+    results: list[EmployeeImportRowResult]

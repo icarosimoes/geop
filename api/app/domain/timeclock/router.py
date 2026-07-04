@@ -112,8 +112,10 @@ async def delete_shift_endpoint(
     user: Annotated[AuthenticatedUser, require_permission("shift.manage")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
-    deleted = await delete_shift(session, user.company_id, user.id, shift_id)
+    deleted, error = await delete_shift(session, user.company_id, user.id, shift_id)
     if not deleted:
+        if error:
+            raise HTTPException(status_code=409, detail={"code": "shift_in_use", "message": error})
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
 
@@ -123,8 +125,7 @@ async def get_calendar_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
     start: date,
     end: date,
-    user_id: int | None = None,
-    sector_id: int | None = None,
+    employee_id: int | None = None,
     shift_id: int | None = None,
 ) -> list[CalendarEntry]:
     rows = await get_calendar(
@@ -132,17 +133,14 @@ async def get_calendar_endpoint(
         user.company_id,
         start,
         end,
-        user_id=user_id,
-        sector_id=sector_id,
+        employee_id=employee_id,
         shift_id=shift_id,
     )
     return [
         CalendarEntry(
             date=entry.date,
-            user_id=entry.user_id,
-            user_name=user_name,
-            sector_id=sector_id_val,
-            sector_name=sector_name,
+            employee_id=entry.employee_id,
+            employee_name=employee_name,
             shift_id=shift.id if shift else None,
             shift_name=shift.name if shift else None,
             shift_color=shift.color if shift else None,
@@ -150,29 +148,29 @@ async def get_calendar_endpoint(
             end_time=shift.end_time if shift else None,
             source=entry.source,
         )
-        for entry, user_name, sector_id_val, sector_name, shift in rows
+        for entry, employee_name, shift in rows
     ]
 
 
-@router.put("/schedule/{user_id}/{target_date}", response_model=CalendarEntry)
+@router.put("/schedule/{employee_id}/{target_date}", response_model=CalendarEntry)
 async def set_schedule_day_endpoint(
-    user_id: int,
+    employee_id: int,
     target_date: date,
     body: ScheduleDayUpsert,
     user: Annotated[AuthenticatedUser, require_permission("schedule.manage")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> CalendarEntry:
     await set_schedule_day(
-        session, user.company_id, user.id, user_id, target_date, body.shift_id, body.notes
+        session, user.company_id, user.id, employee_id, target_date, body.shift_id, body.notes
     )
-    rows = await get_calendar(session, user.company_id, target_date, target_date, user_id=user_id)
-    entry, user_name, sector_id_val, sector_name, shift = rows[0]
+    rows = await get_calendar(
+        session, user.company_id, target_date, target_date, employee_id=employee_id
+    )
+    entry, employee_name, shift = rows[0]
     return CalendarEntry(
         date=entry.date,
-        user_id=entry.user_id,
-        user_name=user_name,
-        sector_id=sector_id_val,
-        sector_name=sector_name,
+        employee_id=entry.employee_id,
+        employee_name=employee_name,
         shift_id=shift.id if shift else None,
         shift_name=shift.name if shift else None,
         shift_color=shift.color if shift else None,
@@ -192,7 +190,7 @@ async def generate_schedule_endpoint(
         session,
         user.company_id,
         user.id,
-        user_ids=body.user_ids,
+        employee_ids=body.employee_ids,
         shift_id=body.shift_id,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -292,11 +290,11 @@ async def list_enrollments_endpoint(
     return [
         TimeClockEnrollmentSummary(
             id=enrollment.id,
-            user_id=enrollment.user_id,
-            user_name=user_name,
+            employee_id=enrollment.employee_id,
+            employee_name=employee_name,
             external_id=enrollment.external_id,
         )
-        for enrollment, user_name in rows
+        for enrollment, employee_name in rows
     ]
 
 
@@ -307,10 +305,17 @@ async def create_enrollment_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> TimeClockEnrollmentSummary:
     record = await create_enrollment(
-        session, user.company_id, user.id, user_id=body.user_id, external_id=body.external_id
+        session,
+        user.company_id,
+        user.id,
+        employee_id=body.employee_id,
+        external_id=body.external_id,
     )
     return TimeClockEnrollmentSummary(
-        id=record.id, user_id=record.user_id, user_name="", external_id=record.external_id
+        id=record.id,
+        employee_id=record.employee_id,
+        employee_name="",
+        external_id=record.external_id,
     )
 
 
@@ -331,7 +336,7 @@ async def list_punches_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
-    user_id: int | None = None,
+    employee_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     status: str | None = None,
@@ -341,7 +346,7 @@ async def list_punches_endpoint(
         user.company_id,
         page,
         page_size,
-        user_id=user_id,
+        employee_id=employee_id,
         date_from=date_from,
         date_to=date_to,
         status=status,
@@ -350,8 +355,8 @@ async def list_punches_endpoint(
         items=[
             TimePunchSummary(
                 id=punch.id,
-                user_id=punch.user_id,
-                user_name=user_name,
+                employee_id=punch.employee_id,
+                employee_name=employee_name,
                 device_id=punch.device_id,
                 device_name=device_name,
                 punched_at=punch.punched_at,
@@ -360,7 +365,7 @@ async def list_punches_endpoint(
                 status=punch.status,
                 notes=punch.notes,
             )
-            for punch, user_name, device_name in rows
+            for punch, employee_name, device_name in rows
         ],
         total=total,
         page=page,
@@ -378,15 +383,15 @@ async def create_manual_punch_endpoint(
         session,
         user.company_id,
         user.id,
-        user_id=body.user_id,
+        employee_id=body.employee_id,
         punched_at=body.punched_at,
         punch_type=body.punch_type,
         notes=body.notes,
     )
     return TimePunchSummary(
         id=record.id,
-        user_id=record.user_id,
-        user_name=None,
+        employee_id=record.employee_id,
+        employee_name=None,
         device_id=record.device_id,
         device_name=None,
         punched_at=record.punched_at,
@@ -410,8 +415,8 @@ async def update_punch_endpoint(
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return TimePunchSummary(
         id=record.id,
-        user_id=record.user_id,
-        user_name=None,
+        employee_id=record.employee_id,
+        employee_name=None,
         device_id=record.device_id,
         device_name=None,
         punched_at=record.punched_at,

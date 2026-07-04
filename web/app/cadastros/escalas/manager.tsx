@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wand2 } from "lucide-react";
 import {
   fetchCalendar,
   fetchShifts,
-  searchUsers,
+  generateScheduleAction,
+  searchEmployees,
   setScheduleDayAction,
   type CalendarEntry,
+  type EmployeeOption,
   type Shift,
-  type UserOption,
 } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 
@@ -46,7 +47,7 @@ function buildCalendar(year: number, month: number, entries: CalendarEntry[]): C
 
   for (const entry of entries) {
     if (!entriesMap.has(entry.date)) entriesMap.set(entry.date, new Map());
-    entriesMap.get(entry.date)!.set(entry.user_id, entry);
+    entriesMap.get(entry.date)!.set(entry.employee_id, entry);
   }
 
   const days: CalendarDay[] = [];
@@ -69,8 +70,8 @@ function buildCalendar(year: number, month: number, entries: CalendarEntry[]): C
 
 export function ScheduleManager({ user }: { user: TenantUser }) {
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [users, setUsers] = useState<UserOption[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState(1);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [date, setDate] = useState(new Date());
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,12 +81,24 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
   const [toast, setToast] = useState("");
   const canManage = hasPermission(user, "schedule.manage");
 
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [genEmployeeIds, setGenEmployeeIds] = useState<number[]>([]);
+  const [genShiftId, setGenShiftId] = useState<number | null>(null);
+  const [genStartDate, setGenStartDate] = useState("");
+  const [genEndDate, setGenEndDate] = useState("");
+  const [genPatternType, setGenPatternType] = useState<"weekly" | "rotating">("weekly");
+  const [genWeekdays, setGenWeekdays] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [genWorkDays, setGenWorkDays] = useState(12);
+  const [genOffDays, setGenOffDays] = useState(36);
+  const [generating, setGenerating] = useState(false);
+
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 2600);
   }
 
   function reload() {
+    if (selectedEmployeeId == null) return;
     setLoading(true);
     const start = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
     const daysInMonth = getDaysInMonth(date.getFullYear(), date.getMonth());
@@ -94,7 +107,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
     fetchCalendar({
       start,
       end,
-      userId: selectedUserId,
+      employeeId: selectedEmployeeId,
     })
       .then(setEntries)
       .finally(() => setLoading(false));
@@ -102,24 +115,40 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
 
   useEffect(() => {
     fetchShifts().then(setShifts);
-    searchUsers("").then(setUsers);
+    searchEmployees("").then((results) => {
+      setEmployees(results);
+      if (results.length > 0) setSelectedEmployeeId((prev) => prev ?? results[0].id);
+    });
   }, []);
 
   useEffect(() => {
     reload();
-  }, [selectedUserId, date]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployeeId, date]);
 
   async function handleDayClick(day: CalendarDay) {
-    if (!canManage || !day.isCurrentMonth) return;
-    const entry = day.entries.get(selectedUserId);
-    setSelectedDay(entry ?? { date: day.date, user_id: selectedUserId, user_name: "", sector_id: null, sector_name: null, shift_id: null, shift_name: null, shift_color: null, start_time: null, end_time: null, source: "manual" });
+    if (!canManage || !day.isCurrentMonth || selectedEmployeeId == null) return;
+    const entry = day.entries.get(selectedEmployeeId);
+    setSelectedDay(
+      entry ?? {
+        date: day.date,
+        employee_id: selectedEmployeeId,
+        employee_name: "",
+        shift_id: null,
+        shift_name: null,
+        shift_color: null,
+        start_time: null,
+        end_time: null,
+        source: "manual",
+      },
+    );
     setSelectedShift(entry?.shift_id ?? null);
   }
 
   async function handleSaveDay() {
-    if (!selectedDay) return;
+    if (!selectedDay || selectedEmployeeId == null) return;
     setSaving(true);
-    const result = await setScheduleDayAction(selectedUserId, selectedDay.date, {
+    const result = await setScheduleDayAction(selectedEmployeeId, selectedDay.date, {
       shift_id: selectedShift,
     });
     setSaving(false);
@@ -132,6 +161,46 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
     }
   }
 
+  function toggleWeekday(day: number) {
+    setGenWeekdays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
+  }
+
+  function toggleGenEmployee(id: number) {
+    setGenEmployeeIds((prev) => (prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id]));
+  }
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault();
+    if (genEmployeeIds.length === 0 || !genShiftId || !genStartDate || !genEndDate) {
+      showToast("Preencha funcionários, turno e período.");
+      return;
+    }
+    setGenerating(true);
+    const pattern =
+      genPatternType === "weekly"
+        ? ({ type: "weekly" as const, weekdays: genWeekdays })
+        : ({ type: "rotating" as const, work_days: genWorkDays, off_days: genOffDays });
+    const result = await generateScheduleAction({
+      employee_ids: genEmployeeIds,
+      shift_id: genShiftId,
+      start_date: genStartDate,
+      end_date: genEndDate,
+      pattern,
+    });
+    setGenerating(false);
+    if (result.ok) {
+      showToast(`Escala gerada (${result.data?.affected ?? 0} dias afetados).`);
+      setShowGenerateForm(false);
+      setGenEmployeeIds([]);
+      setGenShiftId(null);
+      setGenStartDate("");
+      setGenEndDate("");
+      reload();
+    } else {
+      showToast(result.error ?? "Erro ao gerar escala.");
+    }
+  }
+
   const days = buildCalendar(date.getFullYear(), date.getMonth(), entries);
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -139,16 +208,20 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
   return (
     <section className="module-panel">
       <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
-        <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
-          <select value={selectedUserId} onChange={(e) => setSelectedUserId(Number(e.target.value))}>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
+        <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap" }}>
+          <select
+            value={selectedEmployeeId ?? ""}
+            onChange={(e) => setSelectedEmployeeId(e.target.value ? Number(e.target.value) : null)}
+          >
+            {employees.length === 0 && <option value="">Nenhum funcionário</option>}
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name}
               </option>
             ))}
           </select>
 
-          <div style={{ marginLeft: "auto", display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
             <button onClick={() => setDate(new Date(year, month - 1))} aria-label="Mês anterior">
               <ChevronLeft size={16} />
             </button>
@@ -159,10 +232,153 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
               <ChevronRight size={16} />
             </button>
           </div>
+
+          {canManage && (
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => setShowGenerateForm((v) => !v)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto" }}
+            >
+              <Wand2 size={16} /> Gerar escala
+            </button>
+          )}
         </div>
       </div>
 
-      {loading ? (
+      {canManage && showGenerateForm && (
+        <form
+          onSubmit={handleGenerate}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--sp-3)",
+            padding: "var(--sp-4) var(--sp-5)",
+            borderBottom: "1px solid var(--field-border)",
+            backgroundColor: "var(--field-bg)",
+          }}
+        >
+          <div>
+            <label>Funcionários *</label>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--sp-2)",
+                marginTop: "var(--sp-1)",
+                maxHeight: 120,
+                overflowY: "auto",
+              }}
+            >
+              {employees.map((emp) => (
+                <label
+                  key={emp.id}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "4px 8px",
+                    borderRadius: 4,
+                    border: "1px solid var(--field-border)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={genEmployeeIds.includes(emp.id)}
+                    onChange={() => toggleGenEmployee(emp.id)}
+                  />
+                  {emp.name}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--sp-3)" }}>
+            <div>
+              <label>Turno *</label>
+              <select value={genShiftId ?? ""} onChange={(e) => setGenShiftId(e.target.value ? Number(e.target.value) : null)} required>
+                <option value="">Selecione...</option>
+                {shifts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.start_time}-{s.end_time})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Data início *</label>
+              <input type="date" value={genStartDate} onChange={(e) => setGenStartDate(e.target.value)} required />
+            </div>
+            <div>
+              <label>Data fim *</label>
+              <input type="date" value={genEndDate} onChange={(e) => setGenEndDate(e.target.value)} required />
+            </div>
+            <div>
+              <label>Padrão</label>
+              <select value={genPatternType} onChange={(e) => setGenPatternType(e.target.value as "weekly" | "rotating")}>
+                <option value="weekly">Semanal</option>
+                <option value="rotating">Rotativo</option>
+              </select>
+            </div>
+          </div>
+
+          {genPatternType === "weekly" ? (
+            <div>
+              <label>Dias da semana</label>
+              <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-1)" }}>
+                {DAY_NAMES.map((label, idx) => {
+                  const weekday = idx === 0 ? 6 : idx - 1;
+                  return (
+                    <label
+                      key={label}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                        borderRadius: 4,
+                        border: "1px solid var(--field-border)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input type="checkbox" checked={genWeekdays.includes(weekday)} onChange={() => toggleWeekday(weekday)} />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: "var(--sp-3)" }}>
+              <div>
+                <label>Dias trabalhados</label>
+                <input type="number" min={1} value={genWorkDays} onChange={(e) => setGenWorkDays(Number(e.target.value))} />
+              </div>
+              <div>
+                <label>Dias de folga</label>
+                <input type="number" min={1} value={genOffDays} onChange={(e) => setGenOffDays(Number(e.target.value))} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+            <button className="primary-button" type="submit" disabled={generating}>
+              {generating ? "Gerando..." : "Gerar escala"}
+            </button>
+            <button type="button" onClick={() => setShowGenerateForm(false)} style={{ backgroundColor: "var(--field-border)" }}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {selectedEmployeeId == null ? (
+        <div className="module-state">
+          <strong>Nenhum funcionário cadastrado</strong>
+          <span>Cadastre funcionários em Cadastros → Funcionários para gerenciar a escala.</span>
+        </div>
+      ) : loading ? (
         <div className="module-state">Carregando escala...</div>
       ) : (
         <>
@@ -204,17 +420,17 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
                         {day.isCurrentMonth && (
                           <>
                             <div style={{ fontWeight: "bold", marginBottom: "var(--sp-1)" }}>{day.dayOfMonth}</div>
-                            {day.entries.has(selectedUserId) && (
+                            {day.entries.has(selectedEmployeeId) && (
                               <div
                                 style={{
                                   padding: "4px",
                                   borderRadius: 4,
                                   fontSize: 12,
-                                  backgroundColor: day.entries.get(selectedUserId)?.shift_color ?? "#f3f4f6",
-                                  color: day.entries.get(selectedUserId)?.shift_color ? "#fff" : "#000",
+                                  backgroundColor: day.entries.get(selectedEmployeeId)?.shift_color ?? "#f3f4f6",
+                                  color: day.entries.get(selectedEmployeeId)?.shift_color ? "#fff" : "#000",
                                 }}
                               >
-                                {day.entries.get(selectedUserId)?.shift_name ?? "Folga"}
+                                {day.entries.get(selectedEmployeeId)?.shift_name ?? "Folga"}
                               </div>
                             )}
                           </>
@@ -239,7 +455,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
               }}
             >
               <span>
-                <strong>{selectedDay.date}</strong> - {selectedDay.user_name}
+                <strong>{selectedDay.date}</strong>
               </span>
               <select value={selectedShift ?? ""} onChange={(e) => setSelectedShift(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">Folga</option>

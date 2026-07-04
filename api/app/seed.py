@@ -29,9 +29,13 @@ async def seed() -> None:
         if await session.scalar(select(Company.id).limit(1)):
             return
 
-        wildcard = Permission(code="*", name="Acesso total (administrador)", module="system")
-        session.add(wildcard)
-        await session.flush()
+        wildcard = await session.scalar(select(Permission).filter_by(code="*"))
+        if not wildcard:
+            wildcard = Permission(code="*", name="Acesso total (administrador)", module="system")
+            session.add(wildcard)
+            await session.flush()
+        else:
+            wildcard = await session.merge(wildcard)
 
         plan = Plan(
             code="professional",

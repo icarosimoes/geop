@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.employees import Employee, EmployeeExternalId
 from app.models.identity import Company, Permission, Role, User, role_permissions
 from app.models.operations import (
     ApartmentInspection,
@@ -75,6 +76,8 @@ __all__ = [
     "CheckSuiteItem",
     "Company",
     "CompanySetting",
+    "Employee",
+    "EmployeeExternalId",
     "Invoice",
     "FiscalRequest",
     "Function",

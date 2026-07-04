@@ -43,7 +43,7 @@ async def create_tables(test_engine):
 
 @pytest.fixture(scope="session", autouse=True)
 async def seed_data(test_session_factory, create_tables):
-    from app.models import Company, Role, User
+    from app.models import Company, Employee, Role, User
 
     async with test_session_factory() as s:
         existing = await s.get(Company, TENANT_A)
@@ -97,11 +97,33 @@ async def seed_data(test_session_factory, create_tables):
                 active=True,
             )
         )
+        await s.flush()
+
+        s.add(
+            Employee(
+                id=1,
+                company_id=TENANT_A,
+                name="User A",
+                personal_email="a@test.com",
+                user_id=1,
+                status="active",
+            )
+        )
+        s.add(
+            Employee(
+                id=2,
+                company_id=TENANT_B,
+                name="User B",
+                personal_email="b@test.com",
+                user_id=2,
+                status="active",
+            )
+        )
         await s.commit()
 
         if USE_POSTGRES:
             async with test_session_factory() as seq_s:
-                for tbl in ("companies", "roles", "users"):
+                for tbl in ("companies", "roles", "users", "employees"):
                     await seq_s.execute(
                         sa_text(
                             f"SELECT setval(pg_get_serial_sequence('{tbl}', 'id'), "

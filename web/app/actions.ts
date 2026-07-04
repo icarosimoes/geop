@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 import { setTokenCookies, tryRefreshToken } from "@/lib/auth";
 import {
   AttachmentItemSchema,
+  EmployeeDetailedSchema,
+  EmployeeImportResultSchema,
+  EmployeeOptionSchema,
+  EmployeeSummarySchema,
   NotificationItemSchema,
   NotificationListSchema,
   RegistryOptionSchema,
@@ -624,6 +628,195 @@ export async function searchUsers(q: string): Promise<UserOption[]> {
   const response = await authedFetch(`/users/search?q=${encodeURIComponent(q)}`);
   if (!response.ok) return [];
   return safeParse(z.array(UserOptionSchema), await response.json());
+}
+
+// --- Funcionários (cadastro de RH, separado de User/login) ---
+
+export type EmployeeOption = z.infer<typeof EmployeeOptionSchema>;
+
+export type Employee = z.infer<typeof EmployeeSummarySchema>;
+
+export type EmployeeDetailed = z.infer<typeof EmployeeDetailedSchema>;
+
+export interface EmployeeListResponse {
+  items: Employee[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface EmployeePayload {
+  name: string;
+  cpf: string;
+  rg?: string | null;
+  birth_date?: string | null;
+  phone?: string | null;
+  personal_email?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
+  status?: string;
+  user_id?: number | null;
+  job_title?: string | null;
+  hire_date?: string | null;
+  termination_date?: string | null;
+  registration_number?: string | null;
+  sector_id?: number | null;
+}
+
+export async function fetchEmployees(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+}): Promise<EmployeeListResponse> {
+  const qs = new URLSearchParams();
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.pageSize ?? 20));
+  if (params.status) qs.set("status", params.status);
+  const response = await authedFetch(`/employees?${qs.toString()}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  const data = await response.json();
+  return {
+    ...data,
+    items: safeParse(z.array(EmployeeSummarySchema), data.items ?? []),
+  };
+}
+
+export async function fetchEmployee(id: number): Promise<EmployeeDetailed | null> {
+  const response = await authedFetch(`/employees/${id}`);
+  if (!response.ok) return null;
+  return safeParse(EmployeeDetailedSchema, await response.json());
+}
+
+export async function searchEmployees(q: string): Promise<EmployeeOption[]> {
+  const response = await authedFetch(`/employees/search?q=${encodeURIComponent(q)}`);
+  if (!response.ok) return [];
+  return safeParse(z.array(EmployeeOptionSchema), await response.json());
+}
+
+export interface CepLookupResult {
+  ok: boolean;
+  address_street?: string;
+  address_neighborhood?: string;
+  address_city?: string;
+  address_state?: string;
+}
+
+export async function lookupCepAction(cep: string): Promise<CepLookupResult> {
+  const digits = cep.replace(/\D/g, "");
+  if (digits.length !== 8) return { ok: false };
+
+  try {
+    const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return { ok: false };
+    const data = await response.json();
+    if (data.erro) return { ok: false };
+    return {
+      ok: true,
+      address_street: data.logradouro || undefined,
+      address_neighborhood: data.bairro || undefined,
+      address_city: data.localidade || undefined,
+      address_state: data.uf || undefined,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function createEmployeeAction(body: EmployeePayload): Promise<MutationResult> {
+  const response = await authedFetch("/employees", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao criar funcionário." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function updateEmployeeAction(
+  id: number,
+  body: Partial<EmployeePayload>,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/employees/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao atualizar funcionário." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteEmployeeAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/employees/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir funcionário." };
+  return { ok: true };
+}
+
+export async function uploadEmployeeAvatarAction(
+  employeeId: number,
+  formData: FormData,
+): Promise<MutationResult> {
+  const jar = await cookies();
+  const token = jar.get("tenant_token")?.value;
+  if (!token) throw new Error("unauthorized");
+  const response = await fetch(`${apiUrl}/employees/${employeeId}/avatar`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao enviar avatar." };
+  }
+  return { ok: true, data: await response.json() };
+}
+
+export type EmployeeImportResult = z.infer<typeof EmployeeImportResultSchema>;
+
+export async function importEmployeesAction(formData: FormData): Promise<
+  { ok: true; result: EmployeeImportResult } | { ok: false; error: string }
+> {
+  const jar = await cookies();
+  const token = jar.get("tenant_token")?.value;
+  if (!token) throw new Error("unauthorized");
+  const response = await fetch(`${apiUrl}/employees/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao importar funcionários." };
+  }
+  return { ok: true, result: safeParse(EmployeeImportResultSchema, await response.json()) };
+}
+
+export async function createEmployeeExternalIdAction(
+  employeeId: number,
+  system: string,
+  externalId: string,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/employees/${employeeId}/external-ids`, {
+    method: "POST",
+    body: JSON.stringify({ system, external_id: externalId }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao criar identificador externo." };
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteEmployeeExternalIdAction(
+  employeeId: number,
+  externalIdId: number,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/employees/${employeeId}/external-ids/${externalIdId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir identificador externo." };
+  return { ok: true };
 }
 
 // --- Meetings ---
@@ -1258,8 +1451,8 @@ export async function deleteDeviceAction(id: number): Promise<MutationResult> {
 
 export interface TimeClockEnrollment {
   id: number;
-  user_id: number;
-  user_name: string;
+  employee_id: number;
+  employee_name: string;
   external_id: string;
 }
 
@@ -1270,12 +1463,12 @@ export async function fetchEnrollments(): Promise<TimeClockEnrollment[]> {
 }
 
 export async function createEnrollmentAction(
-  userId: number,
+  employeeId: number,
   externalId: string,
 ): Promise<MutationResult> {
   const response = await authedFetch("/timeclock/enrollments", {
     method: "POST",
-    body: JSON.stringify({ user_id: userId, external_id: externalId }),
+    body: JSON.stringify({ employee_id: employeeId, external_id: externalId }),
   });
   if (!response.ok) return { ok: false, error: "Erro ao criar vínculo." };
   return { ok: true, data: await response.json() };
@@ -1289,8 +1482,8 @@ export async function deleteEnrollmentAction(id: number): Promise<MutationResult
 
 export interface TimePunch {
   id: number;
-  user_id: number | null;
-  user_name: string | null;
+  employee_id: number | null;
+  employee_name: string | null;
   device_id: number | null;
   device_name: string | null;
   punched_at: string;
@@ -1310,7 +1503,7 @@ export interface TimePunchListResponse {
 export async function fetchPunches(params: {
   page?: number;
   pageSize?: number;
-  userId?: number;
+  employeeId?: number;
   dateFrom?: string;
   dateTo?: string;
   status?: string;
@@ -1318,7 +1511,7 @@ export async function fetchPunches(params: {
   const qs = new URLSearchParams();
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.pageSize ?? 20));
-  if (params.userId) qs.set("user_id", String(params.userId));
+  if (params.employeeId) qs.set("employee_id", String(params.employeeId));
   if (params.dateFrom) qs.set("date_from", params.dateFrom);
   if (params.dateTo) qs.set("date_to", params.dateTo);
   if (params.status) qs.set("status", params.status);
@@ -1328,7 +1521,7 @@ export async function fetchPunches(params: {
 }
 
 export async function createManualPunchAction(body: {
-  user_id: number;
+  employee_id: number;
   punched_at: string;
   punch_type?: string;
   notes?: string;
@@ -1369,10 +1562,8 @@ export interface Shift {
 
 export interface CalendarEntry {
   date: string;
-  user_id: number;
-  user_name: string;
-  sector_id: number | null;
-  sector_name: string | null;
+  employee_id: number;
+  employee_name: string;
   shift_id: number | null;
   shift_name: string | null;
   shift_color: string | null;
@@ -1434,15 +1625,13 @@ export async function deleteShiftAction(id: number): Promise<MutationResult> {
 export async function fetchCalendar(params: {
   start: string;
   end: string;
-  userId?: number;
-  sectorId?: number;
+  employeeId?: number;
   shiftId?: number;
 }): Promise<CalendarEntry[]> {
   const qs = new URLSearchParams();
   qs.set("start", params.start);
   qs.set("end", params.end);
-  if (params.userId) qs.set("user_id", String(params.userId));
-  if (params.sectorId) qs.set("sector_id", String(params.sectorId));
+  if (params.employeeId) qs.set("employee_id", String(params.employeeId));
   if (params.shiftId) qs.set("shift_id", String(params.shiftId));
   const response = await authedFetch(`/timeclock/schedule?${qs.toString()}`);
   if (!response.ok) return [];
@@ -1450,11 +1639,11 @@ export async function fetchCalendar(params: {
 }
 
 export async function setScheduleDayAction(
-  userId: number,
+  employeeId: number,
   date: string,
   body: { shift_id?: number | null; notes?: string },
 ): Promise<MutationResult> {
-  const response = await authedFetch(`/timeclock/schedule/${userId}/${date}`, {
+  const response = await authedFetch(`/timeclock/schedule/${employeeId}/${date}`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
@@ -1463,7 +1652,7 @@ export async function setScheduleDayAction(
 }
 
 export async function generateScheduleAction(body: {
-  user_ids: number[];
+  employee_ids: number[];
   shift_id: number;
   start_date: string;
   end_date: string;
