@@ -228,6 +228,34 @@ services:
         - traefik.http.routers.registro-admin.tls.certresolver=letsencrypt
         - traefik.http.services.registro-admin.loadbalancer.server.port=3001
 
+  colaborador:
+    image: ghcr.io/icarosimoes/registro/colaborador:${IMAGE_TAG:-latest}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      API_URL: http://api:8000/api/v1
+    networks:
+      - registro-internal
+      - traefik-public
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik-public
+        - traefik.http.routers.registro-colaborador.rule=Host(`${REGISTRO_COLABORADOR_HOST}`)
+        - traefik.http.routers.registro-colaborador.entrypoints=websecure
+        - traefik.http.routers.registro-colaborador.tls.certresolver=letsencrypt
+        - traefik.http.services.registro-colaborador.loadbalancer.server.port=3002
+
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes --appendfsync everysec

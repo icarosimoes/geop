@@ -177,7 +177,9 @@ label span.field-hint {
   margin-top: 2px;
 }
 
-input {
+input,
+select,
+textarea {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -186,6 +188,7 @@ input {
   border-radius: var(--radius-md);
   font-size: 1rem;
   background: #fbfcfe;
+  font-family: inherit;
 }
 
 input:focus {

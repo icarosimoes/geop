@@ -1,3 +1,6 @@
+import csv
+import io
+import zipfile
 from datetime import date
 from typing import Annotated
 
@@ -10,9 +13,18 @@ from app.domain.attachments.service import create_attachment
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.timeclock.schemas import (
     CalendarEntry,
+    EmployeePayslipImportResponse,
+    EmployeePayslipImportRowResult,
     EmployeePayslipUploadResponse,
     EmployeePinResetResponse,
+    HourBankInitialBalanceCreate,
+    HourBankRecalculateRequest,
+    HourBankRecalculateResponse,
+    HourBankSummaryResponse,
     ManualPunchCreate,
+    PunchAdjustmentListResponse,
+    PunchAdjustmentReview,
+    PunchAdjustmentSummary,
     PunchUpdate,
     ScheduleDayUpsert,
     ScheduleGenerateRequest,
@@ -39,11 +51,17 @@ from app.domain.timeclock.service import (
     delete_shift,
     generate_schedule,
     get_calendar,
+    get_hour_bank_summary,
+    import_employee_payslips,
     list_devices,
     list_enrollments,
+    list_punch_adjustment_requests,
     list_punches,
     list_shifts,
+    recalculate_hour_bank,
     reset_employee_pin,
+    review_punch_adjustment_request,
+    set_hour_bank_initial_balance,
     set_schedule_day,
     update_device,
     update_punch,
@@ -471,6 +489,62 @@ async def upload_employee_payslip_endpoint(
     )
 
 
+@router.post(
+    "/employees/payslips/import",
+    response_model=EmployeePayslipImportResponse,
+)
+async def import_employee_payslips_endpoint(
+    manifest: UploadFile,
+    archive: UploadFile,
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeePayslipImportResponse:
+    """RH sobe um ZIP com os PDFs de contracheque de uma competência + um manifesto
+    CSV (cpf ou matricula, competencia, arquivo) casando cada PDF a um funcionário.
+    Não depende de nenhum ERP/sistema de folha específico — funciona com qualquer
+    contador, já que CPF é universal. Reaproveita o fluxo genérico de attachments."""
+    if not (manifest.filename or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail={"code": "invalid_manifest_type"})
+    if not (archive.filename or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail={"code": "invalid_archive_type"})
+
+    manifest_raw = await manifest.read()
+    try:
+        manifest_text = manifest_raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_encoding"}) from exc
+
+    rows = list(csv.DictReader(io.StringIO(manifest_text)))
+    if not rows:
+        raise HTTPException(status_code=400, detail={"code": "empty_manifest"})
+
+    archive_raw = await archive.read()
+    files: dict[str, bytes] = {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(archive_raw)) as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                name = info.filename
+                if name.startswith("/") or ".." in name.split("/"):
+                    raise HTTPException(status_code=400, detail={"code": "invalid_archive_entry"})
+                files[name.rsplit("/", 1)[-1]] = zf.read(info)
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_archive"}) from exc
+
+    results = await import_employee_payslips(session, user.company_id, user.id, rows, files)
+    created = sum(1 for r in results if r["status"] == "created")
+    updated = sum(1 for r in results if r["status"] == "updated")
+    failed = sum(1 for r in results if r["status"] == "failed")
+    return EmployeePayslipImportResponse(
+        total=len(results),
+        created=created,
+        updated=updated,
+        failed=failed,
+        results=[EmployeePayslipImportRowResult(**r) for r in results],
+    )
+
+
 @router.patch("/punches/{punch_id}", response_model=TimePunchSummary)
 async def update_punch_endpoint(
     punch_id: int,
@@ -494,3 +568,146 @@ async def update_punch_endpoint(
         status=record.status,
         notes=record.notes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Banco de horas
+# ---------------------------------------------------------------------------
+
+
+def _hour_bank_summary_response(
+    employee_id: int, total_balance: int, entries: list
+) -> HourBankSummaryResponse:
+    from app.domain.timeclock.schemas import HourBankEntrySummary
+
+    return HourBankSummaryResponse(
+        employee_id=employee_id,
+        balance_minutes=total_balance,
+        entries=[
+            HourBankEntrySummary(
+                id=e.id,
+                reference_date=e.reference_date,
+                expected_minutes=e.expected_minutes,
+                worked_minutes=e.worked_minutes,
+                balance_minutes=e.balance_minutes,
+                source=e.source,
+                notes=e.notes,
+            )
+            for e in entries
+        ],
+    )
+
+
+@router.get("/hour-bank/{employee_id}", response_model=HourBankSummaryResponse)
+async def get_hour_bank_endpoint(
+    employee_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("hour_bank.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> HourBankSummaryResponse:
+    total_balance, entries = await get_hour_bank_summary(session, user.company_id, employee_id)
+    return _hour_bank_summary_response(employee_id, total_balance, entries)
+
+
+@router.post("/hour-bank/{employee_id}/recalculate", response_model=HourBankRecalculateResponse)
+async def recalculate_hour_bank_endpoint(
+    employee_id: int,
+    body: HourBankRecalculateRequest,
+    user: Annotated[AuthenticatedUser, require_permission("hour_bank.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> HourBankRecalculateResponse:
+    if body.end_date < body.start_date:
+        raise HTTPException(status_code=422, detail={"code": "invalid_range"})
+    affected = await recalculate_hour_bank(
+        session, user.company_id, user.id, employee_id, body.start_date, body.end_date
+    )
+    return HourBankRecalculateResponse(affected=affected)
+
+
+@router.post(
+    "/hour-bank/{employee_id}/initial-balance",
+    response_model=HourBankSummaryResponse,
+    status_code=201,
+)
+async def set_hour_bank_initial_balance_endpoint(
+    employee_id: int,
+    body: HourBankInitialBalanceCreate,
+    user: Annotated[AuthenticatedUser, require_permission("hour_bank.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> HourBankSummaryResponse:
+    await set_hour_bank_initial_balance(
+        session,
+        user.company_id,
+        user.id,
+        employee_id,
+        body.effective_date,
+        body.balance_minutes,
+        body.notes,
+    )
+    total_balance, entries = await get_hour_bank_summary(session, user.company_id, employee_id)
+    return _hour_bank_summary_response(employee_id, total_balance, entries)
+
+
+# ---------------------------------------------------------------------------
+# Ajuste de ponto: aprovação (RH/gestor)
+# ---------------------------------------------------------------------------
+
+
+def _punch_adjustment_summary(record, employee_name: str) -> PunchAdjustmentSummary:
+    return PunchAdjustmentSummary(
+        id=record.id,
+        employee_id=record.employee_id,
+        employee_name=employee_name,
+        punch_id=record.punch_id,
+        requested_punched_at=record.requested_punched_at,
+        requested_punch_type=record.requested_punch_type,
+        reason=record.reason,
+        status=record.status,
+        reviewed_by_user_id=record.reviewed_by_user_id,
+        reviewed_at=record.reviewed_at,
+        review_notes=record.review_notes,
+        resulting_punch_id=record.resulting_punch_id,
+        created_at=record.created_at,
+    )
+
+
+@router.get("/adjustments", response_model=PunchAdjustmentListResponse)
+async def list_punch_adjustments_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("punch_adjustment.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    employee_id: int | None = None,
+    status: str | None = None,
+) -> PunchAdjustmentListResponse:
+    rows, total = await list_punch_adjustment_requests(
+        session, user.company_id, page, page_size, employee_id=employee_id, status=status
+    )
+    return PunchAdjustmentListResponse(
+        items=[_punch_adjustment_summary(record, employee_name) for record, employee_name in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/adjustments/{request_id}/review", response_model=PunchAdjustmentSummary)
+async def review_punch_adjustment_endpoint(
+    request_id: int,
+    body: PunchAdjustmentReview,
+    user: Annotated[AuthenticatedUser, require_permission("punch_adjustment.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PunchAdjustmentSummary:
+    record, error = await review_punch_adjustment_request(
+        session,
+        user.company_id,
+        user.id,
+        request_id,
+        approve=body.approve,
+        review_notes=body.review_notes,
+    )
+    if error == "not_found":
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    if error == "already_reviewed":
+        raise HTTPException(status_code=409, detail={"code": "already_reviewed"})
+    assert record is not None
+    return _punch_adjustment_summary(record, "")

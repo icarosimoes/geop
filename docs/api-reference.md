@@ -620,7 +620,7 @@ Cria um cadastro. Requer `name` e `category`. A `category` deve ser `"Setor"`, `
 
 #### `PATCH /registries/{id}?category=Setor`
 
-Atualiza o nome do cadastro. O `category` é obrigatório como query parameter para identificar a tabela correta.
+Atualiza o nome do cadastro. O `category` é obrigatório como query parameter para identificar a tabela correta. Quando `category=Local`, aceita também `latitude`, `longitude` e `geofence_radius_m` (usados no geofencing do Portal do Colaborador — ver [portal-colaborador.md](portal-colaborador.md)); esses campos são ignorados para `Setor`/`Função`. `GET`/`POST`/`PATCH /registries` retornam `latitude`/`longitude`/`geofence_radius_m` (nulos fora de `Local`).
 
 #### `DELETE /registries/{id}?category=Setor`
 
@@ -794,6 +794,8 @@ O sistema de permissões usa uma factory `require_permission(code)` em `app/core
 | handoff | `handoff.view`, `.create`, `.edit`, `.delete` |
 | maintenance | `maintenance.view`, `.create`, `.edit`, `.delete` |
 | bulletin | `bulletin.view`, `.create`, `.edit`, `.delete` |
+| hour_bank | `hour_bank.view`, `.manage` |
+| punch_adjustment | `punch_adjustment.view`, `.manage` |
 | system | `*` (acesso total) |
 
 Sem a permissão necessária, a API retorna `403 Forbidden` com `{"code": "forbidden", "required": "modulo.acao"}`.
@@ -912,8 +914,24 @@ GET  /timeclock/mobile/status      (auth) → próximo tipo de batida esperado
 GET  /timeclock/mobile/schedule    (auth) ?start&end → CalendarEntry[] do próprio funcionário
 GET  /timeclock/mobile/payslips    (auth) → lista dos próprios contracheques
 GET  /timeclock/mobile/payslips/{id}/download  (auth) → PDF, valida posse
+GET  /timeclock/mobile/hour-bank   (auth) → saldo do banco de horas do próprio funcionário
+POST /timeclock/mobile/adjustments (auth) { punch_id?, requested_punched_at, requested_punch_type?, reason } → solicita ajuste de ponto
+GET  /timeclock/mobile/adjustments (auth) → lista as próprias solicitações de ajuste
 ```
 
 Autenticado por token `employee_session`, um namespace de JWT isolado do `access`/`refresh`
 de `User` — nunca intercambiáveis. Endpoint administrativo de reset de PIN:
 `POST /timeclock/employees/{employee_id}/pin/reset` (`timeclock.manage`, no router principal).
+
+### Banco de horas e ajuste de ponto (`/timeclock`)
+
+Documentação completa em [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05).
+
+```
+GET  /timeclock/hour-bank/{employee_id}                 (hour_bank.view)   → saldo total + extrato diário
+POST /timeclock/hour-bank/{employee_id}/recalculate     (hour_bank.manage) { start_date, end_date } → recalcula o período (escala x pontos)
+POST /timeclock/hour-bank/{employee_id}/initial-balance (hour_bank.manage) { effective_date, balance_minutes, notes? } → define/substitui o saldo inicial
+
+GET  /timeclock/adjustments              (punch_adjustment.view)   ?status&employee_id → fila de solicitações
+POST /timeclock/adjustments/{id}/review  (punch_adjustment.manage) { approve, review_notes? } → aprova (cria/corrige o TimePunch) ou rejeita
+```

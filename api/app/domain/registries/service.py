@@ -4,7 +4,7 @@ from typing import NamedTuple
 from sqlalchemy import String, cast, func, literal_column, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import record_event
+from app.core.audit import compute_diff, record_event
 from app.models import Function, Location, Sector
 
 
@@ -39,14 +39,17 @@ async def list_registries(
             )
             or 0
         )
+        columns = [
+            model.id,
+            model.name,
+            cast(literal_column(f"'{label}'"), String).label("category"),
+            model.updated_at,
+        ]
+        if model is Location:
+            columns += [model.latitude, model.longitude, model.geofence_radius_m]
         rows = (
             await session.execute(
-                select(
-                    model.id,
-                    model.name,
-                    cast(literal_column(f"'{label}'"), String).label("category"),
-                    model.updated_at,
-                )
+                select(*columns)
                 .where(*filters)
                 .order_by(model.name)
                 .offset((page - 1) * page_size)
@@ -162,9 +165,13 @@ async def create_registry(
 async def update_registry(
     session: AsyncSession,
     company_id: int,
+    user_id: int,
     registry_id: int,
     category: str,
     name: str | None,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    geofence_radius_m: int | None = None,
 ):
     model = MODELS.get(category)
     if model is None:
@@ -178,8 +185,32 @@ async def update_registry(
     )
     if record is None:
         return None
+
+    fields = ["name"]
+    if model is Location:
+        fields += ["latitude", "longitude", "geofence_radius_m"]
+    before = {field: getattr(record, field) for field in fields}
+
     if name is not None:
         record.name = name
+    if model is Location:
+        if latitude is not None:
+            record.latitude = latitude
+        if longitude is not None:
+            record.longitude = longitude
+        if geofence_radius_m is not None:
+            record.geofence_radius_m = geofence_radius_m
+
+    after = {field: getattr(record, field) for field in fields}
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="registry",
+        entity_id=record.id,
+        event_type="update",
+        diff=compute_diff(before, after),
+    )
     await session.commit()
     await session.refresh(record)
     return record

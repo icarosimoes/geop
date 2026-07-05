@@ -10,18 +10,19 @@ Defina antes de começar:
 export REGISTRO_WEB_HOST=registro.exemplo.com.br
 export REGISTRO_API_HOST=api.registro.exemplo.com.br
 export REGISTRO_ADMIN_HOST=painel.registro.exemplo.com.br
+export REGISTRO_COLABORADOR_HOST=colaborador.registro.exemplo.com.br
 export REGISTRO_WEB_ORIGIN=https://${REGISTRO_WEB_HOST}
 export IMAGE_TAG=sha-<commit-completo-publicado-no-ghcr>
 ```
 
-O navegador acessa três hosts, mas web e admin consomem a API internamente em `http://api:8000/api/v1`. Não troque `API_URL` por uma URL pública no stack.
+O navegador acessa quatro hosts, mas web, admin e colaborador consomem a API internamente em `http://api:8000/api/v1`. Não troque `API_URL` por uma URL pública no stack.
 
 ## 1. Pré-requisitos
 
 - nó manager do Docker Swarm acessível por SSH;
 - Traefik ativo e conectado à rede overlay externa `traefik-public`;
 - certificate resolver conhecido e funcional;
-- três registros DNS apontando para a VPS;
+- quatro registros DNS apontando para a VPS;
 - login do Docker na VPS com permissão `read:packages` no GHCR;
 - workflow `Publish images` concluído para o SHA escolhido;
 - portas 80 e 443 liberadas para o Traefik.
@@ -39,7 +40,7 @@ O stack do Registro usa o resolver `letsencrypt`. Confirme que o Traefik possui 
 
 ## 2. DNS e Cloudflare
 
-Crie registros `A` para web, API e painel apontando para o IP público da VPS.
+Crie registros `A` para web, API, painel e colaborador apontando para o IP público da VPS.
 
 Hosts como `api.registro.exemplo.com.br` e `painel.registro.exemplo.com.br` têm dois níveis abaixo da zona. O certificado Universal `*.exemplo.com.br` do Cloudflare não os cobre. Escolha uma destas opções:
 
@@ -52,6 +53,7 @@ Para o primeiro deploy, DNS-only é a opção mais simples. Valide a resolução
 getent ahostsv4 "$REGISTRO_WEB_HOST"
 getent ahostsv4 "$REGISTRO_API_HOST"
 getent ahostsv4 "$REGISTRO_ADMIN_HOST"
+getent ahostsv4 "$REGISTRO_COLABORADOR_HOST"
 ```
 
 ## 3. Validar código e publicar imagens
@@ -100,6 +102,7 @@ Conteúdo de `/opt/registro/.env.prod`:
 REGISTRO_WEB_HOST=registro.exemplo.com.br
 REGISTRO_API_HOST=api.registro.exemplo.com.br
 REGISTRO_ADMIN_HOST=painel.registro.exemplo.com.br
+REGISTRO_COLABORADOR_HOST=colaborador.registro.exemplo.com.br
 REGISTRO_WEB_ORIGIN=https://registro.exemplo.com.br
 IMAGE_TAG=sha-<sha-completo>
 ```
@@ -197,11 +200,12 @@ curl -fsS "https://${REGISTRO_API_HOST}/api/v1/health"
 curl -fsS "https://${REGISTRO_API_HOST}/api/v1/health/ready"
 curl -fsS -o /dev/null "https://${REGISTRO_WEB_HOST}/login"
 curl -fsS -o /dev/null "https://${REGISTRO_ADMIN_HOST}/login"
+curl -fsS -o /dev/null "https://${REGISTRO_COLABORADOR_HOST}/login"
 ```
 
 Readiness deve informar banco e cache conectados. Valide também:
 
-- certificado e SAN dos três hosts;
+- certificado e SAN dos quatro hosts;
 - login tenant e login platform sem imprimir tokens;
 - criação/listagem de um registro de teste quando aplicável;
 - MinIO e criação do bucket pela API;
@@ -214,8 +218,8 @@ Em produção, `/docs` e o OpenAPI público ficam desativados; `404` nessas rota
 
 Para mover uma instalação existente:
 
-1. crie os três novos registros DNS;
-2. ajuste `REGISTRO_WEB_HOST`, `REGISTRO_API_HOST`, `REGISTRO_ADMIN_HOST` e `REGISTRO_WEB_ORIGIN`;
+1. crie os quatro novos registros DNS;
+2. ajuste `REGISTRO_WEB_HOST`, `REGISTRO_API_HOST`, `REGISTRO_ADMIN_HOST`, `REGISTRO_COLABORADOR_HOST` e `REGISTRO_WEB_ORIGIN`;
 3. renderize `docker stack config`;
 4. aplique `docker stack deploy` com a mesma tag imutável, se não houver mudança de código;
 5. aguarde o DNS challenge e valide os certificados;

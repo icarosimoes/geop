@@ -606,3 +606,27 @@ O Aero Hotel é um **cliente real**, não apenas dados de teste. O dump `aero-20
 - `OperationalModule` ganhou os props opcionais `basePath`/`extraParams` (antes navegava sempre para `/${definition.slug}` na paginação/busca; agora aceita uma base de rota diferente para funcionar embutido em `/configuracoes?tab=usuarios`).
 - Removidas as entradas "Usuários" e "Perfis de acesso" do submenu "Cadastros" da sidebar (`components/app-layout.tsx`); `/perfis` agora é um redirect para `/configuracoes?tab=perfis` (mantém links antigos funcionando); `/usuarios` continua respondendo via a rota genérica `[module]` (sem alteração), só não aparece mais no menu.
 - Verificado em navegador (Playwright headless): as duas abas renderizam corretamente, busca/paginação preservam `tab=usuarios` na URL, sem erros de console.
+
+## 2026-07-05 — Deploy do `colaborador/`, geofencing na UI, banco de horas e ajuste de ponto
+
+### Deploy do `colaborador/` em produção (PC5)
+
+- Serviço `colaborador` adicionado ao `docker-stack.yml` (imagem GHCR, Traefik em `REGISTRO_COLABORADOR_HOST`, porta 3002, `update_config`/`restart_policy` no mesmo padrão de `web`/`admin`).
+- `publish.yml`: novo item na matrix de build/push e novo `docker service update` no job de deploy; `colaborador/**` adicionado aos paths que disparam o workflow.
+- Runbooks `docs/infra/deploy-swarm.md` e `docs/infra/deploy-novo-dominio.md` atualizados para o quarto host/serviço (DNS, `.env.prod`, validação, rollback, troca de domínio).
+
+### Geofencing de `Local` e reset de PIN na UI administrativa (PC6)
+
+- `PATCH/POST/GET /registries` aceita e retorna `latitude`/`longitude`/`geofence_radius_m` quando `category=Local` (ignorado para Setor/Função); mutações agora geram `AuditEvent` com diff, o que também corrigiu uma lacuna pré-existente (updates de cadastro não eram auditados).
+- Formulário de `/cadastros/locais` ganhou os três campos; 2 testes novos em `test_registries.py`.
+- Botão "Resetar PIN" em `/cadastros/funcionarios` (permissão `timeclock.manage`), chamando o endpoint já existente `POST /timeclock/employees/{id}/pin/reset` e exibindo o novo PIN uma única vez.
+
+### Banco de horas e ajuste de ponto com aprovação (PC11/PC12)
+
+Migration `20260705_0048_hour_bank_punch_adjustments.py`. Detalhes completos em [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05).
+
+- `HourBankEntry`: lançamento diário calculado (escala x pontos batidos, via `POST /timeclock/hour-bank/{id}/recalculate`) ou saldo inicial migrado manualmente pelo RH. Consulta em `/ponto/banco-de-horas` (RH) e aba "Banco" no `colaborador/` (funcionário).
+- `PunchAdjustmentRequest`: funcionário solicita correção de batida existente ou lançamento de batida esquecida pelo Portal do Colaborador; RH aprova/rejeita em `/ponto/ajustes`, reaproveitando `update_punch`/`create_manual_punch`. Notificação in-app para usuários com permissão `punch_adjustment.manage`.
+- 4 novas permissões: `hour_bank.view`, `hour_bank.manage`, `punch_adjustment.view`, `punch_adjustment.manage`.
+- 13 testes novos (`test_hour_bank.py`, `test_punch_adjustments.py`); suíte completa em 545 testes passando. `web/` e `colaborador/` com typecheck e build limpos.
+- Escopo definido a partir de benchmarking de concorrentes (Sólides Ponto, Flash Controle de Jornada, PontoSimples); itens não priorizados nesta rodada ficam registrados no backlog (férias, sobreaviso, assinatura eletrônica, exportação AFD/ACJEF, integração com ERP de folha).

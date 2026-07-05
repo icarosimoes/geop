@@ -23,11 +23,24 @@ from app.domain.registries.service import (
 router = APIRouter(prefix="/registries", tags=["registries"])
 
 
+def _geofence_fields(row: object) -> dict[str, float | int | None]:
+    latitude = getattr(row, "latitude", None)
+    longitude = getattr(row, "longitude", None)
+    return {
+        "latitude": float(latitude) if latitude is not None else None,
+        "longitude": float(longitude) if longitude is not None else None,
+        "geofence_radius_m": getattr(row, "geofence_radius_m", None),
+    }
+
+
 class RegistrySummary(BaseModel):
     id: int
     name: str
     category: str
     updated_at: datetime
+    latitude: float | None = None
+    longitude: float | None = None
+    geofence_radius_m: int | None = None
 
 
 class RegistryListResponse(BaseModel):
@@ -44,6 +57,9 @@ class RegistryCreate(BaseModel):
 
 class RegistryUpdate(BaseModel):
     name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    geofence_radius_m: int | None = None
 
 
 class RegistryOption(BaseModel):
@@ -103,6 +119,7 @@ async def list_registries_endpoint(
                 name=row.name,
                 category=row.category,
                 updated_at=row.updated_at,
+                **_geofence_fields(row),
             )
             for row in rows
         ],
@@ -142,7 +159,17 @@ async def update_registry_endpoint(
     user: Annotated[AuthenticatedUser, require_permission("registry.edit")] = None,
     session: Annotated[AsyncSession, Depends(require_session)] = None,
 ) -> RegistrySummary:
-    result = await update_registry(session, user.company_id, registry_id, category, body.name)
+    result = await update_registry(
+        session,
+        user.company_id,
+        user.id,
+        registry_id,
+        category,
+        body.name,
+        body.latitude,
+        body.longitude,
+        body.geofence_radius_m,
+    )
     if result == "invalid_category":
         raise HTTPException(status_code=400, detail={"code": "invalid_category"})
     if result is None:
@@ -152,6 +179,7 @@ async def update_registry_endpoint(
         name=result.name,
         category=category,
         updated_at=result.updated_at,
+        **_geofence_fields(result),
     )
 
 

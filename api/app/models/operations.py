@@ -854,9 +854,7 @@ class TimePunch(Base, TenantMixin):
     __tablename__ = "time_punches"
     __table_args__ = (
         Index("ix_time_punches_employee_date", "company_id", "employee_id", "punched_at"),
-        UniqueConstraint(
-            "device_id", "external_event_id", name="uq_time_punches_device_event"
-        ),
+        UniqueConstraint("device_id", "external_event_id", name="uq_time_punches_device_event"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -881,3 +879,72 @@ class TimePunch(Base, TenantMixin):
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     distance_m: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class HourBankEntry(Base, TenantMixin):
+    """Banco de horas: um lançamento diário calculado (escala x pontos batidos) ou
+    um saldo inicial migrado de outro sistema (source="initial_balance")."""
+
+    __tablename__ = "hour_bank_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "employee_id",
+            "reference_date",
+            "source",
+            name="uq_hour_bank_entries_employee_date_source",
+        ),
+        Index("ix_hour_bank_entries_employee", "company_id", "employee_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    reference_date: Mapped[date] = mapped_column(Date)
+    expected_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    worked_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    balance_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    # "calculated" (escala x pontos, recalculado por período) ou "initial_balance"
+    # (saldo migrado de outro sistema, lançado manualmente pelo RH).
+    source: Mapped[str] = mapped_column(String(20), default="calculated")
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PunchAdjustmentRequest(Base, TenantMixin):
+    """Solicitação do funcionário (Portal do Colaborador) para corrigir uma batida
+    existente ou registrar uma batida esquecida, sujeita à aprovação do RH."""
+
+    __tablename__ = "punch_adjustment_requests"
+    __table_args__ = (
+        Index("ix_punch_adjustment_requests_employee", "company_id", "employee_id"),
+        Index("ix_punch_adjustment_requests_status", "company_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    # Nulo quando é uma batida esquecida (nenhuma batida original a corrigir).
+    punch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("time_punches.id", ondelete="SET NULL"),
+    )
+    requested_punched_at: Mapped[datetime] = mapped_column(DateTime)
+    requested_punch_type: Mapped[str | None] = mapped_column(String(10))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    resulting_punch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("time_punches.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

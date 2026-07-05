@@ -100,10 +100,16 @@ conhecidas) e:
 | `GET /schedule` | employee_session | escala do próprio funcionário (`CalendarEntry[]`) |
 | `GET /payslips` | employee_session | lista os próprios contracheques |
 | `GET /payslips/{id}/download` | employee_session | download do PDF, valida posse |
+| `GET /hour-bank` | employee_session | saldo do banco de horas do próprio funcionário |
+| `POST /adjustments` | employee_session | solicita ajuste de ponto (correção de batida existente ou batida esquecida) |
+| `GET /adjustments` | employee_session | lista as próprias solicitações de ajuste, com status |
 
 Endpoint administrativo (no router principal `timeclock/router.py`, `timeclock.manage`):
 `POST /timeclock/employees/{employee_id}/pin/reset` e upload de contracheque (RH,
 `entity_type="employee_payslip"` em `attachments` + registro em `EmployeePayslip`).
+
+Banco de horas e aprovação de ajustes de ponto (RH, `hour_bank.*`/`punch_adjustment.*`)
+estão documentados em [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05).
 
 ## Frontend (`colaborador/`)
 
@@ -120,6 +126,9 @@ App Next.js 16 App Router independente (porta 3002 em dev, serviço `colaborador
   próprio (`app/api/payslips/[id]/route.ts`) que injeta o `Authorization: Bearer` no
   servidor e faz proxy do stream do backend, porque um `<a href>` normal não carrega
   header de autenticação.
+- `banco/page.tsx` — saldo do banco de horas (`GET /timeclock/mobile/hour-bank`), formulário
+  para solicitar ajuste de ponto (correção de batida existente ou batida esquecida) e lista
+  das próprias solicitações com status (pendente/aprovado/rejeitado).
 - Sessão: token `employee_session` em cookie httpOnly `employee_token` (sem refresh — 401
   limpa o cookie e redireciona para `/login`), gate central em `middleware.ts`.
 - `next.config.ts` própio: diferente de `web/next.config.ts` (que bloqueia geolocalização
@@ -135,12 +144,56 @@ App Next.js 16 App Router independente (porta 3002 em dev, serviço `colaborador
 tabela `employee_payslips` — todas com policies RLS por `company_id`, aplicadas e
 verificadas contra o Postgres do Docker Compose.
 
+`api/alembic/versions/20260705_0048_hour_bank_punch_adjustments.py`: tabelas
+`hour_bank_entries` e `punch_adjustment_requests`, com policies RLS e as permissões
+`hour_bank.view/manage` e `punch_adjustment.view/manage`.
+
 ## Testes
 
 `api/tests/test_timeclock_mobile.py` (14 testes): Haversine, login (sucesso/PIN
 errado/slug errado/lockout), isolamento de namespace de token nos dois sentidos, punch
 dentro/fora do raio, location não configurada, isolamento de escala e contracheque entre
 funcionários, fluxo completo de reset de PIN pelo admin + troca pelo funcionário.
+
+`api/tests/test_hour_bank.py` (5 testes) e `api/tests/test_punch_adjustments.py`
+(8 testes): cálculo exato/com hora extra do banco de horas, saldo inicial substituindo
+o anterior, correção de batida existente vs. batida esquecida, dupla revisão bloqueada
+(`409`), isolamento por permissão.
+
+## Importação de contracheque em lote (2026-07-05)
+
+Não existe um ERP de folha fixo entre os clientes do Registro: a folha é normalmente
+terceirizada, e cada hotel usa o sistema do escritório contábil que contratar (Domínio,
+Alterdata, TOTVS, etc.). Nenhum desses sistemas expõe hoje uma API self-service que o
+Registro (SaaS de terceiro) possa chamar em nome do escritório contábil — só o próprio
+escritório costuma ter acesso à API/portal do sistema que usa. Construir um conector de API
+contra um ERP específico seria especulativo sem um cliente-alvo real.
+
+A solução adotada funciona com **qualquer** contador/sistema, sem integração de API: RH sobe
+um **ZIP com os PDFs** de contracheque de uma competência + um **manifesto CSV** (`cpf`,
+`matricula`, `competencia` no formato `AAAA-MM`, `arquivo`) casando cada PDF a um funcionário.
+O casamento é feito por **CPF** (identificador universal em qualquer holerite brasileiro,
+independente do sistema de origem), com fallback por `matricula` (`registration_number`)
+quando o CPF vier vazio na linha.
+
+- Backend: `POST /timeclock/employees/payslips/import` (`timeclock.manage`,
+  `api/app/domain/timeclock/router.py`) — extrai o ZIP em memória (`zipfile`, rejeitando
+  entradas com path traversal), parseia o manifesto (`csv.DictReader`) e delega para
+  `import_employee_payslips` (`api/app/domain/timeclock/service.py`), que segue o mesmo
+  padrão de `employees/service.py:import_employees` (uma linha inválida não interrompe as
+  demais, resultado por linha acumulado). Reaproveita `create_attachment`
+  (`app/domain/attachments/service.py`) para validação/armazenamento do PDF — nenhuma lógica
+  de upload duplicada.
+- Reimportar a mesma competência **atualiza** o anexo em vez de falhar na unique constraint
+  (`upsert_employee_payslip`), já que o contador pode reenviar um contracheque corrigido.
+- Frontend: `web/app/ponto/contracheques/` — dois inputs de arquivo (manifesto + ZIP), botão
+  "baixar modelo de manifesto" e tabela de resultado por linha (criado/atualizado/erro).
+- **Extensão futura para API real**: `EmployeeExternalId.system` (`models/employees.py`) já é
+  genérico (`"totvs"`, `"chess-hotel"`, etc.). Se um cliente concreto precisar de integração
+  via API (candidato mais provável: TOTVS RM, que tem REST API documentada), o ponto de
+  extensão é um adapter novo em `api/app/domain/timeclock/payroll_providers/` que busca os
+  PDFs na API e alimenta o mesmo `import_employee_payslips` — não construído agora por falta
+  de cliente-alvo com esse ERP.
 
 ## Limitações conhecidas
 
@@ -150,5 +203,6 @@ funcionários, fluxo completo de reset de PIN pelo admin + troca pelo funcionár
 - PIN numérico curto é uma escolha consciente de UX sobre segurança forte — mitigado por
   lockout e TTL curto do token, não substitui autenticação forte se o caso de uso mudar
   (ex: se o app passar a expor dados mais sensíveis que ponto/escala/contracheque).
-- Upload de contracheque é manual pelo RH (um PDF por competência); não há integração
-  automática com folha de pagamento/ERP nesta primeira versão.
+- Upload individual de contracheque pelo RH (um PDF por competência) ainda existe
+  (`POST /timeclock/employees/{id}/payslips`), mas o fluxo recomendado é a importação em lote
+  descrita acima. Não há integração via API com nenhum ERP de folha específico nesta versão.

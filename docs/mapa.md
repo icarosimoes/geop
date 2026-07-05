@@ -89,6 +89,8 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - Agente Go de ponte local (`agent/`) para relógio de ponto Control iD (ver [relogios-de-ponto-catalogo.md](relogios-de-ponto-catalogo.md))
 - Cadastro de usuários e perfis de acesso movido para dentro de `/configuracoes` (abas "Usuários" e "Perfis de acesso"), saindo do submenu "Cadastros" da sidebar
 - Toda empresa nova já recebe 6 turnos padrão pré-cadastrados (Manhã, Tarde, Noite, Comercial, 12x36 Diurno/Noturno) — ver [escala-de-trabalho.md](escala-de-trabalho.md)
+- Geofencing de `Local` (latitude/longitude/raio) editável em `/cadastros/locais`; reset de PIN do Portal do Colaborador direto em `/cadastros/funcionarios`
+- Banco de horas (cálculo por escala x pontos batidos, saldo inicial migrável) e ajuste de ponto com aprovação do RH, com solicitação pelo Portal do Colaborador — ver [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05)
 
 ### Planejado / pendente de produção
 

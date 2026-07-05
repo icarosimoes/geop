@@ -63,6 +63,9 @@ export type ModuleRecord = {
   sectorName?: string;
   avatarUrl?: string;
   sectorId?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofenceRadiusM?: number | null;
 };
 
 export type ModuleDefinition = {

@@ -184,3 +184,84 @@ export async function fetchPayslips(): Promise<Payslip[]> {
     redirect("/login");
   }
 }
+
+// --- Banco de horas ---
+
+export interface HourBankEntry {
+  id: number;
+  reference_date: string;
+  expected_minutes: number;
+  worked_minutes: number;
+  balance_minutes: number;
+  source: string;
+  notes: string | null;
+}
+
+export interface HourBankSummary {
+  balance_minutes: number;
+  entries: HourBankEntry[];
+}
+
+export async function fetchHourBank(): Promise<HourBankSummary | null> {
+  try {
+    const response = await authedFetch("/timeclock/mobile/hour-bank");
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    redirect("/login");
+  }
+}
+
+// --- Ajuste de ponto ---
+
+export interface AdjustmentRequest {
+  id: number;
+  punch_id: number | null;
+  requested_punched_at: string;
+  requested_punch_type: string | null;
+  reason: string;
+  status: string;
+  review_notes: string | null;
+  created_at: string;
+}
+
+export async function fetchAdjustments(): Promise<AdjustmentRequest[]> {
+  try {
+    const response = await authedFetch("/timeclock/mobile/adjustments");
+    if (!response.ok) return [];
+    return response.json();
+  } catch {
+    redirect("/login");
+  }
+}
+
+export interface CreateAdjustmentResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function createAdjustmentAction(body: {
+  requestedPunchedAt: string;
+  requestedPunchType: string;
+  reason: string;
+  punchId?: number | null;
+}): Promise<CreateAdjustmentResult> {
+  let response: Response;
+  try {
+    response = await authedFetch("/timeclock/mobile/adjustments", {
+      method: "POST",
+      body: JSON.stringify({
+        punch_id: body.punchId ?? null,
+        requested_punched_at: body.requestedPunchedAt,
+        requested_punch_type: body.requestedPunchType,
+        reason: body.reason,
+      }),
+    });
+  } catch {
+    redirect("/login");
+  }
+
+  if (response.status === 201) return { ok: true };
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data?.detail?.message ?? "Não foi possível enviar a solicitação." };
+}

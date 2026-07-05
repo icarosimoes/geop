@@ -12,7 +12,7 @@ import {
   fetchTimeline, addCommentAction,
   uploadAttachmentAction, fetchAttachments, deleteAttachmentAction,
 } from "@/app/actions";
-import type { EvolutionSettings, BrevoSettings, UserOption, TimelineEntry, AttachmentItem } from "@/app/actions";
+import type { EvolutionSettings, BrevoSettings, UserOption, TimelineEntry, AttachmentItem, RegistryUpdatePayload } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 import { type HistoryEntry, type ModuleDefinition, type ModuleRecord } from "@/lib/module-definitions";
 import {
@@ -383,7 +383,16 @@ export function OperationalModule({
       } else if (isCadastros) {
         const cat = fixedCategory ?? fields.category;
         if (current) {
-          result = await updateRegistryAction(current.id, { name: fields.title }, cat);
+          const updateBody: RegistryUpdatePayload = { name: fields.title };
+          if (cat === "Local") {
+            const latRaw = String(formData.get("latitude") ?? "");
+            const lngRaw = String(formData.get("longitude") ?? "");
+            const radiusRaw = String(formData.get("geofence_radius_m") ?? "");
+            if (latRaw) updateBody.latitude = Number(latRaw);
+            if (lngRaw) updateBody.longitude = Number(lngRaw);
+            if (radiusRaw) updateBody.geofence_radius_m = Number(radiusRaw);
+          }
+          result = await updateRegistryAction(current.id, updateBody, cat);
         } else {
           result = await createRegistryAction({ name: fields.title, category: cat });
         }
@@ -647,6 +656,13 @@ export function OperationalModule({
         ) : (
           <label>Tipo<select name="category" defaultValue={editing === "new" ? "Setor" : editing.category}><option>Setor</option><option>Local</option><option>Função</option></select></label>
         )}
+        {fixedCategory === "Local" && <>
+          <div className="form-grid">
+            <label>Latitude<input name="latitude" type="number" step="any" placeholder="-23.550520" defaultValue={editing === "new" ? "" : editing.latitude ?? ""}/></label>
+            <label>Longitude<input name="longitude" type="number" step="any" placeholder="-46.633308" defaultValue={editing === "new" ? "" : editing.longitude ?? ""}/></label>
+          </div>
+          <label>Raio de geofencing (metros)<input name="geofence_radius_m" type="number" min="1" placeholder="100" defaultValue={editing === "new" ? "" : editing.geofenceRadiusM ?? ""}/><small className="field-hint">Distância máxima aceita entre o funcionário e este local para registrar o ponto pelo Portal do Colaborador.</small></label>
+        </>}
         <input type="hidden" name="status" value="Ativo" />
         <input type="hidden" name="owner" value="Administração" />
         <input type="hidden" name="description" value="" />

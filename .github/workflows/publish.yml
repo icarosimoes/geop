@@ -7,6 +7,7 @@ on:
       - api/**
       - web/**
       - admin/**
+      - colaborador/**
       - .github/workflows/publish.yml
   workflow_dispatch:
 
@@ -31,6 +32,9 @@ jobs:
           - name: admin
             context: admin
             service: registro_admin
+          - name: colaborador
+            context: colaborador
+            service: registro_colaborador
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -68,4 +72,5 @@ jobs:
             docker service update --image ${REPO}/api:${IMAGE_TAG} registro_api --detach
             docker service update --image ${REPO}/web:${IMAGE_TAG} registro_web --detach
             docker service update --image ${REPO}/admin:${IMAGE_TAG} registro_admin --detach
+            docker service update --image ${REPO}/colaborador:${IMAGE_TAG} registro_colaborador --detach
           "

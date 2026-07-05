@@ -148,6 +148,82 @@ class PunchUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Banco de horas
+# ---------------------------------------------------------------------------
+
+
+class HourBankEntrySummary(BaseModel):
+    id: int
+    reference_date: date
+    expected_minutes: int
+    worked_minutes: int
+    balance_minutes: int
+    source: str
+    notes: str | None
+
+
+class HourBankSummaryResponse(BaseModel):
+    employee_id: int
+    balance_minutes: int
+    entries: list[HourBankEntrySummary]
+
+
+class HourBankInitialBalanceCreate(BaseModel):
+    effective_date: date
+    balance_minutes: int
+    notes: str | None = None
+
+
+class HourBankRecalculateRequest(BaseModel):
+    start_date: date
+    end_date: date
+
+
+class HourBankRecalculateResponse(BaseModel):
+    affected: int
+
+
+# ---------------------------------------------------------------------------
+# Ajuste de ponto (Portal do Colaborador)
+# ---------------------------------------------------------------------------
+
+
+class PunchAdjustmentCreate(BaseModel):
+    punch_id: int | None = None
+    requested_punched_at: datetime
+    requested_punch_type: str | None = None
+    reason: str = Field(min_length=3)
+
+
+class PunchAdjustmentSummary(BaseModel):
+    id: int
+    employee_id: int
+    employee_name: str
+    punch_id: int | None
+    requested_punched_at: datetime
+    requested_punch_type: str | None
+    reason: str
+    status: str
+    reviewed_by_user_id: int | None
+    reviewed_at: datetime | None
+    review_notes: str | None
+    resulting_punch_id: int | None
+    created_at: datetime
+
+
+class PunchAdjustmentListResponse(BaseModel):
+    items: list[PunchAdjustmentSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class PunchAdjustmentReview(BaseModel):
+    approve: bool
+    review_notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Portal do Colaborador (Employee mobile app)
 # ---------------------------------------------------------------------------
 
@@ -209,3 +285,19 @@ class EmployeePayslipUploadResponse(BaseModel):
     employee_id: int
     reference_month: date
     attachment_id: int
+
+
+class EmployeePayslipImportRowResult(BaseModel):
+    row: int
+    status: str  # "created" | "updated" | "failed"
+    employee_name: str | None = None
+    reference_month: str | None = None
+    error: str | None = None
+
+
+class EmployeePayslipImportResponse(BaseModel):
+    total: int
+    created: int
+    updated: int
+    failed: int
+    results: list[EmployeePayslipImportRowResult]

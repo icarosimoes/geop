@@ -27,17 +27,24 @@ from app.domain.timeclock.schemas import (
     EmployeePinChangeRequest,
     EmployeeSessionResponse,
     EmployeeStatusResponse,
+    HourBankEntrySummary,
+    HourBankSummaryResponse,
     MobilePunchRequest,
     MobilePunchResponse,
+    PunchAdjustmentCreate,
+    PunchAdjustmentSummary,
 )
 from app.domain.timeclock.service import (
     authenticate_employee,
     create_mobile_punch,
+    create_punch_adjustment_request,
     get_calendar,
     get_employee_credential,
     get_employee_payslip_for_download,
+    get_hour_bank_summary,
     get_next_expected_punch_type,
     list_employee_payslips,
+    list_punch_adjustment_requests,
     set_employee_pin,
 )
 
@@ -236,3 +243,93 @@ async def mobile_download_payslip(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/hour-bank", response_model=HourBankSummaryResponse)
+async def mobile_hour_bank(
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> HourBankSummaryResponse:
+    total_balance, entries = await get_hour_bank_summary(
+        session, employee.company_id, employee.employee_id
+    )
+    return HourBankSummaryResponse(
+        employee_id=employee.employee_id,
+        balance_minutes=total_balance,
+        entries=[
+            HourBankEntrySummary(
+                id=e.id,
+                reference_date=e.reference_date,
+                expected_minutes=e.expected_minutes,
+                worked_minutes=e.worked_minutes,
+                balance_minutes=e.balance_minutes,
+                source=e.source,
+                notes=e.notes,
+            )
+            for e in entries
+        ],
+    )
+
+
+@router.post("/adjustments", response_model=PunchAdjustmentSummary, status_code=201)
+@limiter.limit("20/minute")
+async def mobile_create_adjustment(
+    request: Request,
+    body: PunchAdjustmentCreate,
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PunchAdjustmentSummary:
+    record = await create_punch_adjustment_request(
+        session,
+        employee.company_id,
+        employee.employee_id,
+        punch_id=body.punch_id,
+        requested_punched_at=body.requested_punched_at,
+        requested_punch_type=body.requested_punch_type,
+        reason=body.reason,
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail={"code": "punch_not_found"})
+    return PunchAdjustmentSummary(
+        id=record.id,
+        employee_id=record.employee_id,
+        employee_name="",
+        punch_id=record.punch_id,
+        requested_punched_at=record.requested_punched_at,
+        requested_punch_type=record.requested_punch_type,
+        reason=record.reason,
+        status=record.status,
+        reviewed_by_user_id=record.reviewed_by_user_id,
+        reviewed_at=record.reviewed_at,
+        review_notes=record.review_notes,
+        resulting_punch_id=record.resulting_punch_id,
+        created_at=record.created_at,
+    )
+
+
+@router.get("/adjustments", response_model=list[PunchAdjustmentSummary])
+async def mobile_list_adjustments(
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[PunchAdjustmentSummary]:
+    rows, _ = await list_punch_adjustment_requests(
+        session, employee.company_id, page=1, page_size=50, employee_id=employee.employee_id
+    )
+    return [
+        PunchAdjustmentSummary(
+            id=record.id,
+            employee_id=record.employee_id,
+            employee_name=employee_name,
+            punch_id=record.punch_id,
+            requested_punched_at=record.requested_punched_at,
+            requested_punch_type=record.requested_punch_type,
+            reason=record.reason,
+            status=record.status,
+            reviewed_by_user_id=record.reviewed_by_user_id,
+            reviewed_at=record.reviewed_at,
+            review_notes=record.review_notes,
+            resulting_punch_id=record.resulting_punch_id,
+            created_at=record.created_at,
+        )
+        for record, employee_name in rows
+    ]

@@ -417,6 +417,50 @@ Concedidas ao role `admin` por padrão. Configure em `/perfis` para usuários no
 
 ---
 
+## Banco de horas e ajuste de ponto (2026-07-05)
+
+Duas features inspiradas em concorrentes (Sólides, Flash, PontoSimples), construídas sobre a base de turnos/escala/pontos já existente. Migration `20260705_0048`.
+
+### Banco de horas
+
+`HourBankEntry` (`hour_bank_entries`) guarda um lançamento por dia e por funcionário:
+
+- **`source="calculated"`**: gerado por `recalculate_hour_bank()` — para cada dia do período, resolve o turno agendado (`_resolve_schedule_for_date`), calcula `expected_minutes` (duração do turno menos intervalo) e pareia as batidas `in`/`out` do dia em `_pair_punches_worked_minutes()` para obter `worked_minutes`. `balance_minutes = worked - expected`. Idempotente: recalcular o mesmo período substitui os lançamentos existentes.
+- **`source="initial_balance"`**: um único lançamento por funcionário, com `balance_minutes` definido manualmente pelo RH (ex.: saldo migrado de outro sistema), com data de vigência.
+- Saldo total do funcionário = soma de todos os lançamentos (`GET /timeclock/hour-bank/{employee_id}`).
+
+**Limitação conhecida**: turnos noturnos cuja saída cai no dia seguinte contam o tempo trabalhado no dia da batida de saída, não no dia do turno — o cálculo por par in/out é por data corrida, não por "dia de turno". Aceitável para o MVP; revisar se virar ponto de atrito real.
+
+Endpoints (`hour_bank.view`/`hour_bank.manage`):
+- `GET /timeclock/hour-bank/{employee_id}` — saldo total + extrato
+- `POST /timeclock/hour-bank/{employee_id}/recalculate` — recalcula um intervalo de datas
+- `POST /timeclock/hour-bank/{employee_id}/initial-balance` — define/substitui o saldo inicial
+- `GET /timeclock/mobile/hour-bank` — o próprio funcionário vê seu saldo (Portal do Colaborador)
+
+Frontend: `/ponto/banco-de-horas` (RH, busca por funcionário) e aba "Banco" no app `colaborador/`.
+
+### Ajuste de ponto com aprovação
+
+`PunchAdjustmentRequest` (`punch_adjustment_requests`): o funcionário solicita pelo Portal do Colaborador a correção de uma batida existente (`punch_id` informado) ou o lançamento de uma batida esquecida (`punch_id=null`), com motivo obrigatório. Fica `status="pending"` até um gestor aprovar ou rejeitar.
+
+- **Aprovar** uma correção de batida existente chama `update_punch()` (recalcula o `status` on_time/late/etc. automaticamente); aprovar uma batida esquecida chama `create_manual_punch()` — ambos reaproveitados do fluxo administrativo já existente.
+- **Rejeitar** apenas marca `status="rejected"` com `review_notes` opcional; nenhuma batida é criada/alterada.
+- Uma solicitação só pode ser revisada uma vez (`409 already_reviewed` numa segunda tentativa).
+- Ao criar a solicitação, todos os usuários com permissão `punch_adjustment.manage` (ou wildcard `*`) recebem notificação in-app.
+
+Endpoints:
+- `POST /timeclock/mobile/adjustments` / `GET /timeclock/mobile/adjustments` — funcionário cria e lista as próprias solicitações
+- `GET /timeclock/adjustments` (`punch_adjustment.view`) — RH lista por status/funcionário
+- `POST /timeclock/adjustments/{id}/review` (`punch_adjustment.manage`) — aprova (`approve: true`) ou rejeita (`approve: false`)
+
+Frontend: `/ponto/ajustes` (fila de aprovação, RH) e aba "Banco" no app `colaborador/` (solicitar + acompanhar status).
+
+### Testes
+
+`api/tests/test_hour_bank.py` (5 testes) e `api/tests/test_punch_adjustments.py` (8 testes): cálculo exato/com hora extra, saldo inicial substituindo o anterior, correção de batida existente vs. batida esquecida, dupla revisão bloqueada, isolamento por permissão.
+
+---
+
 ## Notas de implementação
 
 ### Soft delete vs. hard delete

@@ -12,6 +12,7 @@ import {
   EmployeeSummarySchema,
   NotificationItemSchema,
   NotificationListSchema,
+  PayslipImportResponseSchema,
   RegistryOptionSchema,
   safeParse,
   TimelineEntrySchema,
@@ -299,7 +300,14 @@ export async function createRegistryAction(body: RegistryPayload): Promise<Mutat
   return { ok: true, data: await response.json() };
 }
 
-export async function updateRegistryAction(id: number, body: { name: string }, category: string): Promise<MutationResult> {
+export interface RegistryUpdatePayload {
+  name?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofence_radius_m?: number | null;
+}
+
+export async function updateRegistryAction(id: number, body: RegistryUpdatePayload, category: string): Promise<MutationResult> {
   const response = await authedFetch(`/registries/${id}?category=${encodeURIComponent(category)}`, { method: "PATCH", body: JSON.stringify(body) });
   if (!response.ok) {
     if (response.status === 401) throw new Error("unauthorized");
@@ -775,6 +783,17 @@ export async function uploadEmployeeAvatarAction(
   return { ok: true, data: await response.json() };
 }
 
+export async function resetEmployeePinAction(
+  employeeId: number,
+): Promise<{ ok: true; pin: string } | { ok: false; error: string }> {
+  const response = await authedFetch(`/timeclock/employees/${employeeId}/pin/reset`, {
+    method: "POST",
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao resetar PIN." };
+  const data = (await response.json()) as { pin: string };
+  return { ok: true, pin: data.pin };
+}
+
 export type EmployeeImportResult = z.infer<typeof EmployeeImportResultSchema>;
 
 export async function importEmployeesAction(formData: FormData): Promise<
@@ -793,6 +812,36 @@ export async function importEmployeesAction(formData: FormData): Promise<
     return { ok: false, error: "Erro ao importar funcionários." };
   }
   return { ok: true, result: safeParse(EmployeeImportResultSchema, await response.json()) };
+}
+
+export type PayslipImportResponse = z.infer<typeof PayslipImportResponseSchema>;
+
+export async function importPayslipsAction(formData: FormData): Promise<
+  { ok: true; result: PayslipImportResponse } | { ok: false; error: string }
+> {
+  const jar = await cookies();
+  const token = jar.get("tenant_token")?.value;
+  if (!token) throw new Error("unauthorized");
+  const response = await fetch(`${apiUrl}/timeclock/employees/payslips/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    const detail = await response.json().catch(() => null);
+    const code = detail?.detail?.code;
+    const messages: Record<string, string> = {
+      invalid_manifest_type: "O manifesto precisa ser um arquivo .csv.",
+      invalid_archive_type: "O arquivo precisa ser um .zip.",
+      invalid_archive: "Não foi possível ler o arquivo .zip.",
+      invalid_archive_entry: "O .zip contém um caminho de arquivo inválido.",
+      empty_manifest: "O manifesto está vazio.",
+      invalid_encoding: "Não foi possível ler a codificação do manifesto.",
+    };
+    return { ok: false, error: messages[code] ?? "Erro ao importar contracheques." };
+  }
+  return { ok: true, result: safeParse(PayslipImportResponseSchema, await response.json()) };
 }
 
 export async function createEmployeeExternalIdAction(
@@ -1663,5 +1712,112 @@ export async function generateScheduleAction(body: {
     body: JSON.stringify(body),
   });
   if (!response.ok) return { ok: false, error: "Erro ao gerar escala." };
+  return { ok: true, data: await response.json() };
+}
+
+// ---------------------------------------------------------------------------
+// Banco de horas
+// ---------------------------------------------------------------------------
+
+export interface HourBankEntry {
+  id: number;
+  reference_date: string;
+  expected_minutes: number;
+  worked_minutes: number;
+  balance_minutes: number;
+  source: "calculated" | "initial_balance";
+  notes: string | null;
+}
+
+export interface HourBankSummary {
+  employee_id: number;
+  balance_minutes: number;
+  entries: HourBankEntry[];
+}
+
+export async function fetchHourBankSummary(employeeId: number): Promise<HourBankSummary | null> {
+  const response = await authedFetch(`/timeclock/hour-bank/${employeeId}`);
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function recalculateHourBankAction(
+  employeeId: number,
+  startDate: string,
+  endDate: string,
+): Promise<{ ok: true; affected: number } | { ok: false; error: string }> {
+  const response = await authedFetch(`/timeclock/hour-bank/${employeeId}/recalculate`, {
+    method: "POST",
+    body: JSON.stringify({ start_date: startDate, end_date: endDate }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao recalcular banco de horas." };
+  const data = (await response.json()) as { affected: number };
+  return { ok: true, affected: data.affected };
+}
+
+export async function setHourBankInitialBalanceAction(
+  employeeId: number,
+  body: { effective_date: string; balance_minutes: number; notes?: string },
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/hour-bank/${employeeId}/initial-balance`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao lançar saldo inicial." };
+  return { ok: true, data: await response.json() };
+}
+
+// ---------------------------------------------------------------------------
+// Ajuste de ponto (aprovação pelo RH/gestor)
+// ---------------------------------------------------------------------------
+
+export interface PunchAdjustment {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  punch_id: number | null;
+  requested_punched_at: string;
+  requested_punch_type: string | null;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  resulting_punch_id: number | null;
+  created_at: string;
+}
+
+export interface PunchAdjustmentListResponse {
+  items: PunchAdjustment[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchPunchAdjustments(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+}): Promise<PunchAdjustmentListResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  if (params.status) query.set("status", params.status);
+  const response = await authedFetch(`/timeclock/adjustments?${query}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  return response.json();
+}
+
+export async function reviewPunchAdjustmentAction(
+  requestId: number,
+  approve: boolean,
+  reviewNotes?: string,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/adjustments/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ approve, review_notes: reviewNotes }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao revisar solicitação." };
   return { ok: true, data: await response.json() };
 }

@@ -9,19 +9,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
+from app.core.validators import normalize_doc
+from app.domain.attachments.service import create_attachment
+from app.domain.notifications.service import create_notification
 from app.domain.timeclock.schemas import RotatingPattern, WeeklyPattern
 from app.models import (
     Company,
     Employee,
     EmployeeCredential,
     EmployeePayslip,
+    HourBankEntry,
     Location,
+    Permission,
+    PunchAdjustmentRequest,
+    Role,
     ScheduleEntry,
     Shift,
     TimeClockDevice,
     TimeClockEnrollment,
     TimePunch,
+    User,
 )
+from app.models.identity import role_permissions
 
 WEEKDAY_LABELS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
@@ -184,11 +193,10 @@ async def update_shift(
     return record
 
 
-async def count_shift_usage(
-    session: AsyncSession, company_id: int, shift_id: int
-) -> int:
+async def count_shift_usage(session: AsyncSession, company_id: int, shift_id: int) -> int:
     """Count how many schedule entries reference this shift."""
     from sqlalchemy import func
+
     count = await session.scalar(
         select(func.count(ScheduleEntry.id)).where(
             ScheduleEntry.company_id == company_id,
@@ -482,9 +490,7 @@ async def list_devices(session: AsyncSession, company_id: int) -> list[tuple]:
     rows = await session.execute(
         select(TimeClockDevice, Location.name)
         .outerjoin(Location, Location.id == TimeClockDevice.location_id)
-        .where(
-            TimeClockDevice.company_id == company_id, TimeClockDevice.deleted_at.is_(None)
-        )
+        .where(TimeClockDevice.company_id == company_id, TimeClockDevice.deleted_at.is_(None))
         .order_by(TimeClockDevice.name)
     )
     return rows.all()
@@ -839,6 +845,327 @@ async def list_punches(
 
 
 # ---------------------------------------------------------------------------
+# Banco de horas
+# ---------------------------------------------------------------------------
+
+
+def _shift_expected_minutes(shift: Shift | None) -> int:
+    if shift is None:
+        return 0
+    is_overnight = shift.end_time < shift.start_time
+    anchor = date(2000, 1, 1)
+    end_anchor = anchor + timedelta(days=1) if is_overnight else anchor
+    start_dt = datetime.combine(anchor, shift.start_time)
+    end_dt = datetime.combine(end_anchor, shift.end_time)
+    total = int((end_dt - start_dt).total_seconds() // 60)
+    if shift.break_start and shift.break_end and shift.break_end > shift.break_start:
+        break_start_dt = datetime.combine(anchor, shift.break_start)
+        break_end_dt = datetime.combine(anchor, shift.break_end)
+        total -= int((break_end_dt - break_start_dt).total_seconds() // 60)
+    return max(total, 0)
+
+
+def _pair_punches_worked_minutes(punches: list[TimePunch]) -> int:
+    """Pareia batidas 'in'/'out' em ordem cronológica e soma a duração dos pares
+    completos. Batidas sem tipo definido ou desemparelhadas são ignoradas. Turnos
+    noturnos cuja batida de saída cai no dia seguinte são contados no dia da
+    batida de saída, não no dia do turno — limitação conhecida do MVP."""
+    ordered = sorted(punches, key=lambda p: p.punched_at)
+    total_minutes = 0
+    open_in: datetime | None = None
+    for punch in ordered:
+        if punch.punch_type == "in":
+            open_in = punch.punched_at
+        elif punch.punch_type == "out" and open_in is not None:
+            total_minutes += int((punch.punched_at - open_in).total_seconds() // 60)
+            open_in = None
+    return max(total_minutes, 0)
+
+
+async def recalculate_hour_bank(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    employee_id: int,
+    start_date: date,
+    end_date: date,
+) -> int:
+    """Recalcula o banco de horas diário (escala x pontos batidos) para o período,
+    substituindo os lançamentos 'calculated' já existentes nessas datas."""
+    punches = (
+        await session.scalars(
+            select(TimePunch).where(
+                TimePunch.company_id == company_id,
+                TimePunch.employee_id == employee_id,
+                TimePunch.punched_at >= datetime.combine(start_date, time.min),
+                TimePunch.punched_at <= datetime.combine(end_date, time.max),
+            )
+        )
+    ).all()
+    punches_by_date: dict[date, list[TimePunch]] = {}
+    for punch in punches:
+        punches_by_date.setdefault(punch.punched_at.date(), []).append(punch)
+
+    affected = 0
+    current = start_date
+    while current <= end_date:
+        shift, forced_status = await _resolve_schedule_for_date(
+            session, company_id, employee_id, current
+        )
+        expected_minutes = 0 if forced_status else _shift_expected_minutes(shift)
+        worked_minutes = _pair_punches_worked_minutes(punches_by_date.get(current, []))
+
+        entry = await session.scalar(
+            select(HourBankEntry).where(
+                HourBankEntry.company_id == company_id,
+                HourBankEntry.employee_id == employee_id,
+                HourBankEntry.reference_date == current,
+                HourBankEntry.source == "calculated",
+            )
+        )
+        if entry is None:
+            entry = HourBankEntry(
+                company_id=company_id,
+                employee_id=employee_id,
+                reference_date=current,
+                source="calculated",
+            )
+            session.add(entry)
+        entry.expected_minutes = expected_minutes
+        entry.worked_minutes = worked_minutes
+        entry.balance_minutes = worked_minutes - expected_minutes
+        entry.created_by_user_id = actor_id
+        affected += 1
+        current += timedelta(days=1)
+
+    await session.commit()
+    await invalidate_dashboard(company_id)
+    return affected
+
+
+async def set_hour_bank_initial_balance(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    employee_id: int,
+    effective_date: date,
+    balance_minutes: int,
+    notes: str | None,
+) -> HourBankEntry:
+    entry = await session.scalar(
+        select(HourBankEntry).where(
+            HourBankEntry.company_id == company_id,
+            HourBankEntry.employee_id == employee_id,
+            HourBankEntry.source == "initial_balance",
+        )
+    )
+    if entry is None:
+        entry = HourBankEntry(
+            company_id=company_id,
+            employee_id=employee_id,
+            source="initial_balance",
+        )
+        session.add(entry)
+    entry.reference_date = effective_date
+    entry.expected_minutes = 0
+    entry.worked_minutes = 0
+    entry.balance_minutes = balance_minutes
+    entry.notes = notes
+    entry.created_by_user_id = actor_id
+    await session.commit()
+    await session.refresh(entry)
+    return entry
+
+
+async def get_hour_bank_summary(
+    session: AsyncSession, company_id: int, employee_id: int
+) -> tuple[int, list[HourBankEntry]]:
+    entries = (
+        await session.scalars(
+            select(HourBankEntry)
+            .where(
+                HourBankEntry.company_id == company_id,
+                HourBankEntry.employee_id == employee_id,
+            )
+            .order_by(HourBankEntry.reference_date.desc())
+        )
+    ).all()
+    total_balance = sum(e.balance_minutes for e in entries)
+    return total_balance, list(entries)
+
+
+# ---------------------------------------------------------------------------
+# Ajuste de ponto (Portal do Colaborador): solicitação + aprovação
+# ---------------------------------------------------------------------------
+
+
+async def _notify_punch_adjustment_managers(
+    session: AsyncSession, company_id: int, employee_name: str, request_id: int
+) -> None:
+    user_ids = (
+        await session.scalars(
+            select(User.id)
+            .join(Role, Role.id == User.role_id)
+            .join(role_permissions, role_permissions.c.role_id == Role.id)
+            .join(Permission, Permission.id == role_permissions.c.permission_id)
+            .where(
+                User.company_id == company_id,
+                User.active.is_(True),
+                User.deleted_at.is_(None),
+                Permission.code.in_(["punch_adjustment.manage", "*"]),
+            )
+            .distinct()
+        )
+    ).all()
+    for uid in user_ids:
+        await create_notification(
+            session,
+            company_id=company_id,
+            user_id=uid,
+            title=f"Nova solicitação de ajuste de ponto de {employee_name}",
+            body="Aguardando aprovação no Portal Administrativo.",
+            category="create",
+            entity_type="punch_adjustment_request",
+            entity_id=request_id,
+        )
+
+
+async def create_punch_adjustment_request(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    *,
+    punch_id: int | None,
+    requested_punched_at: datetime,
+    requested_punch_type: str | None,
+    reason: str,
+) -> PunchAdjustmentRequest | None:
+    if punch_id is not None:
+        exists = await session.scalar(
+            select(TimePunch.id).where(
+                TimePunch.id == punch_id,
+                TimePunch.company_id == company_id,
+                TimePunch.employee_id == employee_id,
+            )
+        )
+        if exists is None:
+            return None
+
+    record = PunchAdjustmentRequest(
+        company_id=company_id,
+        employee_id=employee_id,
+        punch_id=punch_id,
+        requested_punched_at=requested_punched_at,
+        requested_punch_type=requested_punch_type,
+        reason=reason,
+    )
+    session.add(record)
+    await session.flush()
+    employee_name = await session.scalar(select(Employee.name).where(Employee.id == employee_id))
+    await _notify_punch_adjustment_managers(
+        session, company_id, employee_name or "funcionário", record.id
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record
+
+
+async def list_punch_adjustment_requests(
+    session: AsyncSession,
+    company_id: int,
+    page: int,
+    page_size: int,
+    *,
+    employee_id: int | None = None,
+    status: str | None = None,
+) -> tuple[list[tuple], int]:
+    filters = [PunchAdjustmentRequest.company_id == company_id]
+    if employee_id is not None:
+        filters.append(PunchAdjustmentRequest.employee_id == employee_id)
+    if status is not None:
+        filters.append(PunchAdjustmentRequest.status == status)
+
+    total = await session.scalar(select(func.count(PunchAdjustmentRequest.id)).where(*filters)) or 0
+    rows = (
+        await session.execute(
+            select(PunchAdjustmentRequest, Employee.name)
+            .join(Employee, Employee.id == PunchAdjustmentRequest.employee_id)
+            .where(*filters)
+            .order_by(PunchAdjustmentRequest.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    return rows, total
+
+
+async def review_punch_adjustment_request(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    request_id: int,
+    *,
+    approve: bool,
+    review_notes: str | None,
+) -> tuple[PunchAdjustmentRequest | None, str | None]:
+    record = await session.scalar(
+        select(PunchAdjustmentRequest).where(
+            PunchAdjustmentRequest.id == request_id,
+            PunchAdjustmentRequest.company_id == company_id,
+        )
+    )
+    if record is None:
+        return None, "not_found"
+    if record.status != "pending":
+        return None, "already_reviewed"
+
+    record.reviewed_by_user_id = actor_id
+    record.reviewed_at = datetime.now()
+    record.review_notes = review_notes
+
+    if approve:
+        record.status = "approved"
+        if record.punch_id is not None:
+            punch = await update_punch(
+                session,
+                company_id,
+                actor_id,
+                record.punch_id,
+                {
+                    "punched_at": record.requested_punched_at,
+                    "punch_type": record.requested_punch_type,
+                },
+            )
+            record.resulting_punch_id = punch.id if punch else None
+        else:
+            punch = await create_manual_punch(
+                session,
+                company_id,
+                actor_id,
+                employee_id=record.employee_id,
+                punched_at=record.requested_punched_at,
+                punch_type=record.requested_punch_type,
+                notes=f"Ajuste aprovado (solicitação #{record.id})",
+            )
+            record.resulting_punch_id = punch.id
+    else:
+        record.status = "rejected"
+
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="punch_adjustment_request",
+        entity_id=record.id,
+        event_type="update",
+        diff={"status": {"from": "pending", "to": record.status}},
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record, None
+
+
+# ---------------------------------------------------------------------------
 # Portal do Colaborador: PIN de acesso (EmployeeCredential)
 # ---------------------------------------------------------------------------
 
@@ -1045,10 +1372,7 @@ def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> 
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     d_phi = math.radians(lat2 - lat1)
     d_lambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(d_phi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    )
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return EARTH_RADIUS_M * c
 
@@ -1216,3 +1540,182 @@ async def create_employee_payslip(
     await session.commit()
     await session.refresh(record)
     return record
+
+
+MAX_PAYSLIP_IMPORT_ROWS = 500
+
+
+async def get_employee_by_cpf(
+    session: AsyncSession, company_id: int, cpf: str
+) -> Employee | None:
+    digits = normalize_doc(cpf)
+    if not digits:
+        return None
+    return await session.scalar(
+        select(Employee).where(
+            Employee.company_id == company_id,
+            Employee.cpf == digits,
+            Employee.deleted_at.is_(None),
+        )
+    )
+
+
+async def get_employee_by_registration_number(
+    session: AsyncSession, company_id: int, registration_number: str
+) -> Employee | None:
+    registration_number = registration_number.strip()
+    if not registration_number:
+        return None
+    return await session.scalar(
+        select(Employee).where(
+            Employee.company_id == company_id,
+            Employee.registration_number == registration_number,
+            Employee.deleted_at.is_(None),
+        )
+    )
+
+
+async def upsert_employee_payslip(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    *,
+    employee_id: int,
+    reference_month: date,
+    attachment_id: int,
+) -> tuple[EmployeePayslip, bool]:
+    """Get-or-create por (employee_id, reference_month) — reimportar a mesma
+    competência troca o anexo em vez de falhar na unique constraint, já que o
+    contador pode reenviar um contracheque corrigido."""
+    existing = await session.scalar(
+        select(EmployeePayslip).where(
+            EmployeePayslip.company_id == company_id,
+            EmployeePayslip.employee_id == employee_id,
+            EmployeePayslip.reference_month == reference_month,
+            EmployeePayslip.deleted_at.is_(None),
+        )
+    )
+    if existing is None:
+        record = await create_employee_payslip(
+            session,
+            company_id,
+            actor_id,
+            employee_id=employee_id,
+            reference_month=reference_month,
+            attachment_id=attachment_id,
+        )
+        return record, True
+
+    old_attachment_id = existing.attachment_id
+    existing.attachment_id = attachment_id
+    await session.flush()
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="employee_payslip",
+        entity_id=existing.id,
+        event_type="update",
+        diff={"attachment_id": {"old": old_attachment_id, "new": attachment_id}},
+    )
+    await session.commit()
+    await session.refresh(existing)
+    return existing, False
+
+
+async def import_employee_payslips(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    rows: list[dict[str, str]],
+    files: dict[str, bytes],
+) -> list[dict]:
+    """Casa cada linha do manifesto (CPF ou matrícula + competência + nome do
+    arquivo no zip) a um funcionário e cria/atualiza o EmployeePayslip. Reaproveita
+    create_attachment para validação/armazenamento do PDF — nenhuma lógica de
+    upload duplicada. Uma linha inválida não interrompe as demais."""
+    results: list[dict] = []
+
+    for index, raw_row in enumerate(rows[:MAX_PAYSLIP_IMPORT_ROWS], start=1):
+        cpf = (raw_row.get("cpf") or "").strip()
+        matricula = (raw_row.get("matricula") or "").strip()
+        competencia = (raw_row.get("competencia") or "").strip()
+        arquivo = (raw_row.get("arquivo") or "").strip()
+
+        employee = None
+        if cpf:
+            employee = await get_employee_by_cpf(session, company_id, cpf)
+        if employee is None and matricula:
+            employee = await get_employee_by_registration_number(session, company_id, matricula)
+        if employee is None:
+            results.append(
+                {"row": index, "status": "failed", "error": "funcionario_nao_encontrado"}
+            )
+            continue
+
+        try:
+            reference_month = datetime.strptime(competencia, "%Y-%m").date().replace(day=1)
+        except ValueError:
+            results.append(
+                {
+                    "row": index,
+                    "status": "failed",
+                    "employee_name": employee.name,
+                    "error": "competencia_invalida",
+                }
+            )
+            continue
+
+        data = files.get(arquivo)
+        if data is None:
+            results.append(
+                {
+                    "row": index,
+                    "status": "failed",
+                    "employee_name": employee.name,
+                    "error": "arquivo_nao_encontrado_no_zip",
+                }
+            )
+            continue
+
+        attachment = await create_attachment(
+            session,
+            company_id,
+            actor_id,
+            entity_type="employee_payslip",
+            entity_id=employee.id,
+            filename=arquivo,
+            content_type="application/pdf",
+            data=data,
+            skip_audit=True,
+        )
+        if isinstance(attachment, str):
+            results.append(
+                {
+                    "row": index,
+                    "status": "failed",
+                    "employee_name": employee.name,
+                    "reference_month": competencia,
+                    "error": attachment,
+                }
+            )
+            continue
+
+        _, created = await upsert_employee_payslip(
+            session,
+            company_id,
+            actor_id,
+            employee_id=employee.id,
+            reference_month=reference_month,
+            attachment_id=attachment.id,
+        )
+        results.append(
+            {
+                "row": index,
+                "status": "created" if created else "updated",
+                "employee_name": employee.name,
+                "reference_month": competencia,
+            }
+        )
+
+    return results

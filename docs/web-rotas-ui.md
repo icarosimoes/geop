@@ -16,10 +16,18 @@
 | `/preventivas` | lista e CRUD | CRUD via API + geração automática de OS | API `preventive-plans` isolada por tenant |
 | `/mural` | cartões e CRUD | CRUD via API + mutações server-side | API `bulletin` (tabela dedicada) isolada por tenant |
 | `/cadastros/setores` | CRUD simples | registries categoria Setor | API `registries` |
-| `/cadastros/locais` | CRUD simples | registries categoria Local | API `registries` |
+| `/cadastros/locais` | CRUD simples | registries categoria Local, com latitude/longitude/raio de geofencing no formulário | API `registries` |
 | `/cadastros/funcoes` | CRUD simples | registries categoria Função | API `registries` |
 | `/cadastros/procedimentos` | lista, CRUD e anexos | CRUD via API + upload/download de anexos | API `procedures` + `attachments` |
 | `/cadastros/categorias-os` | CRUD de categorias | gerencia categorias de OS via settings | API `settings/work-order-categories` + `work-orders/categories` |
+| `/cadastros/funcionarios` | lista, CRUD, avatar, importação em lote e reset de PIN | CRUD via API + upload de avatar + botão "Resetar PIN" do Portal do Colaborador | API `employees` + `employees/import` + `timeclock/employees/{id}/pin/reset` |
+| `/cadastros/turnos` | CRUD de turnos | templates de turno reutilizáveis (Manhã, Tarde, 12x36, etc.) | API `timeclock/shifts` |
+| `/cadastros/escalas` | calendário de escala | atribuição de turnos/folgas por funcionário e data | API `timeclock/schedule` |
+| `/ponto` | batidas | listagem e lançamento manual de pontos | API `timeclock/punches` |
+| `/ponto/dispositivos` | CRUD de relógios | dispositivos Control iD autenticados por webhook token | API `timeclock/devices` |
+| `/ponto/vinculos` | vínculos | associa matrícula do relógio a um funcionário | API `timeclock/enrollments` |
+| `/ponto/ajustes` | fila de aprovação | ajustes de ponto solicitados pelo Portal do Colaborador, aprovar/rejeitar | API `timeclock/adjustments` |
+| `/ponto/banco-de-horas` | saldo por funcionário | busca funcionário, recalcula período, lança saldo inicial | API `timeclock/hour-bank` |
 | `/usuarios` | lista e CRUD + convite | CRUD via API + convite por e-mail + upload avatar | API `users` + `users/invite` isolada por tenant |
 | `/perfis` | gestão de perfis de acesso | CRUD de roles com checkboxes de permissões | API `roles` + `roles/permissions` isolada por tenant |
 | `/configuracoes` | tela unificada com 3 abas | Estabelecimento + Integrações (Brevo/Evolution) + Minha conta | API `settings/company` + `settings/brevo` + `settings/evolution` + `users/me` |
@@ -105,7 +113,7 @@ Toda lista tem título, contador, ação principal, filtros, tabela/cartões res
 
 Cadastros são registros simples (nome + categoria fixa). Diferente dos módulos operacionais, clicar na linha da tabela abre diretamente o modal de edição — não o drawer de detalhes com status, tratativa e descrição. Isso porque cadastros não possuem timeline, descrição ou fluxo de tratativa; são entidades auxiliares de CRUD puro.
 
-O formulário de cadastro contém apenas o campo "Nome". A categoria é determinada pela sub-rota (`/cadastros/setores` → Setor, `/cadastros/locais` → Local, `/cadastros/funcoes` → Função) e enviada como campo hidden.
+O formulário de cadastro contém o campo "Nome" em todas as categorias. A categoria é determinada pela sub-rota (`/cadastros/setores` → Setor, `/cadastros/locais` → Local, `/cadastros/funcoes` → Função) e enviada como campo hidden. A categoria "Local" ganha três campos adicionais (latitude, longitude, raio de geofencing em metros), usados pelo Portal do Colaborador para validar a batida de ponto por proximidade — ver [portal-colaborador.md](portal-colaborador.md#geofencing).
 
 ### Estabelecimento
 

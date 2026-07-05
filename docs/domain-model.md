@@ -43,7 +43,9 @@ Company
   ├── ModuleRecord (genérico: inspeções, obra, manutenção, mural)
   ├── TimeClockDevice ──► TimePunch (relógio físico, webhook Control iD)
   ├── EmployeeCredential (PIN do Portal do Colaborador, 1:1 com Employee)
-  └── EmployeePayslip ──► Attachment (contracheque por competência)
+  ├── EmployeePayslip ──► Attachment (contracheque por competência)
+  ├── HourBankEntry (banco de horas: calculado por período ou saldo inicial)
+  └── PunchAdjustmentRequest ──► TimePunch (ajuste de ponto solicitado pelo funcionário, sujeito a aprovação)
 ```
 
 ## Agregados principais
@@ -76,6 +78,8 @@ Company
 | Anexos | `attachments` | por tenant, `entity_type`/`entity_id` polimórfico, `filename`, `content_type`, `size_bytes`, `storage_key` (MinIO/S3), `uploaded_by_user_id` (inclui `entity_type="employee_payslip"`) |
 | Ponto eletrônico (relógio físico) | `time_clock_devices`, `time_clock_enrollments`, `time_punches` | dispositivo autenticado por `webhook_token` (não JWT), `TimeClockEnrollment.external_id` mapeia matrícula do relógio → `employee_id`. `TimePunch.source` ∈ {`device`, `manual`, `mobile`} |
 | Portal do Colaborador | `employee_credentials`, `employee_payslips` | ver [portal-colaborador.md](portal-colaborador.md). `EmployeeCredential` (PIN hash, lockout, 1:1 com `Employee`) e `EmployeePayslip` (`reference_month` + `attachment_id`) isolados do cadastro de RH por preocupação, mesmo padrão de `TimeClockEnrollment` |
+| Banco de horas | `hour_bank_entries` | um lançamento por `employee_id`+`reference_date`+`source`. `source="calculated"` (gerado por período via `POST /timeclock/hour-bank/{id}/recalculate`, comparando turno agendado x pontos batidos) ou `source="initial_balance"` (lançamento único, manual, para saldo migrado de outro sistema). Ver [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05) |
+| Ajuste de ponto | `punch_adjustment_requests` | solicitação do funcionário (Portal do Colaborador) para corrigir uma `TimePunch` existente (`punch_id` preenchido) ou lançar uma batida esquecida (`punch_id` null). `status` ∈ {`pending`, `approved`, `rejected`}; aprovação reaproveita `update_punch`/`create_manual_punch` e grava `resulting_punch_id`. Uma solicitação só pode ser revisada uma vez |
 | Auditoria | `audit_events` | imutável por tenant (sem `updated_at`/`deleted_at`), `user_id`, `entity_type`, `entity_id`, `event_type` (`create`, `update`, `delete`, `comment`, `attachment_add`, `attachment_remove`), `diff` JSON com antes/depois por campo |
 
 ## Convenções de dados

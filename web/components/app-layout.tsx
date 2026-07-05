@@ -38,6 +38,9 @@ const cadastrosSub = [
 
 const pontoSub = [
   { slug: "ponto-batidas", label: "Batidas", icon: Clock, href: "/ponto" },
+  { slug: "ponto-ajustes", label: "Ajustes", icon: FileClock, href: "/ponto/ajustes" },
+  { slug: "ponto-banco-de-horas", label: "Banco de horas", icon: Timer, href: "/ponto/banco-de-horas" },
+  { slug: "ponto-contracheques", label: "Contracheques", icon: FileText, href: "/ponto/contracheques" },
   { slug: "ponto-dispositivos", label: "Dispositivos", icon: Cpu, href: "/ponto/dispositivos" },
   { slug: "ponto-vinculos", label: "Vínculos", icon: Link2, href: "/ponto/vinculos" },
 ];

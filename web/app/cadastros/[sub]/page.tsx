@@ -35,6 +35,9 @@ export default async function CadastrosSubPage({
       name: string;
       category: string;
       updated_at: string;
+      latitude: number | null;
+      longitude: number | null;
+      geofence_radius_m: number | null;
     };
     type RegistryPage = {
       items: RegistryItem[];
@@ -67,6 +70,9 @@ export default async function CadastrosSubPage({
           updatedAt: new Intl.DateTimeFormat("pt-BR").format(
             new Date(item.updated_at),
           ),
+          latitude: item.latitude,
+          longitude: item.longitude,
+          geofenceRadiusM: item.geofence_radius_m,
         })),
         serverPagination: {
           total: data.total,

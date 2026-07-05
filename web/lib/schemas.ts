@@ -133,6 +133,22 @@ export const EmployeeImportResultSchema = z.object({
   results: z.array(EmployeeImportRowResultSchema),
 });
 
+export const PayslipImportRowResultSchema = z.object({
+  row: z.number(),
+  status: z.enum(["created", "updated", "failed"]),
+  employee_name: z.string().nullable(),
+  reference_month: z.string().nullable(),
+  error: z.string().nullable(),
+});
+
+export const PayslipImportResponseSchema = z.object({
+  total: z.number(),
+  created: z.number(),
+  updated: z.number(),
+  failed: z.number(),
+  results: z.array(PayslipImportRowResultSchema),
+});
+
 export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {

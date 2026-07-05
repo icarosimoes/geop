@@ -9,7 +9,7 @@ Para primeiro deploy ou troca de domínio, siga o procedimento completo em [Depl
 - Produção usa Docker Swarm; não usar `docker compose up` na VPS.
 - A VPS mantém a aplicação em `/opt/registro`.
 - Imagens são publicadas no GHCR com tag imutável `sha-<GITHUB_SHA completo>`.
-- O workflow `Publish images` publica API, web e admin em paralelo a cada push em `main`.
+- O workflow `Publish images` publica API, web, admin e colaborador em paralelo a cada push em `main`.
 - Após publicação, o job `deploy` conecta via SSH e atualiza os serviços no Swarm automaticamente.
 - Deploy usa `--with-registry-auth` e atualização gradual `start-first`.
 - Nenhum segredo é versionado em `.env`, stack ou imagem.
@@ -52,6 +52,7 @@ Arquivo local `/opt/registro/.env.prod`, nunca versionado:
 REGISTRO_WEB_HOST=registro.solidsd.com.br
 REGISTRO_API_HOST=api.registro.solidsd.com.br
 REGISTRO_ADMIN_HOST=painel.registro.solidsd.com.br
+REGISTRO_COLABORADOR_HOST=colaborador.registro.solidsd.com.br
 REGISTRO_WEB_ORIGIN=https://registro.solidsd.com.br
 IMAGE_TAG=sha-<sha-completo>
 ```
@@ -63,7 +64,7 @@ A API é publicada em `api.registro.solidsd.com.br`; seus endpoints permanecem s
 O workflow `Publish images` (`.github/workflows/publish.yml`) executa dois jobs:
 
 1. **publish** — builda e publica as imagens no GHCR com tag `sha-<commit>`.
-2. **deploy** — conecta via SSH na VPS e atualiza os 3 serviços no Swarm com `docker service update --image ... --detach`.
+2. **deploy** — conecta via SSH na VPS e atualiza os 4 serviços no Swarm com `docker service update --image ... --detach`.
 
 Secrets necessários no GitHub (já configurados):
 
@@ -103,6 +104,7 @@ docker service ls
 docker service ps registro_api
 docker service ps registro_web
 docker service ps registro_admin
+docker service ps registro_colaborador
 docker service logs --tail 100 registro_api
 curl -fsS "https://${REGISTRO_API_HOST}/api/v1/health"
 ```
@@ -113,6 +115,7 @@ curl -fsS "https://${REGISTRO_API_HOST}/api/v1/health"
 docker service rollback registro_api
 docker service rollback registro_web
 docker service rollback registro_admin
+docker service rollback registro_colaborador
 ```
 
 Antes de migrations, mudanças críticas ou reboot da VPS, gerar e validar backup. Migrations futuras devem rodar uma única vez, em tarefa controlada no manager, nunca simultaneamente em todas as réplicas.

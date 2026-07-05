@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Upload, History } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Upload, History, KeyRound } from "lucide-react";
 import {
   createEmployeeAction,
   deleteEmployeeAction,
@@ -11,6 +11,7 @@ import {
   fetchTimeline,
   importEmployeesAction,
   lookupCepAction,
+  resetEmployeePinAction,
   updateEmployeeAction,
   uploadEmployeeAvatarAction,
   type Employee,
@@ -77,6 +78,8 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
   const [saving, setSaving] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [pinResetting, setPinResetting] = useState(false);
+  const [resetPin, setResetPin] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [sectors, setSectors] = useState<RegistryOption[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -87,6 +90,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
   const [importResult, setImportResult] = useState<EmployeeImportResult | null>(null);
 
   const canManage = hasPermission(user, "employee.manage");
+  const canManageTimeclock = hasPermission(user, "timeclock.manage");
 
   function showToast(msg: string) {
     setToast(msg);
@@ -120,6 +124,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
     setAvatarUrl(null);
     setShowHistory(false);
     setHistory([]);
+    setResetPin(null);
   }
 
   function setField<K extends keyof EmployeePayload>(field: K, value: EmployeePayload[K]) {
@@ -182,6 +187,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
     setHistory([]);
     setFormData({ ...EMPTY_FORM, name: employee.name, cpf: employee.cpf ?? "", status: employee.status });
     setAvatarUrl(employee.avatar_url);
+    setResetPin(null);
 
     const detail = await fetchEmployee(employee.id);
     if (detail) {
@@ -244,6 +250,21 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
       showToast("Avatar atualizado.");
     } else {
       showToast(result.error ?? "Erro ao enviar avatar.");
+    }
+  }
+
+  async function handleResetPin() {
+    if (!editingId) return;
+    if (!confirm(`Resetar o PIN de acesso ao Portal do Colaborador de "${formData.name}"? O PIN atual deixará de funcionar.`)) return;
+
+    setPinResetting(true);
+    const result = await resetEmployeePinAction(editingId);
+    setPinResetting(false);
+
+    if (result.ok) {
+      setResetPin(result.pin);
+    } else {
+      showToast(result.error);
     }
   }
 
@@ -415,13 +436,44 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
                   style={{ display: "none" }}
                 />
               </label>
+              {canManageTimeclock && (
+                <button
+                  type="button"
+                  onClick={handleResetPin}
+                  disabled={pinResetting}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginLeft: "auto" }}
+                >
+                  <KeyRound size={14} /> {pinResetting ? "Resetando..." : "Resetar PIN"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleToggleHistory}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginLeft: "auto" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginLeft: canManageTimeclock ? 0 : "auto" }}
               >
                 <History size={14} /> {showHistory ? "Ocultar histórico" : "Ver histórico"}
               </button>
+            </div>
+          )}
+
+          {editingId && resetPin && (
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                padding: "var(--sp-3) var(--sp-4)",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "var(--field-bg)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "var(--sp-3)",
+              }}
+            >
+              <span>
+                Novo PIN gerado: <strong style={{ fontSize: "1.1em", letterSpacing: "2px" }}>{resetPin}</strong> — informe ao
+                funcionário; ele deverá trocá-lo no primeiro acesso ao Portal do Colaborador.
+              </span>
+              <button type="button" onClick={() => setResetPin(null)}>Ok</button>
             </div>
           )}
 
