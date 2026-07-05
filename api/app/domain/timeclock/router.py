@@ -1,14 +1,17 @@
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
+from app.domain.attachments.service import create_attachment
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.timeclock.schemas import (
     CalendarEntry,
+    EmployeePayslipUploadResponse,
+    EmployeePinResetResponse,
     ManualPunchCreate,
     PunchUpdate,
     ScheduleDayUpsert,
@@ -27,6 +30,7 @@ from app.domain.timeclock.schemas import (
 )
 from app.domain.timeclock.service import (
     create_device,
+    create_employee_payslip,
     create_enrollment,
     create_manual_punch,
     create_shift,
@@ -39,6 +43,7 @@ from app.domain.timeclock.service import (
     list_enrollments,
     list_punches,
     list_shifts,
+    reset_employee_pin,
     set_schedule_day,
     update_device,
     update_punch,
@@ -399,6 +404,70 @@ async def create_manual_punch_endpoint(
         source=record.source,
         status=record.status,
         notes=record.notes,
+    )
+
+
+@router.post(
+    "/employees/{employee_id}/pin/reset",
+    response_model=EmployeePinResetResponse,
+    status_code=201,
+)
+async def reset_employee_pin_endpoint(
+    employee_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeePinResetResponse:
+    """RH gera um PIN novo para o Portal do Colaborador. O funcionário é obrigado
+    a trocá-lo no primeiro login (must_change_pin=True)."""
+    new_pin, error = await reset_employee_pin(session, user.company_id, user.id, employee_id)
+    if error is not None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return EmployeePinResetResponse(pin=new_pin)
+
+
+@router.post(
+    "/employees/{employee_id}/payslips",
+    response_model=EmployeePayslipUploadResponse,
+    status_code=201,
+)
+async def upload_employee_payslip_endpoint(
+    employee_id: int,
+    reference_month: date,
+    file: UploadFile,
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeePayslipUploadResponse:
+    """RH faz upload do contracheque (PDF) de um mês. Reaproveita o fluxo genérico
+    de anexos (app/domain/attachments/service.py) para armazenamento/validação, e
+    guarda apenas o metadado de competência em EmployeePayslip."""
+    data = await file.read()
+    attachment = await create_attachment(
+        session,
+        user.company_id,
+        user.id,
+        entity_type="employee_payslip",
+        entity_id=employee_id,
+        filename=file.filename or "contracheque.pdf",
+        content_type=file.content_type or "application/pdf",
+        data=data,
+        skip_audit=True,
+    )
+    if isinstance(attachment, str):
+        raise HTTPException(status_code=422, detail={"code": "invalid_file", "message": attachment})
+
+    record = await create_employee_payslip(
+        session,
+        user.company_id,
+        user.id,
+        employee_id=employee_id,
+        reference_month=reference_month.replace(day=1),
+        attachment_id=attachment.id,
+    )
+    return EmployeePayslipUploadResponse(
+        id=record.id,
+        employee_id=record.employee_id,
+        reference_month=record.reference_month,
+        attachment_id=record.attachment_id,
     )
 
 

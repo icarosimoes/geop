@@ -140,6 +140,21 @@ services:
       api:
         condition: service_healthy
 
+  colaborador:
+    build:
+      context: ./colaborador
+      target: development
+    environment:
+      API_URL: http://api:8000/api/v1
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./colaborador/app:/app/app
+      - ./colaborador/lib:/app/lib
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   registro-postgres-data:
   registro-mysql-data:

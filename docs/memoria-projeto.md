@@ -1,5 +1,25 @@
 # Memória do projeto
 
+## 2026-07-04 — Portal do Colaborador: namespace de token separado por design
+
+Decisão: o `Employee` (cadastro de RH) nunca ganhou uma extensão do token `access` de
+`User` — foi criado um tipo de JWT novo e paralelo (`employee_session`, sem
+`permissions`/`role_id`), com dependency própria (`require_employee_session`) que rejeita
+qualquer outro tipo de token, e vice-versa. Testado explicitamente nos dois sentidos.
+
+Motivos:
+
+- `Employee` é puramente RH (nem todo funcionário tem `User`/login); misturar os dois
+  namespaces de auth criaria risco de escalada de privilégio caso um token vazasse.
+- O caso de uso (bater ponto, ver escala, baixar contracheque) nunca deveria abrir acesso a
+  nenhuma rota administrativa da API, mesmo que o mesmo `secret` JWT seja reaproveitado.
+
+Como aplicar: qualquer nova funcionalidade de autoatendimento do colaborador deve entrar
+sob `require_employee_session`/`timeclock/mobile`, nunca sob `require_permission`. PIN
+numérico curto (não senha forte) foi aceito conscientemente para esse token de baixo
+escopo e TTL curto (60min, sem refresh) — não é o padrão a seguir se um recurso futuro do
+Portal do Colaborador expuser dados mais sensíveis. Ver [portal-colaborador.md](portal-colaborador.md).
+
 ## 2026-06-19 — Arquitetura de modernização
 
 Decisão: migrar gradualmente para FastAPI + Next.js App Router. As regras Jarvis aplicáveis foram adaptadas e versionadas em `docs/agentes/`; o Aloji permanece como referência de origem.

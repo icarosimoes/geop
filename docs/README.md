@@ -11,6 +11,8 @@ Esta pasta é a fonte de verdade técnica, funcional e operacional do Registro. 
 - [Modelo de domínio](domain-model.md)
 - [API atual](api-reference.md)
 - [Rotas e estados da interface](web-rotas-ui.md)
+- [Portal do Colaborador (ponto, escala, contracheque)](portal-colaborador.md)
+- [Catálogo de relógios de ponto](relogios-de-ponto-catalogo.md)
 - [Como desenvolver](desenvolvimento.md)
 - [Backlog e critérios de corte](backlog.md)
 - [Segurança](seguranca.md)

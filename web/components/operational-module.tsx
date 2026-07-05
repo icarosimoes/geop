@@ -146,7 +146,18 @@ const SLUG_TO_ENTITY_TYPE: Record<string, string> = {
   "mural": "bulletin",
 };
 
-export function OperationalModule({ definition, user }: { definition: ModuleDefinition; user: TenantUser }) {
+export function OperationalModule({
+  definition,
+  user,
+  basePath,
+  extraParams,
+}: {
+  definition: ModuleDefinition;
+  user: TenantUser;
+  basePath?: string;
+  extraParams?: Record<string, string>;
+}) {
+  const effectiveBasePath = basePath ?? `/${definition.slug}`;
   const storageKey = `registro:${user.company_id}:${definition.slug}`;
   const isFiscal = definition.slug === "solicitacoes-fiscais";
   const isOcorrencias = definition.slug === "ocorrencias";
@@ -284,18 +295,18 @@ export function OperationalModule({ definition, user }: { definition: ModuleDefi
     if (!sp) { setPage(1); return; }
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(extraParams);
       if (value) params.set("search", value);
-      router.push(`/${definition.slug}?${params.toString()}`);
+      router.push(`${effectiveBasePath}?${params.toString()}`);
     }, 400);
   }
   function handleServerPage(newPage: number) {
     setPage(newPage);
     if (!sp) return;
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(extraParams);
     params.set("page", String(newPage));
     if (query) params.set("search", query);
-    router.push(`/${definition.slug}?${params.toString()}`);
+    router.push(`${effectiveBasePath}?${params.toString()}`);
   }
 
   function formatNow() {

@@ -567,3 +567,42 @@ O Aero Hotel é um **cliente real**, não apenas dados de teste. O dump `aero-20
 - `DashboardShell` e `OperationalModule` simplificados para renderizar apenas conteúdo interno (sem sidebar, topbar ou drawers de perfil).
 - Removidos ~120 linhas de CSS duplicado (`.module-shell`, `.module-sidebar`, `.module-brand`, `.module-nav-item`, `.module-topbar`, `.module-user`, `.topbar`).
 - Busca do dashboard movida para a barra de ferramentas da tabela de atividades recentes (`.table-search`).
+
+## 2026-07-04 — Agente Go de ponto, catálogo de relógios e Portal do Colaborador
+
+### Catálogo de relógios de ponto
+
+- Levantados os relógios de ponto mais usados no Brasil (Control iD, ZKTeco, Henry, Topdata, Madis) com protocolo, homologação REP-P e prioridade de suporte — documentado em `relogios-de-ponto-catalogo.md`. Control iD priorizado por já ter suporte no backend (webhook `POST /integrations/control-id/{webhook_token}/punches`).
+
+### Agente Go de ponte local (`agent/`)
+
+- Criado agente Go standalone (`agent/`, módulo `github.com/icarosimoes/registro-timeclock-agent`) que roda no computador da recepção, conversa com o relógio Control iD via API REST local (login/logout, usuários, logs de acesso) e repassa as batidas para o webhook já existente do Registro.
+- `internal/sync`: polling configurável, fila de retry em disco para resiliência offline, cursor de última batida processada.
+- `internal/webui`: UI local de configuração em `127.0.0.1:47334` (sem autenticação — postura de app localhost single-user).
+- `internal/tray`: ícone de bandeja best-effort (`getlantern/systray`), com fallback headless quando dependências de sistema (GTK/pkg-config) não estão disponíveis.
+- Build tags separam a systray real (`-tags systray`) do build padrão headless, evitando dependência de cgo/GTK no build default.
+- Verificação: `go build`/`go vet`/`go test` limpos; UI local testada com `curl` manual.
+
+### Portal do Colaborador (ponto mobile, escala, contracheque)
+
+- Backend novo em `api/app/domain/timeclock/mobile_router.py` + `mobile_auth.py`: token JWT `employee_session` completamente isolado do login de `User` (sem `permissions`/`role_id`, dependency própria `require_employee_session`), login por PIN numérico com lockout (`employee_credentials`), geofencing por Haversine na batida (`Location.latitude/longitude/geofence_radius_m`, `Employee.location_id`), escala reaproveitando `get_calendar()` já existente, contracheque (`employee_payslips` + `attachments` com novo `entity_type="employee_payslip"`).
+- Migration `20260704_0047_employee_portal.py` aplicada e verificada contra o Postgres real do Docker Compose.
+- 14 testes novos em `api/tests/test_timeclock_mobile.py`, incluindo o teste crítico de isolamento de namespace de token nos dois sentidos. Suíte completa: 517 passed, 19 skipped.
+- Frontend novo `colaborador/`: PWA Next.js 16 independente (porta 3002), sem menu do Registro — login por PIN + troca obrigatória de PIN default, tela de ponto com `navigator.geolocation`, escala (próximos 14 dias), contracheque (download via route handler que injeta o Bearer token, já que `<a href>` não carrega headers). `next.config.ts` próprio permite `Permissions-Policy: geolocation=(self)` (o `web/` bloqueia geolocalização). Serviço `colaborador` adicionado ao `docker-compose.yml` raiz.
+- Documentação: `portal-colaborador.md` (novo), `api-reference.md`, `domain-model.md`, `mapa.md`, `backlog.md` (seção P10) e `memoria-projeto.md` atualizados. Pendências registradas em P10 (PC5-PC8): deploy no Swarm, telas administrativas de geofencing/PIN no `web/`, validação contra hardware real, integração automática de contracheque com folha/ERP.
+
+## 2026-07-04 — Turnos padrão por tenant e reorganização de Configurações
+
+### Turnos padrão (seed automático)
+
+- Adicionado `ensure_default_shifts()` em `api/app/domain/timeclock/service.py`: cadastra 6 turnos padrão (Manhã, Tarde, Noite, Comercial, 12x36 Diurno, 12x36 Noturno) para uma empresa, pulando se ela já tiver algum turno ativo.
+- Ligado em `create_tenant` (`api/app/domain/platform/service.py`) — toda empresa criada pelo painel da plataforma já nasce com os turnos.
+- Criado `api/app/backfill_default_shifts.py` (idempotente) para aplicar aos tenants que já existiam antes dessa mudança; rodado manualmente em dev via `docker exec registro-api-1 python -m app.backfill_default_shifts` (aplicado com sucesso em `empresa-demo`, `filial-teste` e `aero-hotel`).
+- Documentado em `escala-de-trabalho.md`.
+
+### Cadastro de usuários e perfis de acesso dentro de Configurações
+
+- Movidas as telas de usuários (`/usuarios`) e perfis de acesso (`/perfis`) para dentro de `/configuracoes`, como abas "Usuários" e "Perfis de acesso", reaproveitando os componentes existentes (`OperationalModule`, `RoleManager`) sem duplicar lógica.
+- `OperationalModule` ganhou os props opcionais `basePath`/`extraParams` (antes navegava sempre para `/${definition.slug}` na paginação/busca; agora aceita uma base de rota diferente para funcionar embutido em `/configuracoes?tab=usuarios`).
+- Removidas as entradas "Usuários" e "Perfis de acesso" do submenu "Cadastros" da sidebar (`components/app-layout.tsx`); `/perfis` agora é um redirect para `/configuracoes?tab=perfis` (mantém links antigos funcionando); `/usuarios` continua respondendo via a rota genérica `[module]` (sem alteração), só não aparece mais no menu.
+- Verificado em navegador (Playwright headless): as duas abas renderizam corretamente, busca/paginação preservam `tab=usuarios` na URL, sem erros de console.

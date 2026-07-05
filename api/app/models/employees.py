@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 
 import sqlalchemy as sa
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -52,6 +52,13 @@ class Employee(Base, TenantMixin, TimestampMixin):
         index=True,
     )
 
+    # Local de trabalho (usado para geofencing no ponto mobile do Portal do Colaborador)
+    location_id: Mapped[int | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Vínculo opcional com User (nem todo employee loga no sistema)
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -83,3 +90,52 @@ class EmployeeExternalId(Base, TenantMixin):
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now()
     )
+
+
+class EmployeeCredential(Base, TenantMixin, TimestampMixin):
+    """Credencial de PIN do Portal do Colaborador — separada de Employee (dado de RH)
+    para não misturar cadastro com segredo de autenticação. 1:1 com Employee."""
+
+    __tablename__ = "employee_credentials"
+    __table_args__ = (
+        UniqueConstraint("employee_id", name="uq_employee_credentials_employee"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        index=True,
+    )
+    pin_hash: Mapped[str] = mapped_column(String(255))
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
+    must_change_pin: Mapped[bool] = mapped_column(Boolean, default=True)
+    pin_set_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
+
+
+class EmployeePayslip(Base, TenantMixin):
+    """Contracheque (PDF) de um funcionário para uma competência (mês/ano)."""
+
+    __tablename__ = "employee_payslips"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "employee_id", "reference_month", name="uq_employee_payslips_month"
+        ),
+        Index("ix_employee_payslips_employee", "company_id", "employee_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"),
+    )
+    reference_month: Mapped[date] = mapped_column(Date)
+    attachment_id: Mapped[int] = mapped_column(
+        ForeignKey("attachments.id", ondelete="CASCADE"),
+    )
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, server_default=sa.func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)

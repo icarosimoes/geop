@@ -150,3 +150,31 @@ def decode_invite_token(token: str, secret: str) -> dict[str, Any]:
     if payload.get("type") != "invite":
         raise jwt.InvalidTokenError("tipo de token inválido")
     return payload
+
+
+def create_employee_session_token(
+    *,
+    employee_id: int,
+    company_id: int,
+    secret: str,
+    minutes: int = 60,
+) -> str:
+    """Token do Portal do Colaborador. Namespace estritamente separado do `access`
+    de User: sem `permissions`/`role_id`, para impedir escalada de acesso a rotas
+    administrativas via `require_permission`."""
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "sub": str(employee_id),
+        "company_id": company_id,
+        "type": "employee_session",
+        "iat": now,
+        "exp": now + timedelta(minutes=minutes),
+    }
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
+
+
+def decode_employee_session_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "employee_session":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload

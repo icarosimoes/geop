@@ -41,6 +41,10 @@ class Location(Base, TenantMixin, LegacyEntityMixin, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))
+    # Geofencing (Portal do Colaborador): nem todo estabelecimento configura de imediato.
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    geofence_radius_m: Mapped[int] = mapped_column(Integer, default=100)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -862,6 +866,8 @@ class TimePunch(Base, TenantMixin):
     )
     punched_at: Mapped[datetime] = mapped_column(DateTime)
     punch_type: Mapped[str | None] = mapped_column(String(10))
+    # "device" (relógio físico Control iD), "manual" (lançado por User admin) ou
+    # "mobile" (Portal do Colaborador, via app do funcionário com geofencing).
     source: Mapped[str] = mapped_column(String(20), default="device")
     external_event_id: Mapped[str | None] = mapped_column(String(120))
     status: Mapped[str | None] = mapped_column(String(20))
@@ -870,4 +876,8 @@ class TimePunch(Base, TenantMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    # Preenchidos apenas quando source="mobile" (geofencing do ponto pelo celular).
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    distance_m: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -899,3 +899,21 @@ Relatórios usam `entity_type="shift_report"` para timeline e anexos.
 ### Infraestrutura: MinIO
 
 O MinIO é o storage S3-compatible para anexos. Em dev, roda como container Docker (`localhost:9000` API, `localhost:9001` console). O bucket `registro-attachments` é criado automaticamente no startup da API. Em produção, pode ser substituído por AWS S3 ou qualquer storage S3-compatible via variáveis `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` e `S3_BUCKET`.
+
+### Portal do Colaborador (`/timeclock/mobile`)
+
+Documentação completa em [portal-colaborador.md](portal-colaborador.md). Resumo do contrato:
+
+```
+POST /timeclock/mobile/login       { company_slug, registration_number, pin } → employee_session token
+POST /timeclock/mobile/pin         (auth) { old_pin?, new_pin }
+POST /timeclock/mobile/punch       (auth) { latitude, longitude } → TimePunch (geofencing por Haversine)
+GET  /timeclock/mobile/status      (auth) → próximo tipo de batida esperado
+GET  /timeclock/mobile/schedule    (auth) ?start&end → CalendarEntry[] do próprio funcionário
+GET  /timeclock/mobile/payslips    (auth) → lista dos próprios contracheques
+GET  /timeclock/mobile/payslips/{id}/download  (auth) → PDF, valida posse
+```
+
+Autenticado por token `employee_session`, um namespace de JWT isolado do `access`/`refresh`
+de `User` — nunca intercambiáveis. Endpoint administrativo de reset de PIN:
+`POST /timeclock/employees/{employee_id}/pin/reset` (`timeclock.manage`, no router principal).

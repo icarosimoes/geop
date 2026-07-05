@@ -96,7 +96,7 @@
 - [x] Criar demo user para Aero Hotel — `demo@aerohotel.local` / `Registro@123` com role `legacy-admin` + permissão wildcard `*`.
 - [x] Corrigir permissões do role `legacy-admin` — adicionada permissão `*` para que os endpoints do Registro funcionem (V1 usava códigos `legacy.controller.action`, API nova usa `module.action`).
 - [x] Atualizar `import_v1.py` para escrever diretamente nas tabelas dedicadas em futuras importações — `import_meetings` grava em `meetings`/`meeting_participants`/`meeting_subjects` e `import_shift_reports` grava em `shift_reports`.
-- [ ] Executar corte final — puxar dump MySQL atualizado do V1, importar via `import_v1.py`, rodar migrations (incluindo 0030), validar dados.
+- [DESCONTINUADO] ~~Executar corte final — puxar dump MySQL atualizado do V1, importar via `import_v1.py`, rodar migrations (incluindo 0030), validar dados.~~ — decisão de 2026-07-04: a migração final do V1 (Laravel) não vai mais acontecer.
 
 ## P6 — documentação e governança
 
@@ -117,12 +117,14 @@
 
 ## Próximos passos pendentes (prioridade)
 
-### Alta — bloqueiam corte
+### Alta — bloqueiam corte (DESCONTINUADO — ver nota abaixo)
 
 1. ~~**Atualizar `import_v1.py`**~~ — ✅ reescrito para gravar diretamente em `meetings`, `meeting_participants`, `meeting_subjects` e `shift_reports`.
-2. **Dump V1 atualizado** — puxar dump MySQL fresco do servidor V1 em produção. O dump local (`aero-2026-06-19.sql`) é snapshot de desenvolvimento.
-3. **Inventário de anexos físicos** — mapear arquivos/volumes fora do banco na V1 (uploads, PDFs, imagens) para migração ao MinIO.
+2. [DESCONTINUADO] ~~**Dump V1 atualizado** — puxar dump MySQL fresco do servidor V1 em produção. O dump local (`aero-2026-06-19.sql`) é snapshot de desenvolvimento.~~
+3. [DESCONTINUADO] ~~**Inventário de anexos físicos** — mapear arquivos/volumes fora do banco na V1 (uploads, PDFs, imagens) para migração ao MinIO.~~
 4. ~~**Testes de cobertura**~~ — ✅ expandido: 70 testes cobrindo SLA, CRUD, cross-tenant, anexos (9 testes) e auditoria (9 testes).
+
+> **Nota (2026-07-04):** decidido não seguir mais com o corte final do V1 (Laravel/Chess legado de gestão). Os itens 2 e 3 acima, e o item 11 abaixo, ficam descontinuados.
 
 ### Média — valor operacional
 
@@ -135,8 +137,8 @@
 
 ### Baixa — preparação futura
 
-11. **Corte do Laravel** — procedimento documentado em `docs/migracao-postgresql.md`. Depende dos itens 2-3 acima.
-12. **Remover profile `mysql-import`** — após corte final em produção, eliminar MySQL do Docker Compose e dependência `asyncmy`.
+11. [DESCONTINUADO] ~~**Corte do Laravel** — procedimento documentado em `docs/migracao-postgresql.md`. Depende dos itens 2-3 acima.~~
+12. **Remover profile `mysql-import`** — ✅ avaliado em `docs/infra/avaliacao-remocao-mysql-import.md`: manter por ora (custo baixo, útil para importações pontuais de conferência ao V1); remover quando o V1 for oficialmente descomissionado.
 
 ## P6 — evolução operacional
 
@@ -227,16 +229,16 @@ Itens identificados na auditoria completa de sistema. Documentação detalhada e
 - [x] **[M12] Acessibilidade** — ✅ ARIA combobox/listbox nos autocompletes, keyboard navigation (↑↓ Enter Escape), `aria-live` nas notificações, tabIndex em itens interativos, focus styling para itens ativos.
 - [x] **[M13] Configurar error tracking centralizado** — ✅ `sentry-sdk[fastapi]` adicionado, init condicional por `SENTRY_DSN` env var com traces 10% e profiling. Basta configurar o DSN em produção.
 - [x] **[M14] Habilitar persistência no Redis** — ✅ `--appendonly yes --appendfsync everysec` no `docker-stack.yml`.
-- [ ] **[M15] Avaliar PostgreSQL com failover** — considerar streaming replication ou managed DB. (~8h+)
+- [x] **[M15] Avaliar PostgreSQL com failover** — ✅ avaliado em `docs/infra/avaliacao-postgresql-failover.md`: não implementar agora (infra single-node Swarm, ganho real exige multi-node); RPO/RTO atuais (24h/1h) aceitos como meta.
 - [x] **[M16] Configurar log rotation no Docker** — ✅ `json-file` driver com `max-size: 10m`, `max-file: 3` em api, web, admin.
 - [x] **[M17] Testar procedimento de restore** — ✅ Roteiro detalhado em `docs/infra/teste-restore.md`: procedimento de 6 passos, checklist pós-restore, template de registro mensal, troubleshooting.
-- [ ] **[M18] Avaliar replicação do MinIO** — considerar clustering ou S3 externo. (~4h)
+- [x] **[M18] Avaliar replicação do MinIO** — ✅ avaliado em `docs/infra/avaliacao-minio-replicacao.md`: não implementar clustering agora; risco real é backup e volume de produção morarem no mesmo host — ação futura de menor esforço seria apontar `mc mirror` para destino externo.
 
 ### Low — quando houver oportunidade
 
 - [x] **[L1] Cookie `secure` explícito por ambiente** — ✅ `COOKIE_SECURE` env var com fallback para `NODE_ENV`.
 - [x] **[L2] Log de permissão específica para wildcard** — ✅ `logger.debug("permission_check", required=code, granted_via="wildcard")`.
-- [ ] **[L3] Avaliar i18n** — texto hardcoded em português. Considerar `next-intl` se multi-idioma necessário. (~8h+)
+- [x] **[L3] Avaliar i18n** — ✅ avaliado em `docs/avaliacao-i18n.md`: não implementar agora, sem sinal de demanda real por outro idioma; reabrir quando houver tenant/mercado concreto exigindo.
 - [x] **[L4] Configurar image optimization no Next.js** — ✅ `formats: ["image/avif", "image/webp"]` em `next.config.ts`.
 - [x] **[L5] Revisar filtros do Alembic env.py** — ✅ Revisado: filtro de index/FK mantido pois naming diverge entre models e migrations legacy (indexes compostos vs single-column). Adicionado filtro de column attributes. Drift real (tabelas/colunas novas ou removidas) continua reportado.
 - [x] **[L6] Padronizar error response** — ✅ Padrão `{"code": "...", "message": "..."}` já consistente nos routers.
@@ -280,6 +282,19 @@ Itens identificados no levantamento do WIP não commitado de `employees`, `timec
 - [x] **[E12] Upload de avatar** — ✅ `POST /employees/{id}/avatar`, mesmo fluxo de `POST /users/{id}/avatar` (MinIO/S3, validação de assinatura de arquivo).
 - [x] **[E13] Histórico de mudança de status** — ✅ `"employee"` registrado em `VALID_ENTITY_TYPES`/`ENTITY_MODEL_MAP` do domínio de timeline; `GET /timeline/employee/{id}` já funciona reaproveitando os `AuditEvent`s existentes, sem tabela de histórico dedicada.
 - [x] **[E14] Importação em lote** de funcionários — ✅ `POST /employees/import`, CSV validado linha a linha com o mesmo schema `EmployeeCreate` do cadastro manual; uma linha inválida não interrompe as demais, resposta traz resultado por linha.
+
+## P10 — Portal do Colaborador e agente Go de ponto (2026-07-04)
+
+- [x] **[PC1] Backend do Portal do Colaborador** — ✅ token `employee_session` isolado do login de `User`, login por PIN com lockout, geofencing por Haversine, escala e contracheque. 14 testes dedicados em `test_timeclock_mobile.py`, 517 testes totais passando. Ver [portal-colaborador.md](portal-colaborador.md).
+- [x] **[PC2] Frontend PWA `colaborador/`** — ✅ app Next.js independente (porta 3002), login/troca de PIN, ponto com geolocalização, escala, contracheque. Typecheck e build limpos.
+- [x] **[PC3] Agente Go de ponte local (`agent/`)** — ✅ cliente REST Control iD, sync com fila de retry offline, UI local de configuração, systray best-effort. Build/vet/test passando.
+- [x] **[PC4] Catálogo de relógios de ponto** — ✅ [relogios-de-ponto-catalogo.md](relogios-de-ponto-catalogo.md), priorizando Control iD (já suportado no backend).
+- [ ] **[PC5] Deploy do `colaborador/` no Swarm de produção** — pendente: `docker-stack.yml` ainda não tem o serviço `colaborador`; app só roda em dev (`docker-compose.yml`, porta 3002).
+- [ ] **[PC6] Cadastro de `Location` com lat/lng e de `EmployeeCredential` via UI administrativa** — pendente: hoje só existe endpoint de API (`PATCH /registries` não expõe lat/lng/raio; reset de PIN só via `POST /timeclock/employees/{id}/pin/reset`); falta tela no `web/` para o RH configurar geofencing e gerar PIN sem depender de chamada direta à API.
+- [ ] **[PC7] Validação em hardware real** — o payload de push do Control iD (webhook) e o formato de resposta da API REST local (usado pelo agente Go) não foram validados contra um equipamento físico; parsing é deliberadamente tolerante, mas pode exigir ajuste fino.
+- [ ] **[PC8] Integração automática de contracheque com folha/ERP** — hoje o upload é manual pelo RH (um PDF por competência via `attachments`); sem integração com sistema de folha de pagamento.
+- [x] **[PC9] Turnos padrão por tenant** — ✅ `ensure_default_shifts()` cadastra 6 turnos padrão (Manhã, Tarde, Noite, Comercial, 12x36 Diurno/Noturno) em toda empresa nova (`create_tenant`); `api/app/backfill_default_shifts.py` aplica retroativamente aos tenants existentes. Ver [escala-de-trabalho.md](escala-de-trabalho.md).
+- [x] **[PC10] Usuários e Perfis de acesso movidos para Configurações** — ✅ `/usuarios` e `/perfis` viraram abas dentro de `/configuracoes`, reaproveitando `OperationalModule`/`RoleManager`; removidos do submenu "Cadastros" da sidebar. `/perfis` mantém redirect para compatibilidade com links antigos.
 
 ## Definition of Done por módulo
 

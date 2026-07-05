@@ -15,6 +15,7 @@ ALLOWED_ENTITY_TYPES = {
     "occurrence",
     "procedure",
     "module_record",
+    "employee_payslip",
 }
 
 

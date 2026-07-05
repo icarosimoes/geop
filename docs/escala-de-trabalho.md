@@ -302,12 +302,39 @@ is_working = offset < work_days
 
 ### 1. Criar turnos
 
-Na tela `/cadastros/turnos`, crie:
-- "Manhã" (08:00-17:00)
-- "Tarde" (14:00-22:00)
-- "Noite" (22:00-06:00)
-- "12x36 Diurno" (06:00-18:00)
-- etc.
+Na tela `/cadastros/turnos`, crie turnos adicionais conforme a operação exigir,
+ou ajuste os turnos padrão (ver seção abaixo).
+
+### Turnos padrão (seed automático)
+
+Toda empresa nova já nasce com 6 turnos pré-cadastrados, para não obrigar o
+gestor a montar a escala do zero (`DEFAULT_SHIFTS` em
+`api/app/domain/timeclock/service.py`):
+
+| Turno | Horário | Observação |
+| --- | --- | --- |
+| Manhã | 07:00–15:00 | Recepção |
+| Tarde | 15:00–23:00 | Recepção |
+| Noite | 23:00–07:00 | Recepção |
+| Comercial | 08:00–18:00 (almoço 12:00–13:00) | Administrativo |
+| 12x36 Diurno | 07:00–19:00 | Portaria/segurança |
+| 12x36 Noturno | 19:00–07:00 | Portaria/segurança |
+
+`ensure_default_shifts()` só cadastra os turnos se a empresa ainda não tiver
+nenhum (`Shift.company_id == company_id, deleted_at IS NULL`), e é chamada em
+dois pontos:
+
+1. **`create_tenant`** (`api/app/domain/platform/service.py`): toda empresa
+   criada pelo painel da plataforma recebe os turnos automaticamente.
+2. **Backfill manual** (`api/app/backfill_default_shifts.py`): script
+   idempotente para aplicar aos tenants que já existiam antes dessa mudança.
+   Rodar com `.venv/bin/python -m app.backfill_default_shifts` (ou
+   `docker exec registro-api-1 python -m app.backfill_default_shifts` em
+   containers já subindo).
+
+Esses turnos são apenas o ponto de partida — o gestor pode renomear, ajustar
+horários/tolerância ou desativar (`active=false`) qualquer um deles em
+`/cadastros/turnos`, como qualquer outro turno.
 
 ### 2. Gerar escala base
 

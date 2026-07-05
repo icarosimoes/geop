@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.domain.timeclock.service import ensure_default_shifts
 from app.integrations.asaas import AsaasClient, AsaasError
 from app.models import Company, Invoice, Plan, PlatformAuditLog, Subscription, User
 
@@ -62,6 +63,7 @@ async def create_tenant(
     )
     session.add(company)
     await session.flush()
+    await ensure_default_shifts(session, company.id)
     subscription = Subscription(
         company_id=company.id,
         plan_id=plan.id,

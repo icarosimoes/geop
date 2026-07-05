@@ -145,3 +145,67 @@ class PunchUpdate(BaseModel):
     punched_at: datetime | None = None
     punch_type: str | None = None
     notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Portal do Colaborador (Employee mobile app)
+# ---------------------------------------------------------------------------
+
+
+class EmployeeLoginRequest(BaseModel):
+    company_slug: str
+    registration_number: str
+    pin: str
+
+
+class EmployeeSessionResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    must_change_pin: bool
+    employee_id: int
+    employee_name: str
+
+
+class EmployeePinChangeRequest(BaseModel):
+    old_pin: str | None = None
+    new_pin: str
+
+
+class EmployeePinResetResponse(BaseModel):
+    pin: str
+    must_change_pin: bool = True
+
+
+class MobilePunchRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class MobilePunchResponse(BaseModel):
+    id: int
+    punched_at: datetime
+    punch_type: str | None
+    status: str | None
+    distance_m: float | None
+
+
+class EmployeeStatusResponse(BaseModel):
+    next_punch_type: str
+
+
+class EmployeePayslipSummary(BaseModel):
+    id: int
+    reference_month: date
+    created_at: datetime
+
+
+class EmployeePayslipListResponse(BaseModel):
+    items: list[EmployeePayslipSummary]
+
+
+class EmployeePayslipUploadResponse(BaseModel):
+    id: int
+    employee_id: int
+    reference_month: date
+    attachment_id: int

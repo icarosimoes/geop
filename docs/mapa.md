@@ -26,6 +26,8 @@
 | Dashboard KPIs | indicadores avançados de OS, ocorrências e fiscais + tendência 7 dias | `/dashboard/metrics` expandido |
 | Estoque e materiais | itens com entrada/saída/ajuste, vínculo com OS e ocorrências, alerta mínimo | `stock_items` + `stock_movements` |
 | Pendências de turno | handoff estruturado com leitura e resolução, direcionável por turno/data | `shift_handoffs` |
+| Ponto eletrônico (relógio físico) | Control iD via webhook + agente Go de ponte local (bridge LAN→nuvem) | `timeclock` + `agent/` |
+| Portal do Colaborador (PWA) | login por PIN (token isolado de `User`), bater ponto com geofencing, escala, contracheque | `timeclock/mobile` + `colaborador/` |
 
 ## Caminhos
 
@@ -35,6 +37,8 @@
 | testes API | `api/tests/` |
 | Web | `web/app/`, `web/components/` (`app-layout.tsx` é o shell unificado; `dashboard-shell.tsx` e `operational-module.tsx` renderizam apenas conteúdo) |
 | Admin SaaS | `admin/app/`, `admin/lib/` |
+| Portal do Colaborador (PWA) | `colaborador/app/`, `colaborador/lib/` — app Next.js independente, sem menu do Registro |
+| Agente Go de ponto (relógio físico) | `agent/` — ponte local entre o relógio Control iD (LAN) e o webhook do Registro |
 | Compose | `docker-compose.yml` |
 | Swarm | `docker-stack.yml` |
 | legado local | `docs/v1/` |
@@ -81,6 +85,10 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - 70 testes automatizados (SLA, CRUD, cross-tenant, anexos, auditoria)
 - RLS em 25 tabelas PostgreSQL (inclui `work_orders`)
 - Ordens de serviço com workflow de 5 estados, Kanban com drag-and-drop, criação, exclusão e transições auditadas
+- Portal do Colaborador: ponto por geolocalização, escala e contracheque via PWA dedicado (`colaborador/`), com auth por PIN e token isolado do login de `User` (ver [portal-colaborador.md](portal-colaborador.md))
+- Agente Go de ponte local (`agent/`) para relógio de ponto Control iD (ver [relogios-de-ponto-catalogo.md](relogios-de-ponto-catalogo.md))
+- Cadastro de usuários e perfis de acesso movido para dentro de `/configuracoes` (abas "Usuários" e "Perfis de acesso"), saindo do submenu "Cadastros" da sidebar
+- Toda empresa nova já recebe 6 turnos padrão pré-cadastrados (Manhã, Tarde, Noite, Comercial, 12x36 Diurno/Noturno) — ver [escala-de-trabalho.md](escala-de-trabalho.md)
 
 ### Planejado / pendente de produção
 

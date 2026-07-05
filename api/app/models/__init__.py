@@ -1,5 +1,10 @@
 from app.models.base import Base
-from app.models.employees import Employee, EmployeeExternalId
+from app.models.employees import (
+    Employee,
+    EmployeeCredential,
+    EmployeeExternalId,
+    EmployeePayslip,
+)
 from app.models.identity import Company, Permission, Role, User, role_permissions
 from app.models.operations import (
     ApartmentInspection,
@@ -77,7 +82,9 @@ __all__ = [
     "Company",
     "CompanySetting",
     "Employee",
+    "EmployeeCredential",
     "EmployeeExternalId",
+    "EmployeePayslip",
     "Invoice",
     "FiscalRequest",
     "Function",

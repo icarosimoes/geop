@@ -40,7 +40,10 @@ Company
   ├── ChecklistExecution ──► ChecklistExecutionItem
   ├── StockItem ──► StockMovement (→ WorkOrder, Occurrence)
   ├── ShiftHandoff (pendências entre turnos → ShiftReport)
-  └── ModuleRecord (genérico: inspeções, obra, manutenção, mural)
+  ├── ModuleRecord (genérico: inspeções, obra, manutenção, mural)
+  ├── TimeClockDevice ──► TimePunch (relógio físico, webhook Control iD)
+  ├── EmployeeCredential (PIN do Portal do Colaborador, 1:1 com Employee)
+  └── EmployeePayslip ──► Attachment (contracheque por competência)
 ```
 
 ## Agregados principais
@@ -70,7 +73,9 @@ Company
 | Pendências de turno | `shift_handoffs` | comunicação entre turnos com fluxo pendente → lido → resolvido. Direcionável por turno (morning/afternoon/night) e data. Vínculo opcional com `shift_reports`. Confirmação de leitura e resolução com timestamps. Permissões: `handoff.view/create/edit/delete` |
 | Participantes de ocorrências | `occurrence_participants` | junction table (occurrence_id, user_id) para participantes de ocorrências |
 | Notificações | `notifications`, `notification_preferences` | por tenant e usuário, `title`, `body`, `category`, `entity_type`/`entity_id` (link opcional ao registro), `read_at` para leitura, `email_sent_at` para tracking de entrega. Preferências por módulo (in_app/email) em `notification_preferences`. Destinatários por módulo em `company_settings` (chave `notification_recipients`) |
-| Anexos | `attachments` | por tenant, `entity_type`/`entity_id` polimórfico, `filename`, `content_type`, `size_bytes`, `storage_key` (MinIO/S3), `uploaded_by_user_id` |
+| Anexos | `attachments` | por tenant, `entity_type`/`entity_id` polimórfico, `filename`, `content_type`, `size_bytes`, `storage_key` (MinIO/S3), `uploaded_by_user_id` (inclui `entity_type="employee_payslip"`) |
+| Ponto eletrônico (relógio físico) | `time_clock_devices`, `time_clock_enrollments`, `time_punches` | dispositivo autenticado por `webhook_token` (não JWT), `TimeClockEnrollment.external_id` mapeia matrícula do relógio → `employee_id`. `TimePunch.source` ∈ {`device`, `manual`, `mobile`} |
+| Portal do Colaborador | `employee_credentials`, `employee_payslips` | ver [portal-colaborador.md](portal-colaborador.md). `EmployeeCredential` (PIN hash, lockout, 1:1 com `Employee`) e `EmployeePayslip` (`reference_month` + `attachment_id`) isolados do cadastro de RH por preocupação, mesmo padrão de `TimeClockEnrollment` |
 | Auditoria | `audit_events` | imutável por tenant (sem `updated_at`/`deleted_at`), `user_id`, `entity_type`, `entity_id`, `event_type` (`create`, `update`, `delete`, `comment`, `attachment_add`, `attachment_remove`), `diff` JSON com antes/depois por campo |
 
 ## Convenções de dados
@@ -94,3 +99,4 @@ Company
 - Autenticação usa dois tokens JWT: access token (30min, type=access, contém permissions) e refresh token (7 dias, type=refresh, contém apenas sub e company_id). O frontend armazena ambos em cookies httpOnly e faz auto-refresh transparente quando o access expira.
 - Rate limiting via slowapi protege endpoints sensíveis: login (10/min), refresh (20/min), integração Chess (30/min). Exceder retorna 429.
 - Cada domínio possui `service.py` com lógica de negócio separada do router. Services recebem session e parâmetros tipados, facilitando reuso entre integrações (ex: `fiscal_requests.service.create_from_chess()`) e testes unitários sem dependência do FastAPI.
+- O Portal do Colaborador usa um terceiro tipo de token JWT, `employee_session` (`sub`=employee_id, `company_id`, sem `permissions`/`role_id`), completamente isolado dos tokens `access`/`refresh` de `User` — nenhum dos dois abre rotas do outro (testado nos dois sentidos). `Location` ganhou `latitude`/`longitude`/`geofence_radius_m` para geofencing por Haversine na batida mobile. Ver [portal-colaborador.md](portal-colaborador.md).

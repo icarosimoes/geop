@@ -1,7 +1,9 @@
+import math
 import secrets
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import select
+import bcrypt
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +11,10 @@ from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
 from app.domain.timeclock.schemas import RotatingPattern, WeeklyPattern
 from app.models import (
+    Company,
     Employee,
+    EmployeeCredential,
+    EmployeePayslip,
     Location,
     ScheduleEntry,
     Shift,
@@ -20,10 +25,85 @@ from app.models import (
 
 WEEKDAY_LABELS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
+# Portal do Colaborador: PIN curto (4-6 dígitos) é fraco por natureza — o lockout por
+# tentativas e o TTL curto do employee_session token são a mitigação, não uma senha forte.
+PIN_MAX_ATTEMPTS = 5
+PIN_LOCKOUT_MINUTES = 15
+_WEAK_PINS = {
+    "000000",
+    "111111",
+    "222222",
+    "333333",
+    "444444",
+    "555555",
+    "666666",
+    "777777",
+    "888888",
+    "999999",
+    "123456",
+    "654321",
+    "012345",
+}
+
 
 # ---------------------------------------------------------------------------
 # Turnos
 # ---------------------------------------------------------------------------
+
+# Padrões de escala hoteleira usados para pré-cadastrar turnos em toda empresa
+# nova (recepção 24h em 3 turnos + comercial + 12x36 para portaria/segurança).
+DEFAULT_SHIFTS: list[dict] = [
+    {"name": "Manhã", "start_time": time(7, 0), "end_time": time(15, 0), "color": "#2563eb"},
+    {"name": "Tarde", "start_time": time(15, 0), "end_time": time(23, 0), "color": "#f59e0b"},
+    {"name": "Noite", "start_time": time(23, 0), "end_time": time(7, 0), "color": "#4f46e5"},
+    {
+        "name": "Comercial",
+        "start_time": time(8, 0),
+        "end_time": time(18, 0),
+        "break_start": time(12, 0),
+        "break_end": time(13, 0),
+        "color": "#16a34a",
+    },
+    {
+        "name": "12x36 Diurno",
+        "start_time": time(7, 0),
+        "end_time": time(19, 0),
+        "color": "#0891b2",
+    },
+    {
+        "name": "12x36 Noturno",
+        "start_time": time(19, 0),
+        "end_time": time(7, 0),
+        "color": "#7c3aed",
+    },
+]
+
+
+async def ensure_default_shifts(session: AsyncSession, company_id: int) -> list[Shift]:
+    """Cadastra os turnos padrão para a empresa, se ela ainda não tiver nenhum."""
+    existing = await session.scalar(
+        select(func.count(Shift.id)).where(
+            Shift.company_id == company_id, Shift.deleted_at.is_(None)
+        )
+    )
+    if existing:
+        return []
+    shifts = [
+        Shift(
+            company_id=company_id,
+            name=spec["name"],
+            start_time=spec["start_time"],
+            end_time=spec["end_time"],
+            break_start=spec.get("break_start"),
+            break_end=spec.get("break_end"),
+            tolerance_minutes=10,
+            color=spec["color"],
+        )
+        for spec in DEFAULT_SHIFTS
+    ]
+    session.add_all(shifts)
+    await session.flush()
+    return shifts
 
 
 async def list_shifts(session: AsyncSession, company_id: int) -> list[Shift]:
@@ -574,6 +654,23 @@ async def delete_enrollment(
 # ---------------------------------------------------------------------------
 
 
+async def _compute_punch_status(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int | None,
+    punched_at: datetime,
+    punch_type: str | None,
+) -> str:
+    """Resolve o status (on_time/late/early_leave/unscheduled/day_off) de uma batida,
+    reaproveitado por todas as origens de ingestão (device, manual, mobile)."""
+    if not employee_id:
+        return "unscheduled"
+    shift, forced_status = await _resolve_schedule_for_punch(
+        session, company_id, employee_id, punched_at
+    )
+    return forced_status or evaluate_status(shift, punched_at, punch_type)
+
+
 async def ingest_punch(
     session: AsyncSession,
     *,
@@ -601,12 +698,7 @@ async def ingest_punch(
             TimeClockEnrollment.external_id == external_id,
         )
     )
-    status = "unscheduled"
-    if employee_id:
-        shift, forced_status = await _resolve_schedule_for_punch(
-            session, company_id, employee_id, punched_at
-        )
-        status = forced_status or evaluate_status(shift, punched_at, punch_type)
+    status = await _compute_punch_status(session, company_id, employee_id, punched_at, punch_type)
 
     record = TimePunch(
         company_id=company_id,
@@ -648,10 +740,7 @@ async def create_manual_punch(
     punch_type: str | None,
     notes: str | None,
 ) -> TimePunch:
-    shift, forced_status = await _resolve_schedule_for_punch(
-        session, company_id, employee_id, punched_at
-    )
-    status = forced_status or evaluate_status(shift, punched_at, punch_type)
+    status = await _compute_punch_status(session, company_id, employee_id, punched_at, punch_type)
     record = TimePunch(
         company_id=company_id,
         employee_id=employee_id,
@@ -691,12 +780,8 @@ async def update_punch(
     for field, value in updates.items():
         setattr(record, field, value)
     if record.employee_id:
-        shift, forced_status = await _resolve_schedule_for_punch(
-            session, company_id, record.employee_id, record.punched_at
-        )
-        record.status = (
-            forced_status
-            or evaluate_status(shift, record.punched_at, record.punch_type)
+        record.status = await _compute_punch_status(
+            session, company_id, record.employee_id, record.punched_at, record.punch_type
         )
     diff = compute_diff(before, {k: str(v) for k, v in updates.items()})
     if diff:
@@ -751,3 +836,383 @@ async def list_punches(
         )
     ).all()
     return rows, total
+
+
+# ---------------------------------------------------------------------------
+# Portal do Colaborador: PIN de acesso (EmployeeCredential)
+# ---------------------------------------------------------------------------
+
+
+def hash_pin(pin: str) -> str:
+    return bcrypt.hashpw(pin.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_pin(pin: str, pin_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(pin.encode(), pin_hash.encode())
+    except (ValueError, TypeError):
+        return False
+
+
+def _is_weak_pin(pin: str) -> bool:
+    """Recusa sequências óbvias. PIN numérico curto é fraco por natureza — isto é
+    só uma barreira mínima, a mitigação real é o lockout por tentativas + TTL curto
+    do token de sessão."""
+    return pin in _WEAK_PINS
+
+
+async def _record_employee_action(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    *,
+    entity_type: str,
+    entity_id: int,
+    event_type: str,
+    diff: dict | None = None,
+) -> None:
+    """AuditEvent.user_id é FK obrigatória para `users.id` — não existe conceito de
+    "ator = Employee" no schema de auditoria hoje. Quando o employee tem User
+    vinculado (`Employee.user_id`), atribuímos o evento a ele; caso contrário,
+    a ação (autoatendimento sem User) não gera AuditEvent, para não violar a FK
+    nem atribuir o evento a um usuário errado."""
+    employee = await session.get(Employee, employee_id)
+    if employee is None or employee.user_id is None:
+        return
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=employee.user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        event_type=event_type,
+        diff=diff,
+    )
+
+
+async def get_employee_credential(
+    session: AsyncSession, company_id: int, employee_id: int
+) -> EmployeeCredential | None:
+    return await session.scalar(
+        select(EmployeeCredential).where(
+            EmployeeCredential.company_id == company_id,
+            EmployeeCredential.employee_id == employee_id,
+            EmployeeCredential.deleted_at.is_(None),
+        )
+    )
+
+
+async def reset_employee_pin(
+    session: AsyncSession, company_id: int, actor_id: int, employee_id: int
+) -> tuple[str | None, str | None]:
+    """Admin gera um novo PIN aleatório de 6 dígitos para o funcionário. Retorna
+    (pin_em_texto_puro, error_code) — o texto puro só existe nesse retorno, nunca é
+    persistido."""
+    employee = await session.scalar(
+        select(Employee).where(
+            Employee.id == employee_id,
+            Employee.company_id == company_id,
+            Employee.deleted_at.is_(None),
+        )
+    )
+    if employee is None:
+        return None, "not_found"
+
+    new_pin = f"{secrets.randbelow(1_000_000):06d}"
+    credential = await get_employee_credential(session, company_id, employee_id)
+    if credential is None:
+        credential = EmployeeCredential(company_id=company_id, employee_id=employee_id)
+        session.add(credential)
+
+    credential.pin_hash = hash_pin(new_pin)
+    credential.failed_attempts = 0
+    credential.locked_until = None
+    credential.must_change_pin = True
+    credential.pin_set_at = datetime.now()
+
+    await session.flush()
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="employee_credential",
+        entity_id=employee_id,
+        event_type="pin_reset",
+    )
+    await session.commit()
+    return new_pin, None
+
+
+async def set_employee_pin(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    *,
+    old_pin: str | None,
+    new_pin: str,
+) -> tuple[bool, str | None]:
+    """O próprio funcionário define/troca o PIN. Exige o PIN atual, exceto na
+    primeira troca obrigatória após um reset administrativo (`must_change_pin`)."""
+    if not new_pin.isdigit() or not (4 <= len(new_pin) <= 6):
+        return False, "invalid_pin_format"
+    if _is_weak_pin(new_pin):
+        return False, "weak_pin"
+
+    credential = await get_employee_credential(session, company_id, employee_id)
+    if credential is None:
+        return False, "not_found"
+
+    if not credential.must_change_pin and (
+        not old_pin or not verify_pin(old_pin, credential.pin_hash)
+    ):
+        return False, "invalid_old_pin"
+
+    credential.pin_hash = hash_pin(new_pin)
+    credential.must_change_pin = False
+    credential.pin_set_at = datetime.now()
+    credential.failed_attempts = 0
+    credential.locked_until = None
+
+    await _record_employee_action(
+        session,
+        company_id,
+        employee_id,
+        entity_type="employee_credential",
+        entity_id=employee_id,
+        event_type="pin_change",
+    )
+    await session.commit()
+    return True, None
+
+
+async def authenticate_employee(
+    session: AsyncSession,
+    *,
+    company_slug: str,
+    registration_number: str,
+    pin: str,
+) -> tuple[Employee | None, str | None]:
+    """Resolve company_id pelo slug (mesmo mecanismo já usado pela integração
+    Chess Hotel em app/domain/fiscal_requests/service.py), autentica o funcionário
+    pelo registration_number + PIN, aplicando lockout por tentativas."""
+    company = await session.scalar(
+        select(Company).where(Company.slug == company_slug, Company.deleted_at.is_(None))
+    )
+    if company is None:
+        return None, "invalid_tenant"
+
+    employee = await session.scalar(
+        select(Employee).where(
+            Employee.company_id == company.id,
+            Employee.registration_number == registration_number,
+            Employee.deleted_at.is_(None),
+            Employee.status == "active",
+        )
+    )
+    if employee is None:
+        return None, "invalid_credentials"
+
+    credential = await get_employee_credential(session, company.id, employee.id)
+    if credential is None:
+        return None, "invalid_credentials"
+
+    if credential.locked_until and credential.locked_until > datetime.now():
+        return None, "locked"
+
+    if not verify_pin(pin, credential.pin_hash):
+        credential.failed_attempts += 1
+        if credential.failed_attempts >= PIN_MAX_ATTEMPTS:
+            credential.locked_until = datetime.now() + timedelta(minutes=PIN_LOCKOUT_MINUTES)
+        await session.commit()
+        return None, "invalid_credentials"
+
+    credential.failed_attempts = 0
+    credential.locked_until = None
+    await session.commit()
+    return employee, None
+
+
+# ---------------------------------------------------------------------------
+# Portal do Colaborador: punch mobile com geofencing
+# ---------------------------------------------------------------------------
+
+EARTH_RADIUS_M = 6_371_000
+
+
+def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distância em metros entre duas coordenadas (fórmula de Haversine). Função
+    pura, sem I/O, testável isoladamente."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return EARTH_RADIUS_M * c
+
+
+async def get_next_expected_punch_type(
+    session: AsyncSession, company_id: int, employee_id: int
+) -> str:
+    """Próximo tipo de batida esperado (in/out) para hoje, sem side effect."""
+    today = date.today()
+    last = await session.scalar(
+        select(TimePunch)
+        .where(
+            TimePunch.company_id == company_id,
+            TimePunch.employee_id == employee_id,
+            TimePunch.punched_at >= datetime.combine(today, time.min),
+            TimePunch.punched_at <= datetime.combine(today, time.max),
+        )
+        .order_by(TimePunch.punched_at.desc())
+        .limit(1)
+    )
+    if last is None or last.punch_type == "out":
+        return "in"
+    return "out"
+
+
+async def create_mobile_punch(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    *,
+    latitude: float,
+    longitude: float,
+) -> tuple[TimePunch | None, str | None, float | None]:
+    """Cria uma batida mobile validando geofencing contra a Location do employee.
+
+    Retorna (punch, error_code, distance_m). error_code é None em caso de sucesso,
+    "LOCATION_NOT_CONFIGURED" se o employee não tiver Location com lat/lng
+    configurados (nunca deixamos passar sem geofencing silenciosamente), ou
+    "OUT_OF_RANGE" se a distância exceder o raio configurado (distance_m sempre
+    presente nesse caso).
+    """
+    employee = await session.scalar(
+        select(Employee).where(
+            Employee.id == employee_id,
+            Employee.company_id == company_id,
+            Employee.deleted_at.is_(None),
+        )
+    )
+    if employee is None or employee.location_id is None:
+        return None, "LOCATION_NOT_CONFIGURED", None
+
+    location = await session.scalar(
+        select(Location).where(
+            Location.id == employee.location_id,
+            Location.company_id == company_id,
+            Location.deleted_at.is_(None),
+        )
+    )
+    if location is None or location.latitude is None or location.longitude is None:
+        return None, "LOCATION_NOT_CONFIGURED", None
+
+    distance_m = haversine_distance_m(
+        float(location.latitude), float(location.longitude), latitude, longitude
+    )
+    if distance_m > location.geofence_radius_m:
+        return None, "OUT_OF_RANGE", distance_m
+
+    punch_type = await get_next_expected_punch_type(session, company_id, employee_id)
+    punched_at = datetime.now()
+    status = await _compute_punch_status(session, company_id, employee_id, punched_at, punch_type)
+
+    record = TimePunch(
+        company_id=company_id,
+        employee_id=employee_id,
+        device_id=None,
+        punched_at=punched_at,
+        punch_type=punch_type,
+        source="mobile",
+        status=status,
+        created_by_user_id=None,
+        latitude=latitude,
+        longitude=longitude,
+        distance_m=distance_m,
+    )
+    session.add(record)
+    await session.flush()
+    await _record_employee_action(
+        session,
+        company_id,
+        employee_id,
+        entity_type="time_punch",
+        entity_id=record.id,
+        event_type="create",
+        diff={"source": "mobile", "distance_m": round(distance_m, 2)},
+    )
+    await session.commit()
+    await invalidate_dashboard(company_id)
+    await session.refresh(record)
+    return record, None, distance_m
+
+
+# ---------------------------------------------------------------------------
+# Portal do Colaborador: contracheques
+# ---------------------------------------------------------------------------
+
+
+async def list_employee_payslips(
+    session: AsyncSession, company_id: int, employee_id: int
+) -> list[EmployeePayslip]:
+    rows = (
+        await session.execute(
+            select(EmployeePayslip)
+            .where(
+                EmployeePayslip.company_id == company_id,
+                EmployeePayslip.employee_id == employee_id,
+                EmployeePayslip.deleted_at.is_(None),
+            )
+            .order_by(EmployeePayslip.reference_month.desc())
+        )
+    ).scalars()
+    return list(rows)
+
+
+async def get_employee_payslip_for_download(
+    session: AsyncSession, company_id: int, employee_id: int, payslip_id: int
+) -> EmployeePayslip | None:
+    """Nunca confia no payslip_id recebido sem checar que pertence a esse employee."""
+    return await session.scalar(
+        select(EmployeePayslip).where(
+            EmployeePayslip.id == payslip_id,
+            EmployeePayslip.company_id == company_id,
+            EmployeePayslip.employee_id == employee_id,
+            EmployeePayslip.deleted_at.is_(None),
+        )
+    )
+
+
+async def create_employee_payslip(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    *,
+    employee_id: int,
+    reference_month: date,
+    attachment_id: int,
+) -> EmployeePayslip:
+    record = EmployeePayslip(
+        company_id=company_id,
+        employee_id=employee_id,
+        reference_month=reference_month,
+        attachment_id=attachment_id,
+        uploaded_by_user_id=actor_id,
+    )
+    session.add(record)
+    await session.flush()
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="employee_payslip",
+        entity_id=record.id,
+        event_type="create",
+        diff={"employee_id": employee_id, "reference_month": str(reference_month)},
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record
