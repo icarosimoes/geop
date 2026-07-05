@@ -48,6 +48,17 @@ docker compose --profile mysql-import up -d mysql
 docker compose --profile mysql-import stop mysql
 ```
 
+## Verificação end-to-end no navegador (`web/`)
+
+Para validar visualmente uma tela do `web/` (login, preencher formulário, subir
+arquivo, conferir screenshot) sem `chromium-cli` instalado no ambiente, use o
+skill `web/.claude/skills/run-web/` — driver Playwright em `driver.mjs` que lê
+comandos (`nav`, `fill`, `click`, `screenshot`, `console-errors`, etc.) de
+stdin, no mesmo espírito do `chromium-cli`. Instruções completas, incluindo o
+contorno necessário para rodar o Chromium do Playwright sem acesso root
+(extração local do `.deb` de `libasound2t64`), estão em
+`web/.claude/skills/run-web/SKILL.md`.
+
 ## Regras
 
 - Nunca copiar `.env` da V1 para o repositório.
