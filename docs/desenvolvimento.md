@@ -48,6 +48,26 @@ docker compose --profile mysql-import up -d mysql
 docker compose --profile mysql-import stop mysql
 ```
 
+## Dados fictícios do sistema de ponto
+
+Para popular o tenant `empresa-demo` com um cenário completo do módulo de ponto (locais com
+geofencing, setores, 10 funcionários com PIN, escala dos últimos 28 dias, batidas com atraso/falta/
+esquecimento propositais, banco de horas calculado + saldo inicial, ajustes de ponto nos três
+status e contracheques), use `api/scripts/seed_timeclock_demo.py`. Reaproveita o `service.py` real
+do domínio `timeclock` (mesma auditoria e regras de negócio da aplicação), não é INSERT direto.
+
+`scripts/` não é montado como volume no container (só `app/`, `tests/` e `alembic/` são), então
+precisa copiar antes de rodar:
+
+```bash
+docker cp api/scripts/seed_timeclock_demo.py registro-api-1:/tmp/seed_timeclock_demo.py
+docker exec -e PYTHONPATH=/app -w /app registro-api-1 python /tmp/seed_timeclock_demo.py
+```
+
+Login de teste depois do seed: matrícula `DEMO-001` a `DEMO-010`, PIN `123456`, no `colaborador/`.
+Recusa rodar com `ENVIRONMENT=production` e é idempotente (aborta cedo se `DEMO-001` já existir) —
+seguro rodar mais de uma vez.
+
 ## Verificação end-to-end no navegador (`web/`)
 
 Para validar visualmente uma tela do `web/` (login, preencher formulário, subir

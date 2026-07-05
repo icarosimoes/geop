@@ -1,0 +1,8 @@
+{
+  "name": "run-web-skill-driver",
+  "private": true,
+  "description": "Playwright driver for the run-web agent skill. Not part of the shipped web/ app.",
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}

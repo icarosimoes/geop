@@ -85,7 +85,9 @@ seen so far in the session — check it before declaring success; a page
 can render its shell while every data fetch 500s.
 
 Full command reference is in the comment header of `driver.mjs`:
-`nav`, `wait-for` (`text=...` or CSS selector), `fill`, `set-files`
+`nav`, `wait-for` (`text=...` or CSS selector), `fill`, `select` (native `<select>`, use
+Playwright's `selectOption` under the hood — `eval el.value = ...`/`selectedIndex` does **not**
+fire React's onChange on a controlled `<select>`, same gotcha as text inputs), `set-files`
 (for `<input type="file">`), `click`, `press`, `screenshot`, `eval`,
 `console-errors`, `sleep` (last resort).
 

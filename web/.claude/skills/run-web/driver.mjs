@@ -87,6 +87,12 @@ async function runLine(line) {
       console.log("click ok:", arg);
       break;
     }
+    case "select": {
+      const [sel, ...valueParts] = rest;
+      await page.selectOption(resolveSelector(sel), valueParts.join(" "));
+      console.log("select ok:", sel);
+      break;
+    }
     case "press": {
       await page.keyboard.press(arg);
       console.log("press ok:", arg);
