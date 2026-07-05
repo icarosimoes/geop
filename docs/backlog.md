@@ -298,6 +298,44 @@ Itens identificados no levantamento do WIP não commitado de `employees`, `timec
 - [x] **[PC11] Banco de horas** — ✅ modelo `HourBankEntry`, cálculo diário (escala x pontos batidos) via `POST /timeclock/hour-bank/{id}/recalculate`, saldo inicial migrável via `POST /timeclock/hour-bank/{id}/initial-balance`, consulta em `GET /timeclock/hour-bank/{id}` (RH) e `GET /timeclock/mobile/hour-bank` (funcionário). Frontend `/ponto/banco-de-horas` e aba "Banco" no `colaborador/`. 5 testes em `test_hour_bank.py`. Ver [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05).
 - [x] **[PC12] Ajuste de ponto com aprovação** — ✅ modelo `PunchAdjustmentRequest`: funcionário solicita correção de batida existente ou lançamento de batida esquecida pelo Portal do Colaborador (`POST /timeclock/mobile/adjustments`); RH aprova/rejeita em `/ponto/ajustes` (`POST /timeclock/adjustments/{id}/review`), reaproveitando `update_punch`/`create_manual_punch`; notificação in-app para gestores com permissão `punch_adjustment.manage`. 8 testes em `test_punch_adjustments.py`.
 
+## Pendente de implantação em produção (2026-07-05)
+
+`origin/main` está 3 commits atrás do local (`4efea026`, `00275763`, `98c4e00a`) — nada do
+Portal do Colaborador, agente Go, turnos padrão, banco de horas, ajuste de ponto, geofencing
+administrativo ou importação de contracheque (PC1–PC12) está no ar ainda. Checklist para
+implantar:
+
+1. **Push para `main`** — dispara `Publish images` (`.github/workflows/publish.yml`), que builda
+   e publica `api`, `web`, `admin` e `colaborador` no GHCR com tag `sha-<commit>`. O job `deploy`
+   tem gate manual (`environment: production`, aprovação no GitHub Actions).
+2. **Primeiro deploy do serviço `colaborador`** — como é um serviço novo no `docker-stack.yml`,
+   o `docker service update` do CI só funciona se o serviço já existir no Swarm. Antes do push
+   (ou logo após, antes da aprovação do gate), rodar na VPS:
+   ```bash
+   cd /opt/registro && set -a && . ./.env.prod && set +a
+   docker stack deploy -c docker-stack.yml --with-registry-auth registro
+   ```
+   Requer `REGISTRO_COLABORADOR_HOST` já definido em `/opt/registro/.env.prod` (ver
+   [deploy-swarm.md](infra/deploy-swarm.md)) e o DNS do subdomínio (ex.:
+   `colaborador.registro.solidsd.com.br`) apontando para a VPS — procedimento em
+   [deploy-novo-dominio.md](infra/deploy-novo-dominio.md).
+3. **Migrations 0047 e 0048** — Alembic não roda sozinho no Swarm (só no Compose de dev). Rodar
+   manualmente a sequência documentada em [deploy-swarm.md](infra/deploy-swarm.md#migrations-no-swarm)
+   depois que a imagem nova da API estiver publicada, antes ou logo após atualizar o serviço
+   `registro_api` — inclui `hour_bank_entries`, `punch_adjustment_requests`, geofencing em
+   `Location`/`Employee`, `employee_credentials`, `time_punches` (mobile), `employee_payslips`.
+   Fazer backup do Postgres antes (regra padrão do projeto).
+4. **Sem secrets/env novos** — nenhuma variável de config nova foi introduzida neste lote
+   (confirmado via diff de `api/app/core/config.py` contra `origin/main`); só o host
+   `REGISTRO_COLABORADOR_HOST` do item 2.
+5. **Validação pós-deploy** — `docker service ls` (4 serviços rodando), `docker service ps
+   registro_colaborador`, `curl -fsS https://<REGISTRO_COLABORADOR_HOST>/login`, health check da
+   API, e um smoke manual do fluxo de ponto por PIN + geofencing com um funcionário de teste real
+   (não apenas dados de dev).
+6. **PC7 continua bloqueado** — validação em hardware físico do Control iD só é possível depois
+   do agente Go estar rodando contra um relógio real; não é pré-requisito para este deploy, mas
+   é o próximo item a destravar depois que a infra estiver no ar.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
