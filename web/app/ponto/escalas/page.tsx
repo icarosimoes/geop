@@ -10,7 +10,7 @@ export default async function EscalasPage() {
       <AppLayout user={user}>
         <header className="module-heading">
           <div>
-            <p className="eyebrow">Cadastros</p>
+            <p className="eyebrow">Ponto</p>
             <h1>Escalas de trabalho</h1>
             <p>Defina o horário previsto de cada funcionário por dia da semana.</p>
           </div>

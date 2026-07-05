@@ -22,7 +22,7 @@
 | `/cadastros/categorias-os` | CRUD de categorias | gerencia categorias de OS via settings | API `settings/work-order-categories` + `work-orders/categories` |
 | `/cadastros/funcionarios` | lista, CRUD, avatar, importação em lote e reset de PIN | CRUD via API + upload de avatar + botão "Resetar PIN" do Portal do Colaborador | API `employees` + `employees/import` + `timeclock/employees/{id}/pin/reset` |
 | `/cadastros/turnos` | CRUD de turnos | templates de turno reutilizáveis (Manhã, Tarde, 12x36, etc.) | API `timeclock/shifts` |
-| `/cadastros/escalas` | calendário de escala | atribuição de turnos/folgas por funcionário e data | API `timeclock/schedule` |
+| `/ponto/escalas` | calendário de escala | atribuição de turnos/folgas por funcionário e data | API `timeclock/schedule` |
 | `/ponto` | batidas | listagem e lançamento manual de pontos | API `timeclock/punches` |
 | `/ponto/dispositivos` | CRUD de relógios | dispositivos Control iD autenticados por webhook token | API `timeclock/devices` |
 | `/ponto/vinculos` | vínculos | associa matrícula do relógio a um funcionário | API `timeclock/enrollments` |

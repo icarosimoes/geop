@@ -214,7 +214,7 @@ CRUD de turnos. Crie e edite os templates que serão usados na escala.
 **Componentes**: `page.tsx` (Server Component) → `ShiftManager` (Client)  
 **Ações**: fetchShifts, createShiftAction, updateShiftAction, deleteShiftAction
 
-#### `/cadastros/escalas`
+#### `/ponto/escalas`
 Calendário mensal de escala por funcionário.
 
 **Componentes**: `page.tsx` (Server Component) → `ScheduleManager` (Client)  
@@ -338,7 +338,7 @@ horários/tolerância ou desativar (`active=false`) qualquer um deles em
 
 ### 2. Gerar escala base
 
-O endpoint já existe e está migrado para `employee_id`; falta o botão/formulário "Gerar escala" na tela `/cadastros/escalas` (ver "Próximas melhorias possíveis"). Por ora, chame diretamente:
+O endpoint já existe e está migrado para `employee_id`; falta o botão/formulário "Gerar escala" na tela `/ponto/escalas` (ver "Próximas melhorias possíveis"). Por ora, chame diretamente:
 
 ```json
 POST /timeclock/schedule/generate
@@ -496,7 +496,7 @@ Ambos são idempotentes: gerar duas vezes o mesmo período com o mesmo padrão n
 
 ## Próximas melhorias possíveis
 
-1. **UI de geração** (pendente): Botão "Gerar escala" na tela `/cadastros/escalas` com form (endpoint já pronto e migrado para `employee_id`)
+1. **UI de geração** (pendente): Botão "Gerar escala" na tela `/ponto/escalas` com form (endpoint já pronto e migrado para `employee_id`)
 2. **Vistas por Turno/Empresa/Setor**: Expandir `ScheduleManager` com abas (Vista por Setor depende do cadastro de Funcionários ganhar vínculo organizacional)
 3. **Histórico**: Auditar mudanças em escalas (já temos `AuditEvent`)
 4. **Publicação de período**: Congelar escala de julho e marcar como "oficial"

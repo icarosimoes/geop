@@ -33,7 +33,6 @@ const cadastrosSub = [
   { slug: "cadastros-procedimentos", label: "Procedimentos", icon: BookOpen, href: "/cadastros/procedimentos" },
   { slug: "cadastros-categorias-os", label: "Categorias de OS", icon: ClipboardList, href: "/cadastros/categorias-os" },
   { slug: "cadastros-turnos", label: "Turnos de trabalho", icon: Clock, href: "/cadastros/turnos" },
-  { slug: "cadastros-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/cadastros/escalas" },
 ];
 
 const pontoSub = [
@@ -43,6 +42,7 @@ const pontoSub = [
   { slug: "ponto-contracheques", label: "Contracheques", icon: FileText, href: "/ponto/contracheques" },
   { slug: "ponto-dispositivos", label: "Dispositivos", icon: Cpu, href: "/ponto/dispositivos" },
   { slug: "ponto-vinculos", label: "Vínculos", icon: Link2, href: "/ponto/vinculos" },
+  { slug: "ponto-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/ponto/escalas" },
 ];
 
 export function AppLayout({ user, children }: { user: TenantUser; children: ReactNode }) {
