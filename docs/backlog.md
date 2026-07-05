@@ -298,43 +298,43 @@ Itens identificados no levantamento do WIP não commitado de `employees`, `timec
 - [x] **[PC11] Banco de horas** — ✅ modelo `HourBankEntry`, cálculo diário (escala x pontos batidos) via `POST /timeclock/hour-bank/{id}/recalculate`, saldo inicial migrável via `POST /timeclock/hour-bank/{id}/initial-balance`, consulta em `GET /timeclock/hour-bank/{id}` (RH) e `GET /timeclock/mobile/hour-bank` (funcionário). Frontend `/ponto/banco-de-horas` e aba "Banco" no `colaborador/`. 5 testes em `test_hour_bank.py`. Ver [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05).
 - [x] **[PC12] Ajuste de ponto com aprovação** — ✅ modelo `PunchAdjustmentRequest`: funcionário solicita correção de batida existente ou lançamento de batida esquecida pelo Portal do Colaborador (`POST /timeclock/mobile/adjustments`); RH aprova/rejeita em `/ponto/ajustes` (`POST /timeclock/adjustments/{id}/review`), reaproveitando `update_punch`/`create_manual_punch`; notificação in-app para gestores com permissão `punch_adjustment.manage`. 8 testes em `test_punch_adjustments.py`.
 
-## Pendente de implantação em produção (2026-07-05)
+## Implantação em produção (2026-07-05) — concluída manualmente (CI indisponível)
 
-`origin/main` está 3 commits atrás do local (`4efea026`, `00275763`, `98c4e00a`) — nada do
-Portal do Colaborador, agente Go, turnos padrão, banco de horas, ajuste de ponto, geofencing
-administrativo ou importação de contracheque (PC1–PC12) está no ar ainda. Checklist para
-implantar:
+`git push origin main` foi feito, mas o GitHub Actions do repositório estava com "account
+locked due to a billing issue" (falha em 5s no job `Publish images`, sem sequer iniciar o
+build) — a conta do GitHub está com problema de cobrança, não é um bug no workflow. Diante
+disso, o build e o deploy foram feitos manualmente, sem depender do CI:
 
-1. **Push para `main`** — dispara `Publish images` (`.github/workflows/publish.yml`), que builda
-   e publica `api`, `web`, `admin` e `colaborador` no GHCR com tag `sha-<commit>`. O job `deploy`
-   tem gate manual (`environment: production`, aprovação no GitHub Actions).
-2. **Primeiro deploy do serviço `colaborador`** — como é um serviço novo no `docker-stack.yml`,
-   o `docker service update` do CI só funciona se o serviço já existir no Swarm. Antes do push
-   (ou logo após, antes da aprovação do gate), rodar na VPS:
-   ```bash
-   cd /opt/registro && set -a && . ./.env.prod && set +a
-   docker stack deploy -c docker-stack.yml --with-registry-auth registro
-   ```
-   Requer `REGISTRO_COLABORADOR_HOST` já definido em `/opt/registro/.env.prod` (ver
-   [deploy-swarm.md](infra/deploy-swarm.md)) e o DNS do subdomínio (ex.:
-   `colaborador.registro.solidsd.com.br`) apontando para a VPS — procedimento em
-   [deploy-novo-dominio.md](infra/deploy-novo-dominio.md).
-3. **Migrations 0047 e 0048** — Alembic não roda sozinho no Swarm (só no Compose de dev). Rodar
-   manualmente a sequência documentada em [deploy-swarm.md](infra/deploy-swarm.md#migrations-no-swarm)
-   depois que a imagem nova da API estiver publicada, antes ou logo após atualizar o serviço
-   `registro_api` — inclui `hour_bank_entries`, `punch_adjustment_requests`, geofencing em
-   `Location`/`Employee`, `employee_credentials`, `time_punches` (mobile), `employee_payslips`.
-   Fazer backup do Postgres antes (regra padrão do projeto).
-4. **Sem secrets/env novos** — nenhuma variável de config nova foi introduzida neste lote
-   (confirmado via diff de `api/app/core/config.py` contra `origin/main`); só o host
-   `REGISTRO_COLABORADOR_HOST` do item 2.
-5. **Validação pós-deploy** — `docker service ls` (4 serviços rodando), `docker service ps
-   registro_colaborador`, `curl -fsS https://<REGISTRO_COLABORADOR_HOST>/login`, health check da
-   API, e um smoke manual do fluxo de ponto por PIN + geofencing com um funcionário de teste real
-   (não apenas dados de dev).
-6. **PC7 continua bloqueado** — validação em hardware físico do Control iD só é possível depois
-   do agente Go estar rodando contra um relógio real; não é pré-requisito para este deploy, mas
-   é o próximo item a destravar depois que a infra estiver no ar.
+1. **Build local + push manual pro GHCR** — as 4 imagens (`api`, `web`, `admin`, `colaborador`)
+   buildadas localmente (`docker build --target production`) e enviadas para
+   `ghcr.io/icarosimoes/registro/*:sha-6f2677d5df1a1e9cb9adce1756bd757e2a50c75b` via
+   `docker login ghcr.io` com token do `gh auth token` (escopo `write:packages` já habilitado).
+2. **Backup manual do Postgres antes de tocar no banco** — `pg_dump -Fc` disparado dentro do
+   container `registro_backup` (mesmo comando do cron diário), validado com `pg_restore --list`
+   antes de prosseguir.
+3. **Primeiro deploy do serviço `colaborador`** — `docker-stack.yml` atualizado copiado para
+   `/opt/registro/` (não é um checkout git, arquivo solto); `REGISTRO_COLABORADOR_HOST` e
+   `IMAGE_TAG` adicionados/atualizados em `/opt/registro/.env.prod` (backup do arquivo anterior
+   mantido ao lado); `docker stack deploy -c docker-stack.yml --with-registry-auth registro`
+   criou `registro_colaborador` e `registro_backup-minio` (este já estava no compose de uma
+   entrega anterior mas nunca tinha sido aplicado) e atualizou os demais serviços.
+4. **Migrations 0047 e 0048** — Swarm roda em 2 nós; os containers do `registro_api` estavam no
+   nó worker, não no manager onde a sessão SSH estava — `docker exec` direto não alcança
+   container em outro nó. Aplicado via o procedimento documentado em
+   [deploy-swarm.md](infra/deploy-swarm.md#migrations-no-swarm): rede overlay temporária +
+   `docker run` com a imagem nova da API conectado ao container do `db` (que roda no manager),
+   `alembic upgrade head`. Confirmado `SELECT version_num FROM alembic_version` = `20260705_0048`.
+5. **Validação pós-deploy** — `docker service ls` com todos os 8 serviços `registro_*` em
+   `N/N` saudável; `curl` 200 em `api.registro.solidsd.com.br/api/v1/health`; `web`/`admin`
+   respondendo 307 (redirect de login, esperado sem sessão); logs do `registro_colaborador`
+   ("Ready") e do `registro_api` (rolling update limpo, sem erro).
+6. **Pendente: DNS de `colaborador.registro.solidsd.com.br`** — o registro do serviço no
+   Traefik já existe (rule `Host` configurada), mas o subdomínio ainda não resolve (não tenho
+   acesso ao provedor de DNS a partir daqui). Precisa de um registro A apontando para
+   `95.111.250.4` antes do Portal do Colaborador ficar acessível publicamente — o app já está
+   rodando e saudável internamente, só falta o DNS.
+7. **PC7 continua bloqueado** — validação em hardware físico do Control iD só é possível depois
+   do agente Go estar rodando contra um relógio real; não é pré-requisito deste deploy.
 
 ## Definition of Done por módulo
 
