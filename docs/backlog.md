@@ -328,11 +328,9 @@ disso, o build e o deploy foram feitos manualmente, sem depender do CI:
    `N/N` saudável; `curl` 200 em `api.registro.solidsd.com.br/api/v1/health`; `web`/`admin`
    respondendo 307 (redirect de login, esperado sem sessão); logs do `registro_colaborador`
    ("Ready") e do `registro_api` (rolling update limpo, sem erro).
-6. **Pendente: DNS de `colaborador.registro.solidsd.com.br`** — o registro do serviço no
-   Traefik já existe (rule `Host` configurada), mas o subdomínio ainda não resolve (não tenho
-   acesso ao provedor de DNS a partir daqui). Precisa de um registro A apontando para
-   `95.111.250.4` antes do Portal do Colaborador ficar acessível publicamente — o app já está
-   rodando e saudável internamente, só falta o DNS.
+6. **DNS de `colaborador.registro.solidsd.com.br`** — ✅ resolvido pelo usuário; `curl
+   https://colaborador.registro.solidsd.com.br/login` responde `200` com certificado Let's
+   Encrypt válido via Traefik. Portal do Colaborador acessível publicamente.
 7. **PC7 continua bloqueado** — validação em hardware físico do Control iD só é possível depois
    do agente Go estar rodando contra um relógio real; não é pré-requisito deste deploy.
 
