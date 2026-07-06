@@ -350,6 +350,35 @@ disso, o build e o deploy foram feitos manualmente, sem depender do CI:
 - [ ] **[P11.12] Confirmar estilo do seletor de arquivo em browser real** — `::file-selector-button` (usado em Contracheques) foi validado só via `getComputedStyle`; o Chromium headless shell da skill `run-web` não pinta o pseudo-elemento. Conferir visualmente em Chrome/Edge na próxima vez que a tela for tocada.
 - [x] **[P11.13] Hora extra paga em dinheiro (salário individual ou por cargo)** — ✅ `Employee.salary` (migration `20260707_0052`) + salário-base por cargo (`cargo_salaries`, fallback quando o funcionário não tem salário individual) + toggle `overtime_paid_in_cash` em `/configuracoes` → Ponto. Valor em R$ (`overtime_50_value`/`overtime_100_value`) calculado a partir da jornada mensal esperada do funcionário, exibido no espelho de ponto. Quando ligado e há salário resolvível, `recalculate_hour_bank` para de bancar a HE (só o déficit continua virando banco de horas). 5 testes novos (`test_overtime_pay.py`). Ver [escala-de-trabalho.md](escala-de-trabalho.md#hora-extra-paga-em-dinheiro-2026-07-06).
 
+## Implantação em produção (2026-07-06) — concluída manualmente (CI ainda indisponível)
+
+`git push origin main` (commit `42143c24`, P11 completo) feito normalmente; o GitHub Actions
+continua com a conta travada por "billing issue" (mesma causa do deploy de 2026-07-05, ainda não
+resolvida) — os 4 jobs `Publish *` falham em segundos, sem sequer iniciar o build. Deploy feito
+manualmente, com uma mudança de estratégia em relação ao deploy anterior:
+
+1. **Build local, não na VPS** — diferente do deploy de 2026-07-05 (que buildou direto na VPS), as
+   4 imagens (`api`, `web`, `admin`, `colaborador`) foram buildadas localmente (`docker build
+   --target production`, mesma tag `sha-42143c24afee9e7b7b3e10fa8e360f5f7c97cb1e` do commit) e
+   enviadas ao GHCR de fora — a VPS estava com só ~1.1GB de RAM livre, compartilhada com várias
+   outras aplicações de clientes (aloji, becond, solidguardian, evolution, etc.); buildar lá
+   arriscaria estourar memória e afetar esses outros serviços. Decisão tomada em conjunto com o
+   usuário antes de prosseguir.
+2. **Backup do Postgres antes de tocar no banco** — `pg_dump -Fc` disparado dentro do container
+   `registro_db`, copiado para `/opt/registro/registro_pre_deploy_20260706_125107.dump` no
+   filesystem do host (fora do container).
+3. **Migrations 0049 a 0052** — `alembic_version` estava em `20260705_0048`; aplicadas via o
+   procedimento de rede overlay temporária + `docker run` documentado em
+   [deploy-swarm.md](infra/deploy-swarm.md#migrations-no-swarm) (mesmo procedimento do deploy
+   anterior, sem mudanças). Confirmado `SELECT version_num FROM alembic_version` = `20260707_0052`.
+4. **`docker service update --image ... --detach`** para os 4 serviços (nenhum serviço novo desta
+   vez, diferente do deploy anterior que criou o `colaborador`) — rolling update limpo, todas as
+   réplicas (`registro_api` 2/2, `registro_web` 2/2, `registro_admin` 1/1, `registro_colaborador`
+   1/1) na imagem nova.
+5. **Validação pós-deploy** — `200` em `/api/v1/health` e em `/login` dos 4 domínios
+   (`registro`/`api`/`painel`/`colaborador.registro.solidsd.com.br`); `docker service logs` do
+   `registro_api` sem erro/exception/traceback logo após o rollout.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
