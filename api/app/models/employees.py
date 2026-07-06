@@ -1,7 +1,8 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -44,6 +45,9 @@ class Employee(Base, TenantMixin, TimestampMixin):
     hire_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
     termination_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
     registration_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    # Salário mensal (usado para calcular o valor em R$ da hora extra no espelho de ponto)
+    salary: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     # Setor/departamento (reaproveita o cadastro de Setor usado por User/Ocorrências)
     sector_id: Mapped[int | None] = mapped_column(

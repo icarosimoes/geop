@@ -1,9 +1,9 @@
 import { AppLayout } from "@/components/app-layout";
 import { currentTenantUser } from "@/lib/api";
 import { redirect } from "next/navigation";
-import { AdjustmentManager } from "./manager";
+import { HolidayManager } from "./manager";
 
-export default async function AjustesPontoPage() {
+export default async function FeriadosPontoPage() {
   try {
     const user = await currentTenantUser();
     return (
@@ -11,11 +11,11 @@ export default async function AjustesPontoPage() {
         <header className="module-heading">
           <div>
             <p className="eyebrow">Ponto</p>
-            <h1>Ajustes e abonos de ponto</h1>
-            <p>Solicitações de correção enviadas pelo Portal do Colaborador, além de ajustes e abonos lançados diretamente pelo RH.</p>
+            <h1>Feriados</h1>
+            <p>Cadastre os feriados considerados no cálculo de hora extra 100% do espelho de ponto.</p>
           </div>
         </header>
-        <AdjustmentManager user={user} />
+        <HolidayManager />
       </AppLayout>
     );
   } catch (error) {

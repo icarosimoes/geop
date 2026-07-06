@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Upload, History, KeyRound } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Upload, History, KeyRound, X } from "lucide-react";
 import {
   createEmployeeAction,
   deleteEmployeeAction,
@@ -58,6 +58,7 @@ const EMPTY_FORM: EmployeePayload = {
   hire_date: "",
   termination_date: "",
   registration_number: "",
+  salary: null,
   sector_id: null,
 };
 
@@ -210,6 +211,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
         hire_date: detail.hire_date ?? "",
         termination_date: detail.termination_date ?? "",
         registration_number: detail.registration_number ?? "",
+        salary: detail.salary ?? null,
         sector_id: detail.sector_id ?? null,
       });
       setAvatarUrl(detail.avatar_url);
@@ -327,7 +329,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
             </option>
           ))}
         </select>
-        {canManage && !showForm && (
+        {canManage && (
           <div style={{ display: "flex", gap: "var(--sp-2)", marginLeft: "auto" }}>
             <button
               type="button"
@@ -348,7 +350,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
         )}
       </div>
 
-      {canManage && showImport && !showForm && (
+      {canManage && showImport && (
         <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
           <p style={{ marginTop: 0 }}>
             Envie um CSV com colunas <code>name,cpf,rg,birth_date,phone,personal_email,address_street,
@@ -390,130 +392,97 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
       )}
 
       {canManage && showForm && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "var(--sp-3)",
-            padding: "var(--sp-4) var(--sp-5)",
-            borderBottom: "1px solid var(--field-border)",
-          }}
-        >
-          {editingId && (
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", gridColumn: "1 / -1" }}>
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarUrl}
-                  alt="Avatar"
-                  style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }}
-                />
-              ) : (
+        <div className="modal-layer" onClick={resetForm}>
+          <div className={`record-modal${showHistory ? " has-timeline" : ""}`} onClick={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <span>Cadastros</span>
+                <h2>{editingId ? "Editar funcionário" : "Novo funcionário"}</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={resetForm} aria-label="Fechar">
+                <X />
+              </button>
+            </header>
+            <form onSubmit={handleSubmit}>
+              {editingId && (
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}>
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: "50%",
+                        backgroundColor: "var(--field-bg)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {formData.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <label style={{ cursor: "pointer" }}>
+                    <span className="status status-progress" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Upload size={14} /> {avatarUploading ? "Enviando..." : "Trocar avatar"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleAvatarChange}
+                      disabled={avatarUploading}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                  {canManageTimeclock && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleResetPin}
+                      disabled={pinResetting}
+                      style={{ marginLeft: "auto" }}
+                    >
+                      <KeyRound size={14} /> {pinResetting ? "Resetando..." : "Resetar PIN"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleToggleHistory}
+                    style={{ marginLeft: canManageTimeclock ? 0 : "auto" }}
+                  >
+                    <History size={14} /> {showHistory ? "Ocultar histórico" : "Ver histórico"}
+                  </button>
+                </div>
+              )}
+
+              {editingId && resetPin && (
                 <div
                   style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "50%",
+                    padding: "var(--sp-3) var(--sp-4)",
+                    borderRadius: "var(--radius-md)",
                     backgroundColor: "var(--field-bg)",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--sp-3)",
                   }}
                 >
-                  {formData.name.slice(0, 1).toUpperCase()}
+                  <span>
+                    Novo PIN gerado: <strong style={{ fontSize: "1.1em", letterSpacing: "2px" }}>{resetPin}</strong> — informe ao
+                    funcionário; ele deverá trocá-lo no primeiro acesso ao Portal do Colaborador.
+                  </span>
+                  <button type="button" className="secondary-button" onClick={() => setResetPin(null)}>Ok</button>
                 </div>
               )}
-              <label style={{ cursor: "pointer" }}>
-                <span className="status status-progress" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Upload size={14} /> {avatarUploading ? "Enviando..." : "Trocar avatar"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleAvatarChange}
-                  disabled={avatarUploading}
-                  style={{ display: "none" }}
-                />
-              </label>
-              {canManageTimeclock && (
-                <button
-                  type="button"
-                  onClick={handleResetPin}
-                  disabled={pinResetting}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginLeft: "auto" }}
-                >
-                  <KeyRound size={14} /> {pinResetting ? "Resetando..." : "Resetar PIN"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleToggleHistory}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginLeft: canManageTimeclock ? 0 : "auto" }}
-              >
-                <History size={14} /> {showHistory ? "Ocultar histórico" : "Ver histórico"}
-              </button>
-            </div>
-          )}
 
-          {editingId && resetPin && (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                padding: "var(--sp-3) var(--sp-4)",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "var(--field-bg)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "var(--sp-3)",
-              }}
-            >
-              <span>
-                Novo PIN gerado: <strong style={{ fontSize: "1.1em", letterSpacing: "2px" }}>{resetPin}</strong> — informe ao
-                funcionário; ele deverá trocá-lo no primeiro acesso ao Portal do Colaborador.
-              </span>
-              <button type="button" onClick={() => setResetPin(null)}>Ok</button>
-            </div>
-          )}
-
-          {editingId && showHistory && (
-            <div style={{ gridColumn: "1 / -1" }} className="module-table-wrap">
-              {historyLoading ? (
-                <p>Carregando histórico...</p>
-              ) : history.length === 0 ? (
-                <p>Nenhum evento registrado.</p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Evento</th>
-                      <th>Usuário</th>
-                      <th>Alterações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{new Date(entry.created_at).toLocaleString("pt-BR")}</td>
-                        <td>{entry.event_type}</td>
-                        <td>{entry.user}</td>
-                        <td>
-                          {entry.changes
-                            ? Object.entries(entry.changes)
-                                .map(([field, { from, to }]) => `${field}: ${from} → ${to}`)
-                                .join("; ")
-                            : entry.message ?? "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
+              <div className="form-grid">
           <div>
             <label>Nome *</label>
             <input
@@ -603,6 +572,17 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
               value={formData.registration_number ?? ""}
               onChange={(e) => setField("registration_number", e.target.value)}
               placeholder="Número de matrícula"
+            />
+          </div>
+          <div>
+            <label>Salário</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.salary ?? ""}
+              onChange={(e) => setField("salary", e.target.value ? Number(e.target.value) : null)}
+              placeholder="Usado para calcular o valor da hora extra"
             />
           </div>
           <div>
@@ -709,15 +689,54 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
               ))}
             </select>
           </div>
-          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "start" }}>
-            <button className="primary-button" type="submit" disabled={saving}>
-              {saving ? "Salvando..." : editingId ? "Atualizar" : "Criar"}
-            </button>
-            <button type="button" onClick={resetForm} style={{ backgroundColor: "var(--field-bg)" }}>
-              Cancelar
-            </button>
+              </div>
+
+              <footer>
+                <button type="button" onClick={resetForm}>Cancelar</button>
+                <button type="submit" disabled={saving}>
+                  {saving ? "Salvando..." : editingId ? "Atualizar" : "Criar"}
+                </button>
+              </footer>
+            </form>
+
+            {editingId && showHistory && (
+              <div className="module-table-wrap" style={{ borderTop: "1px solid var(--line)" }}>
+                {historyLoading ? (
+                  <p style={{ padding: "var(--sp-4) var(--sp-5)" }}>Carregando histórico...</p>
+                ) : history.length === 0 ? (
+                  <p style={{ padding: "var(--sp-4) var(--sp-5)" }}>Nenhum evento registrado.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Evento</th>
+                        <th>Usuário</th>
+                        <th>Alterações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((entry) => (
+                        <tr key={entry.id}>
+                          <td>{new Date(entry.created_at).toLocaleString("pt-BR")}</td>
+                          <td>{entry.event_type}</td>
+                          <td>{entry.user}</td>
+                          <td>
+                            {entry.changes
+                              ? Object.entries(entry.changes)
+                                  .map(([field, { from, to }]) => `${field}: ${from} → ${to}`)
+                                  .join("; ")
+                              : entry.message ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </div>
-        </form>
+        </div>
       )}
 
       {loading ? (

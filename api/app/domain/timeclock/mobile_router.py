@@ -320,6 +320,7 @@ async def mobile_list_adjustments(
             id=record.id,
             employee_id=record.employee_id,
             employee_name=employee_name,
+            employee_avatar_url=avatar_url,
             punch_id=record.punch_id,
             requested_punched_at=record.requested_punched_at,
             requested_punch_type=record.requested_punch_type,
@@ -331,5 +332,5 @@ async def mobile_list_adjustments(
             resulting_punch_id=record.resulting_punch_id,
             created_at=record.created_at,
         )
-        for record, employee_name in rows
+        for record, employee_name, avatar_url in rows
     ]

@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Bell, BookOpen, Building2, CalendarClock, ChevronDown,
-  ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileText, Home,
+  BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
+  ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSpreadsheet, FileText, Home,
   Link2, MapPin, Menu, Package, PanelLeftClose, PanelLeftOpen,
   Receipt, Settings, ShieldCheck, Timer, UserCog, Users, X,
 } from "lucide-react";
@@ -22,6 +22,7 @@ const navOperation = [
   { slug: "inspecoes", label: "Inspeções", icon: ClipboardCheck, href: "/inspecoes" },
   { slug: "preventivas", label: "Preventivas", icon: Timer, href: "/preventivas" },
   { slug: "solicitacoes-fiscais", label: "Solicitações Fiscais", icon: Receipt, href: "/solicitacoes-fiscais" },
+  { slug: "relatorios", label: "Relatórios", icon: BarChart3, href: "/relatorios" },
   { slug: "mural", label: "Mural de avisos", icon: Bell, href: "/mural" },
 ];
 
@@ -38,11 +39,13 @@ const cadastrosSub = [
 const pontoSub = [
   { slug: "ponto-batidas", label: "Batidas", icon: Clock, href: "/ponto" },
   { slug: "ponto-ajustes", label: "Ajustes", icon: FileClock, href: "/ponto/ajustes" },
+  { slug: "ponto-espelho", label: "Espelho de ponto", icon: FileSpreadsheet, href: "/ponto/espelho" },
   { slug: "ponto-banco-de-horas", label: "Banco de horas", icon: Timer, href: "/ponto/banco-de-horas" },
   { slug: "ponto-contracheques", label: "Contracheques", icon: FileText, href: "/ponto/contracheques" },
   { slug: "ponto-dispositivos", label: "Dispositivos", icon: Cpu, href: "/ponto/dispositivos" },
   { slug: "ponto-vinculos", label: "Vínculos", icon: Link2, href: "/ponto/vinculos" },
   { slug: "ponto-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/ponto/escalas" },
+  { slug: "ponto-feriados", label: "Feriados", icon: CalendarDays, href: "/ponto/feriados" },
 ];
 
 export function AppLayout({ user, children }: { user: TenantUser; children: ReactNode }) {

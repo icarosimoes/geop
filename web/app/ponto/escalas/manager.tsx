@@ -32,6 +32,11 @@ interface CalendarDay {
   entries: Map<number, CalendarEntry>;
 }
 
+function fmtDate(value: string): string {
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -208,27 +213,31 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
   return (
     <section className="module-panel">
       <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
-        <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap" }}>
-          <select
-            value={selectedEmployeeId ?? ""}
-            onChange={(e) => setSelectedEmployeeId(e.target.value ? Number(e.target.value) : null)}
-          >
-            {employees.length === 0 && <option value="">Nenhum funcionário</option>}
-            {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.name}
-              </option>
-            ))}
-          </select>
+        <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div className="report-filter-field" style={{ flex: "1 1 220px", maxWidth: 320 }}>
+            <label htmlFor="schedule_employee">Funcionário</label>
+            <select
+              id="schedule_employee"
+              value={selectedEmployeeId ?? ""}
+              onChange={(e) => setSelectedEmployeeId(e.target.value ? Number(e.target.value) : null)}
+            >
+              {employees.length === 0 && <option value="">Nenhum funcionário</option>}
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
-            <button onClick={() => setDate(new Date(year, month - 1))} aria-label="Mês anterior">
+          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center", height: 40 }}>
+            <button className="nav-arrow-button" onClick={() => setDate(new Date(year, month - 1))} aria-label="Mês anterior">
               <ChevronLeft size={16} />
             </button>
             <span style={{ minWidth: 160, textAlign: "center" }}>
               <strong>{MONTH_NAMES[month]} {year}</strong>
             </span>
-            <button onClick={() => setDate(new Date(year, month + 1))} aria-label="Próximo mês">
+            <button className="nav-arrow-button" onClick={() => setDate(new Date(year, month + 1))} aria-label="Próximo mês">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -258,7 +267,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
             backgroundColor: "var(--field-bg)",
           }}
         >
-          <div>
+          <div className="report-filter-field">
             <label>Funcionários *</label>
             <div
               style={{
@@ -268,6 +277,10 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
                 marginTop: "var(--sp-1)",
                 maxHeight: 120,
                 overflowY: "auto",
+                padding: "var(--sp-2)",
+                border: "1px solid var(--field-border)",
+                borderRadius: "var(--radius-md)",
+                background: "var(--field-bg)",
               }}
             >
               {employees.map((emp) => (
@@ -295,7 +308,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--sp-3)" }}>
-            <div>
+            <div className="report-filter-field">
               <label>Turno *</label>
               <select value={genShiftId ?? ""} onChange={(e) => setGenShiftId(e.target.value ? Number(e.target.value) : null)} required>
                 <option value="">Selecione...</option>
@@ -306,15 +319,15 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
                 ))}
               </select>
             </div>
-            <div>
+            <div className="report-filter-field">
               <label>Data início *</label>
               <input type="date" value={genStartDate} onChange={(e) => setGenStartDate(e.target.value)} required />
             </div>
-            <div>
+            <div className="report-filter-field">
               <label>Data fim *</label>
               <input type="date" value={genEndDate} onChange={(e) => setGenEndDate(e.target.value)} required />
             </div>
-            <div>
+            <div className="report-filter-field">
               <label>Padrão</label>
               <select value={genPatternType} onChange={(e) => setGenPatternType(e.target.value as "weekly" | "rotating")}>
                 <option value="weekly">Semanal</option>
@@ -324,7 +337,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
           </div>
 
           {genPatternType === "weekly" ? (
-            <div>
+            <div className="report-filter-field">
               <label>Dias da semana</label>
               <div style={{ display: "flex", gap: "var(--sp-2)", marginTop: "var(--sp-1)" }}>
                 {DAY_NAMES.map((label, idx) => {
@@ -351,11 +364,11 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
             </div>
           ) : (
             <div style={{ display: "flex", gap: "var(--sp-3)" }}>
-              <div>
+              <div className="report-filter-field">
                 <label>Dias trabalhados</label>
                 <input type="number" min={1} value={genWorkDays} onChange={(e) => setGenWorkDays(Number(e.target.value))} />
               </div>
-              <div>
+              <div className="report-filter-field">
                 <label>Dias de folga</label>
                 <input type="number" min={1} value={genOffDays} onChange={(e) => setGenOffDays(Number(e.target.value))} />
               </div>
@@ -366,7 +379,7 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
             <button className="primary-button" type="submit" disabled={generating}>
               {generating ? "Gerando..." : "Gerar escala"}
             </button>
-            <button type="button" onClick={() => setShowGenerateForm(false)} style={{ backgroundColor: "var(--field-border)" }}>
+            <button type="button" className="secondary-button" onClick={() => setShowGenerateForm(false)}>
               Cancelar
             </button>
           </div>
@@ -426,11 +439,18 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
                                   padding: "4px",
                                   borderRadius: 4,
                                   fontSize: 12,
+                                  lineHeight: 1.3,
                                   backgroundColor: day.entries.get(selectedEmployeeId)?.shift_color ?? "#f3f4f6",
                                   color: day.entries.get(selectedEmployeeId)?.shift_color ? "#fff" : "#000",
                                 }}
                               >
-                                {day.entries.get(selectedEmployeeId)?.shift_name ?? "Folga"}
+                                <div>{day.entries.get(selectedEmployeeId)?.shift_name ?? "Folga"}</div>
+                                {day.entries.get(selectedEmployeeId)?.start_time && (
+                                  <div style={{ fontSize: 11, opacity: 0.85 }}>
+                                    {day.entries.get(selectedEmployeeId)?.start_time?.slice(0, 5)}–
+                                    {day.entries.get(selectedEmployeeId)?.end_time?.slice(0, 5)}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </>
@@ -454,25 +474,25 @@ export function ScheduleManager({ user }: { user: TenantUser }) {
                 alignItems: "center",
               }}
             >
-              <span>
-                <strong>{selectedDay.date}</strong>
-              </span>
-              <select value={selectedShift ?? ""} onChange={(e) => setSelectedShift(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">Folga</option>
-                {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.start_time}-{s.end_time})
-                  </option>
-                ))}
-              </select>
+              <div className="report-filter-field">
+                <label>Dia selecionado</label>
+                <strong>{fmtDate(selectedDay.date)}</strong>
+              </div>
+              <div className="report-filter-field">
+                <label>Turno</label>
+                <select value={selectedShift ?? ""} onChange={(e) => setSelectedShift(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">Folga</option>
+                  {shifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.start_time}-{s.end_time})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button className="primary-button" onClick={handleSaveDay} disabled={saving} style={{ marginLeft: "auto" }}>
                 {saving ? "Salvando..." : "Salvar"}
               </button>
-              <button
-                type="button"
-                onClick={() => setSelectedDay(null)}
-                style={{ backgroundColor: "var(--field-border)" }}
-              >
+              <button type="button" className="secondary-button" onClick={() => setSelectedDay(null)}>
                 Cancelar
               </button>
             </div>

@@ -75,6 +75,7 @@ class EmployeeCreate(_EmployeeFieldValidators):
     hire_date: str | None = None
     termination_date: str | None = None
     registration_number: str | None = None
+    salary: float | None = None
     sector_id: int | None = None
 
     @field_validator("cpf")
@@ -113,6 +114,7 @@ class EmployeeUpdate(_EmployeeFieldValidators):
     hire_date: str | None = None
     termination_date: str | None = None
     registration_number: str | None = None
+    salary: float | None = None
     sector_id: int | None = None
 
     @field_validator("cpf")
@@ -182,6 +184,7 @@ class EmployeeDetailedSummary(EmployeeSummary):
     hire_date: str | None
     termination_date: str | None
     registration_number: str | None
+    salary: float | None
     sector_id: int | None
     sector_name: str | None
     external_ids: list[EmployeeExternalIdSummary] = Field(default_factory=list)

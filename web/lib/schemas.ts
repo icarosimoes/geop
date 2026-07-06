@@ -106,6 +106,7 @@ export const EmployeeDetailedSchema = EmployeeSummarySchema.extend({
   hire_date: z.string().nullable(),
   termination_date: z.string().nullable(),
   registration_number: z.string().nullable(),
+  salary: z.number().nullable(),
   sector_id: z.number().nullable(),
   sector_name: z.string().nullable(),
   external_ids: z.array(

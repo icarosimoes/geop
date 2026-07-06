@@ -1,11 +1,13 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TenantUser } from "@/lib/api";
-import type { EvolutionSettings, BrevoSettings, CompanyInfo } from "@/app/actions";
+import type { EvolutionSettings, BrevoSettings, CompanyInfo, TimeclockSettings } from "@/app/actions";
 import {
   getEvolutionSettings, saveEvolutionSettings,
   getBrevoSettings, saveBrevoSettings,
+  getTimeclockSettings, saveTimeclockSettings,
 } from "@/app/actions";
 
 function formatPhone(v: string): string {
@@ -175,6 +177,138 @@ export function EvolutionSettingsSection() {
     </section>
     <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar conexão"}</button>
   </form>;
+}
+
+export function TimeclockSettingsSection() {
+  const [config, setConfig] = useState<TimeclockSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [newCargo, setNewCargo] = useState("");
+  const [newCargoSalary, setNewCargoSalary] = useState("");
+
+  useEffect(() => {
+    getTimeclockSettings().then(setConfig).catch(() =>
+      setConfig({ overtime_paid_in_cash: false, cargo_salaries: {} })
+    );
+  }, []);
+
+  async function persist(next: TimeclockSettings) {
+    setSaving(true);
+    setFeedback(null);
+    const result = await saveTimeclockSettings(next);
+    setSaving(false);
+    if (result.ok) {
+      setConfig(next);
+      setFeedback("Configuração salva com sucesso.");
+    } else {
+      setFeedback(result.error ?? "Erro ao salvar.");
+    }
+  }
+
+  if (!config) return null;
+
+  function addCargo() {
+    const name = newCargo.trim();
+    const salary = Number(newCargoSalary);
+    if (!name || !salary || salary <= 0) return;
+    const next = { ...config!, cargo_salaries: { ...config!.cargo_salaries, [name]: salary } };
+    setNewCargo("");
+    setNewCargoSalary("");
+    persist(next);
+  }
+
+  function removeCargo(name: string) {
+    const cargo_salaries = { ...config!.cargo_salaries };
+    delete cargo_salaries[name];
+    persist({ ...config!, cargo_salaries });
+  }
+
+  return (
+    <div className="settings-form">
+      <section>
+        <h2>Ponto e banco de horas</h2>
+        <p>Define se hora extra vira saldo de banco de horas (compensação em folga) ou é paga em dinheiro.</p>
+        {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
+        <label className="switch-row">
+          <span>
+            <strong>Pagar hora extra em dinheiro</strong>
+            <small>HE 50%/100% deixa de virar saldo de banco de horas e passa a ter valor em R$ no espelho de ponto.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={config.overtime_paid_in_cash}
+            disabled={saving}
+            onChange={(e) => persist({ ...config, overtime_paid_in_cash: e.target.checked })}
+          />
+        </label>
+
+        <h3 style={{ marginTop: "var(--sp-4)" }}>Salário-base por cargo</h3>
+        <p>
+          Usado para calcular o valor da hora extra de funcionários sem salário individual cadastrado
+          (ver Cadastros → Funcionários). O salário individual, quando preenchido, tem prioridade.
+        </p>
+        <table className="module-table">
+          <thead>
+            <tr>
+              <th>Cargo</th>
+              <th className="col-num">Salário</th>
+              <th aria-label="Ações" />
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(config.cargo_salaries).map(([cargo, salary]) => (
+              <tr key={cargo}>
+                <td>{cargo}</td>
+                <td className="col-num">
+                  {salary.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Remover ${cargo}`}
+                    disabled={saving}
+                    onClick={() => removeCargo(cargo)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {Object.keys(config.cargo_salaries).length === 0 && (
+              <tr>
+                <td colSpan={3} style={{ color: "var(--label)" }}>Nenhum cargo cadastrado.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div className="report-filter-bar" style={{ marginTop: "var(--sp-3)" }}>
+          <div className="report-filter-field">
+            <label>Cargo</label>
+            <input
+              type="text"
+              value={newCargo}
+              onChange={(e) => setNewCargo(e.target.value)}
+              placeholder="Camareira, Recepcionista..."
+            />
+          </div>
+          <div className="report-filter-field">
+            <label>Salário</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={newCargoSalary}
+              onChange={(e) => setNewCargoSalary(e.target.value)}
+            />
+          </div>
+          <button type="button" className="secondary-button" disabled={saving} onClick={addCargo}>
+            Adicionar
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 export function ProfileForm({ user, onSaved }: { user: TenantUser; onSaved: (msg: string) => void }) {

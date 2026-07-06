@@ -5,18 +5,27 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_session
+from app.core.export import generate_xlsx
 from app.core.permissions import require_permission
 from app.domain.attachments.service import create_attachment
 from app.domain.auth.repository import AuthenticatedUser
+from app.domain.timeclock.mirror import build_employee_mirror, build_sector_mirrors
+from app.domain.timeclock.mirror_pdf import generate_mirror_pdf
 from app.domain.timeclock.schemas import (
+    AdjustmentStatsResponse,
     CalendarEntry,
+    EmployeeMirrorResponse,
     EmployeePayslipImportResponse,
     EmployeePayslipImportRowResult,
     EmployeePayslipUploadResponse,
     EmployeePinResetResponse,
+    HolidayCreate,
+    HolidaySummary,
     HourBankInitialBalanceCreate,
     HourBankRecalculateRequest,
     HourBankRecalculateResponse,
@@ -25,10 +34,14 @@ from app.domain.timeclock.schemas import (
     PunchAdjustmentListResponse,
     PunchAdjustmentReview,
     PunchAdjustmentSummary,
+    PunchExcusalCreate,
+    PunchExcusalListResponse,
+    PunchExcusalSummary,
     PunchUpdate,
     ScheduleDayUpsert,
     ScheduleGenerateRequest,
     ScheduleGenerateResponse,
+    SectorMirrorResponse,
     ShiftCreate,
     ShiftSummary,
     ShiftUpdate,
@@ -44,18 +57,24 @@ from app.domain.timeclock.service import (
     create_device,
     create_employee_payslip,
     create_enrollment,
+    create_holiday,
     create_manual_punch,
+    create_punch_excusal,
     create_shift,
     delete_device,
     delete_enrollment,
+    delete_holiday,
     delete_shift,
     generate_schedule,
     get_calendar,
     get_hour_bank_summary,
+    get_punch_adjustment_stats,
     import_employee_payslips,
     list_devices,
     list_enrollments,
+    list_holidays,
     list_punch_adjustment_requests,
+    list_punch_excusals,
     list_punches,
     list_shifts,
     recalculate_hour_bank,
@@ -67,6 +86,7 @@ from app.domain.timeclock.service import (
     update_punch,
     update_shift,
 )
+from app.models import Employee
 
 router = APIRouter(prefix="/timeclock", tags=["timeclock"])
 
@@ -349,6 +369,53 @@ async def delete_enrollment_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
     deleted = await delete_enrollment(session, user.company_id, user.id, enrollment_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+# ---------------------------------------------------------------------------
+# Feriados
+# ---------------------------------------------------------------------------
+
+
+@router.get("/holidays", response_model=list[HolidaySummary])
+async def list_holidays_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("holiday.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    year: int | None = None,
+) -> list[HolidaySummary]:
+    rows = await list_holidays(session, user.company_id, year=year)
+    return [HolidaySummary(id=row.id, date=row.date, name=row.name) for row in rows]
+
+
+@router.post("/holidays", response_model=HolidaySummary, status_code=201)
+async def create_holiday_endpoint(
+    body: HolidayCreate,
+    user: Annotated[AuthenticatedUser, require_permission("holiday.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> HolidaySummary:
+    try:
+        record = await create_holiday(
+            session, user.company_id, user.id, holiday_date=body.date, name=body.name
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "duplicate_date",
+                "message": "Já existe um feriado cadastrado nesta data.",
+            },
+        ) from None
+    return HolidaySummary(id=record.id, date=record.date, name=record.name)
+
+
+@router.delete("/holidays/{holiday_id}", status_code=204)
+async def delete_holiday_endpoint(
+    holiday_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("holiday.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    deleted = await delete_holiday(session, user.company_id, user.id, holiday_id)
     if not deleted:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
@@ -652,11 +719,14 @@ async def set_hour_bank_initial_balance_endpoint(
 # ---------------------------------------------------------------------------
 
 
-def _punch_adjustment_summary(record, employee_name: str) -> PunchAdjustmentSummary:
+def _punch_adjustment_summary(
+    record, employee_name: str, employee_avatar_url: str | None = None
+) -> PunchAdjustmentSummary:
     return PunchAdjustmentSummary(
         id=record.id,
         employee_id=record.employee_id,
         employee_name=employee_name,
+        employee_avatar_url=employee_avatar_url,
         punch_id=record.punch_id,
         requested_punched_at=record.requested_punched_at,
         requested_punch_type=record.requested_punch_type,
@@ -683,7 +753,10 @@ async def list_punch_adjustments_endpoint(
         session, user.company_id, page, page_size, employee_id=employee_id, status=status
     )
     return PunchAdjustmentListResponse(
-        items=[_punch_adjustment_summary(record, employee_name) for record, employee_name in rows],
+        items=[
+            _punch_adjustment_summary(record, employee_name, avatar_url)
+            for record, employee_name, avatar_url in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -711,3 +784,180 @@ async def review_punch_adjustment_endpoint(
         raise HTTPException(status_code=409, detail={"code": "already_reviewed"})
     assert record is not None
     return _punch_adjustment_summary(record, "")
+
+
+@router.get("/adjustments/stats", response_model=AdjustmentStatsResponse)
+async def get_adjustment_stats_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("punch_adjustment.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> AdjustmentStatsResponse:
+    data = await get_punch_adjustment_stats(session, user.company_id)
+    return AdjustmentStatsResponse(**data)
+
+
+def _punch_excusal_summary(
+    record, employee_name: str, employee_avatar_url: str | None
+) -> PunchExcusalSummary:
+    return PunchExcusalSummary(
+        id=record.id,
+        employee_id=record.employee_id,
+        employee_name=employee_name,
+        employee_avatar_url=employee_avatar_url,
+        reference_date=record.reference_date,
+        minutes=record.minutes,
+        reason=record.reason,
+        created_by_user_id=record.created_by_user_id,
+        created_at=record.created_at,
+    )
+
+
+@router.get("/excusals", response_model=PunchExcusalListResponse)
+async def list_punch_excusals_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("punch_adjustment.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    employee_id: int | None = None,
+) -> PunchExcusalListResponse:
+    rows, total = await list_punch_excusals(
+        session, user.company_id, page, page_size, employee_id=employee_id
+    )
+    return PunchExcusalListResponse(
+        items=[
+            _punch_excusal_summary(record, employee_name, avatar_url)
+            for record, employee_name, avatar_url in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/excusals", response_model=PunchExcusalSummary, status_code=201)
+async def create_punch_excusal_endpoint(
+    body: PunchExcusalCreate,
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.manage")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PunchExcusalSummary:
+    record = await create_punch_excusal(
+        session,
+        user.company_id,
+        user.id,
+        employee_id=body.employee_id,
+        reference_date=body.reference_date,
+        minutes=body.minutes,
+        reason=body.reason,
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail={"code": "employee_not_found"})
+    employee_name = await session.scalar(
+        select(Employee.name).where(Employee.id == body.employee_id)
+    )
+    return _punch_excusal_summary(record, employee_name or "", None)
+
+
+# ---------------------------------------------------------------------------
+# Espelho de ponto
+# ---------------------------------------------------------------------------
+
+
+@router.get("/mirror", response_model=EmployeeMirrorResponse)
+async def get_mirror_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    employee_id: int,
+    date_from: date,
+    date_to: date,
+) -> EmployeeMirrorResponse:
+    data = await build_employee_mirror(session, user.company_id, employee_id, date_from, date_to)
+    if data is None:
+        raise HTTPException(status_code=404, detail={"code": "employee_not_found"})
+    return EmployeeMirrorResponse(**data)
+
+
+@router.get("/mirror/by-sector", response_model=SectorMirrorResponse)
+async def get_sector_mirror_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    sector_id: int,
+    date_from: date,
+    date_to: date,
+) -> SectorMirrorResponse:
+    mirrors = await build_sector_mirrors(session, user.company_id, sector_id, date_from, date_to)
+    return SectorMirrorResponse(mirrors=[EmployeeMirrorResponse(**m) for m in mirrors])
+
+
+@router.get("/mirror/export")
+async def export_mirror_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("timeclock.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    employee_id: int,
+    date_from: date,
+    date_to: date,
+    format: Annotated[str, Query(pattern="^(xlsx|pdf)$")] = "xlsx",
+) -> StreamingResponse:
+    data = await build_employee_mirror(session, user.company_id, employee_id, date_from, date_to)
+    if data is None:
+        raise HTTPException(status_code=404, detail={"code": "employee_not_found"})
+
+    def fmt_time(value) -> str:
+        return value.strftime("%H:%M") if value else "—"
+
+    def fmt_minutes(value: int) -> str:
+        sign = "-" if value < 0 else ""
+        value = abs(value)
+        return f"{sign}{value // 60:02d}:{value % 60:02d}"
+
+    if format == "pdf":
+        buf = generate_mirror_pdf(
+            company_name=user.company_name,
+            employee_name=data["employee_name"],
+            sector_name=data["sector_name"],
+            date_from=date_from,
+            date_to=date_to,
+            days=data["days"],
+            totals=data["totals"],
+        )
+        filename = f"espelho_ponto_{employee_id}_{date_from}_{date_to}.pdf"
+        return StreamingResponse(
+            buf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    headers = [
+        "Data", "1ª Entrada", "1ª Saída", "2ª Entrada", "2ª Saída",
+        "Crédito", "Débito", "Intervalo", "Trabalhado",
+        "HE 50%", "HE 100%", "Adicional Noturno", "Saldo", "Observações",
+    ]
+    rows = [
+        [
+            day["date"],
+            fmt_time(day["first_in"]),
+            fmt_time(day["first_out"]),
+            fmt_time(day["second_in"]),
+            fmt_time(day["second_out"]),
+            fmt_minutes(day["credit_minutes"]),
+            fmt_minutes(day["debit_minutes"]),
+            fmt_minutes(day["break_minutes"]),
+            fmt_minutes(day["worked_minutes"]),
+            fmt_minutes(day["overtime_50_minutes"]),
+            fmt_minutes(day["overtime_100_minutes"]),
+            fmt_minutes(day["night_differential_minutes"]),
+            fmt_minutes(day["balance_minutes"]),
+            day["notes"],
+        ]
+        for day in data["days"]
+    ]
+    buf = generate_xlsx(
+        title="Espelho de Ponto",
+        headers=headers,
+        rows=rows,
+        sheet_name="Espelho",
+    )
+    filename = f"espelho_ponto_{employee_id}_{date_from}_{date_to}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

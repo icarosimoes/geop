@@ -91,6 +91,11 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - Toda empresa nova já recebe 6 turnos padrão pré-cadastrados (Manhã, Tarde, Noite, Comercial, 12x36 Diurno/Noturno) — ver [escala-de-trabalho.md](escala-de-trabalho.md)
 - Geofencing de `Local` (latitude/longitude/raio) editável em `/cadastros/locais`; reset de PIN do Portal do Colaborador direto em `/cadastros/funcionarios`
 - Banco de horas (cálculo por escala x pontos batidos, saldo inicial migrável) e ajuste de ponto com aprovação do RH, com solicitação pelo Portal do Colaborador — ver [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-horas-e-ajuste-de-ponto-2026-07-05)
+- Relatórios de ocorrências por período e SLA de solicitações fiscais (`/relatorios`), sem exportação ainda
+- Abono de ponto (lançado direto pelo RH, sem aprovação), estatísticas de ajuste de ponto e notificações in-app conectadas ao sino (clique navega para a tela de origem) — ver [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06)
+- Espelho de ponto (`/ponto/espelho`): grade diária com batidas, crédito/débito, hora extra 50%/100% (considerando feriados cadastrados) e adicional noturno com hora reduzida da CLT, exportável em Excel/PDF por funcionário; filtro por Setor gera um card por funcionário ativo do setor — ver [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06)
+- Feriados (`/ponto/feriados`): CRUD simples por tenant, usado no cálculo de HE 100% — ver [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06)
+- Hora extra paga em dinheiro (toggle em `/configuracoes` → Ponto): salário individual do funcionário ou salário-base por cargo, valor em R$ da HE 50%/100% no espelho de ponto, banco de horas para de bancar a HE quando ligado — ver [escala-de-trabalho.md](escala-de-trabalho.md#hora-extra-paga-em-dinheiro-2026-07-06)
 
 ### Planejado / pendente de produção
 
@@ -105,3 +110,5 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - Manutenção real usa tabela dedicada `maintenance_records` (endpoint `/maintenance`); mural usa `bulletin_posts` (endpoint `/bulletin`)
 - Diário de obra sem dados V1 (tabela vazia)
 - Solicitações fiscais sem dados V1 (apenas criáveis manualmente ou via integração Chess)
+- Suíte de testes (`api/tests/`) roda contra o mesmo banco de desenvolvimento (sem `TEST_DATABASE_URL` isolado) — acumula dados a cada execução e colide com o seed fictício de ponto em datas hardcoded (ver [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06))
+- Espelho de ponto: HE 100% não considera feriados (sem calendário integrado); adicional noturno é um adicional simples de 20%, sem a "hora noturna reduzida" da CLT; filtro por um colaborador por vez (sem Equipe/Departamento/Todos)

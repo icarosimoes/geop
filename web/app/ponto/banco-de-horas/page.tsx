@@ -11,8 +11,10 @@ export default async function BancoDeHorasPage() {
         <header className="module-heading">
           <div>
             <p className="eyebrow">Ponto</p>
-            <h1>Banco de horas</h1>
-            <p>Saldo acumulado por funcionário, calculado a partir da escala e das batidas.</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+              <h1 style={{ margin: 0 }}>Banco de horas</h1>
+              <p style={{ margin: 0, color: "var(--muted)" }}>Saldo acumulado por funcionário, calculado a partir da escala e das batidas.</p>
+            </div>
           </div>
         </header>
         <HourBankManager />

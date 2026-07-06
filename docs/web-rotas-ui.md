@@ -26,8 +26,11 @@
 | `/ponto` | batidas | listagem e lançamento manual de pontos | API `timeclock/punches` |
 | `/ponto/dispositivos` | CRUD de relógios | dispositivos Control iD autenticados por webhook token | API `timeclock/devices` |
 | `/ponto/vinculos` | vínculos | associa matrícula do relógio a um funcionário | API `timeclock/enrollments` |
-| `/ponto/ajustes` | fila de aprovação | ajustes de ponto solicitados pelo Portal do Colaborador, aprovar/rejeitar | API `timeclock/adjustments` |
+| `/ponto/ajustes` | fila de aprovação | ajustes de ponto solicitados pelo Portal do Colaborador, aprovar/rejeitar, abono direto pelo RH | API `timeclock/adjustments` + `timeclock/excusals` |
 | `/ponto/banco-de-horas` | saldo por funcionário | busca funcionário, recalcula período, lança saldo inicial | API `timeclock/hour-bank` |
+| `/ponto/espelho` | grade diária + HE + adicional noturno | filtro por funcionário **ou** por setor (múltiplos cards), export Excel/PDF só por funcionário individual | API `timeclock/mirror` + `timeclock/mirror/by-sector` + `timeclock/mirror/export` |
+| `/ponto/contracheques` | importação em lote | manifesto CSV + ZIP de PDFs, casamento por CPF/matrícula | API `timeclock/employees/payslips/import` |
+| `/ponto/feriados` | CRUD de feriados | calendário por tenant usado no cálculo de HE 100% do espelho | API `timeclock/holidays` |
 | `/usuarios` | lista e CRUD + convite | CRUD via API + convite por e-mail + upload avatar | API `users` + `users/invite` isolada por tenant |
 | `/perfis` | gestão de perfis de acesso | CRUD de roles com checkboxes de permissões | API `roles` + `roles/permissions` isolada por tenant |
 | `/configuracoes` | tela unificada com 3 abas | Estabelecimento + Integrações (Brevo/Evolution) + Minha conta | API `settings/company` + `settings/brevo` + `settings/evolution` + `users/me` |
@@ -104,6 +107,38 @@ O `globals.css` utiliza um sistema de design tokens para garantir consistência 
 | Transição | `--transition` (.2s ease) | `transition: background var(--transition)` |
 
 Todo novo CSS deve usar esses tokens em vez de valores hardcoded.
+
+## Padrão de campo e filtro (`report-filter-field`)
+
+Obrigatório em toda tela nova e em qualquer formulário de filtro/criação inline (fora de modal `record-modal` e de drawer `kanban-create-form`, que já têm o próprio padrão). Estabelecido em 2026-07-06 ao padronizar o módulo Ponto (Espelho, Banco de Horas, Dispositivos, Vínculos, Escalas, Contracheques, Batidas).
+
+**Motivação**: `<input>`/`<select>` sem classe renderizam com estilo nativo do browser (borda cinza `rgb(118,118,118)`, `border-radius: 0`), quebrando a consistência visual com o resto do app. Isso não aparece em toda revisão visual rápida — sempre confirme com `getComputedStyle` antes de assumir que um campo "parece certo".
+
+```tsx
+<div className="report-filter-bar">
+  <div className="report-filter-field">
+    <label htmlFor="campo">Rótulo</label>
+    <input id="campo" ... />
+  </div>
+  <div className="report-filter-group">
+    {/* campos + botões que devem permanecer visualmente agrupados ao quebrar linha */}
+  </div>
+</div>
+```
+
+| Classe | Uso |
+| --- | --- |
+| `.report-filter-bar` | container de filtro/formulário inline: cartão com borda, `flex-wrap`, breakpoint próprio em 640px (empilha campos em tela estreita em vez de quebrar campos soltos e desalinhados) |
+| `.report-filter-field` | wrapper de um campo: label pequeno (`--font-xs`, `--muted`) acima do `input`/`select`, ambos com altura 40px, borda `--field-border` e `--radius-md` |
+| `.report-filter-group` | subgrupo de campos/botões dentro de uma `report-filter-bar` que deve quebrar linha como bloco único (ex.: datas + botão de ação), evitando que um campo largo (autocomplete, nome) empurre os demais para linhas soltas |
+| `.col-num` | `<th>`/`<td>` de coluna numérica (minutos, horas, valores): alinha à direita com `font-variant-numeric: tabular-nums` para permitir comparação vertical |
+| `.balance-negative` | aplicar junto com `.col-num` quando o valor da célula for negativo (saldo devedor, hora extra negativa etc.); pinta o texto em `var(--red)` |
+| `.nav-arrow-button` | botão quadrado 34×34 com borda, para navegação tipo `‹ ›` (troca de mês, período) fora do contexto de paginação de tabela |
+| `input[type="file"]` dentro de `.report-filter-field` | o seletor nativo de arquivo é estilizado via `::file-selector-button`/`::-webkit-file-upload-button` para parecer um `secondary-button` — não precisa de wrapper extra além do `report-filter-field` |
+
+**Armadilha de especificidade CSS conhecida**: `.module-toolbar button { background: white }` (seletor elemento+classe) tem mais especificidade que `.primary-button { background: var(--blue) }` (classe única) e sobrescrevia o fundo de qualquer botão azul dentro de uma toolbar, deixando o texto branco invisível sobre fundo branco. Corrigido com `.module-toolbar .primary-button` / `.module-toolbar .secondary-button` (dupla classe, maior especificidade). **Nunca** adicionar uma regra `.algum-container button { background: ... }` sem também cobrir `.primary-button`/`.secondary-button` dentro desse mesmo container — o bug se repete.
+
+Todas as regras vivem em `web/app/globals.css` perto de `.report-filter-bar` (~linha 449) e `.module-toolbar` (~linha 265). Ao criar uma tela nova, comece por esse padrão em vez de estilo inline ad-hoc.
 
 ## Padrão obrigatório de tela
 

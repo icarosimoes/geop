@@ -322,6 +322,49 @@ async def delete_work_order_category(
     return CategoryList(items=sorted(items))
 
 
+# ── Ponto e banco de horas ──
+
+
+class TimeclockSettings(BaseModel):
+    overtime_paid_in_cash: bool = False
+    # Salário-base por cargo (job_title), usado como alternativa/fallback ao
+    # salário individual do funcionário no cálculo do valor da hora extra —
+    # ver `_resolve_salary` em mirror.py.
+    cargo_salaries: dict[str, float] = {}
+
+
+@router.get("/timeclock", response_model=TimeclockSettings)
+async def get_timeclock_settings(
+    user: Annotated[AuthenticatedUser, require_permission("settings.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> TimeclockSettings:
+    value = await get_company_setting(session, user.company_id, "timeclock")
+    return TimeclockSettings(
+        overtime_paid_in_cash=value.get("overtime_paid_in_cash", False),
+        cargo_salaries=value.get("cargo_salaries", {}),
+    )
+
+
+@router.post("/timeclock", response_model=TimeclockSettings)
+async def save_timeclock_settings(
+    body: TimeclockSettings,
+    user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> TimeclockSettings:
+    row = await _get_setting(session, user.company_id, "timeclock")
+    new_value = {
+        "overtime_paid_in_cash": body.overtime_paid_in_cash,
+        "cargo_salaries": body.cargo_salaries,
+    }
+    if row:
+        row.value = new_value
+        flag_modified(row, "value")
+    else:
+        session.add(CompanySetting(company_id=user.company_id, key="timeclock", value=new_value))
+    await session.commit()
+    return body
+
+
 # ── Dados do Estabelecimento ──
 
 

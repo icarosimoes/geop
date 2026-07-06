@@ -571,6 +571,29 @@ export async function saveEvolutionSettings(body: { api_url: string; api_key: st
   return { ok: true, data: await response.json() };
 }
 
+export interface TimeclockSettings {
+  overtime_paid_in_cash: boolean;
+  cargo_salaries: Record<string, number>;
+}
+
+export async function getTimeclockSettings(): Promise<TimeclockSettings> {
+  const response = await authedFetch("/settings/timeclock");
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { overtime_paid_in_cash: false, cargo_salaries: {} };
+  }
+  return response.json();
+}
+
+export async function saveTimeclockSettings(body: TimeclockSettings): Promise<MutationResult> {
+  const response = await authedFetch("/settings/timeclock", { method: "POST", body: JSON.stringify(body) });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao salvar configurações de ponto." };
+  }
+  return { ok: true, data: await response.json() };
+}
+
 export interface BrevoSettings {
   has_credentials: boolean;
   from_address?: string | null;
@@ -673,6 +696,7 @@ export interface EmployeePayload {
   hire_date?: string | null;
   termination_date?: string | null;
   registration_number?: string | null;
+  salary?: number | null;
   sector_id?: number | null;
 }
 
@@ -1775,6 +1799,7 @@ export interface PunchAdjustment {
   id: number;
   employee_id: number;
   employee_name: string;
+  employee_avatar_url: string | null;
   punch_id: number | null;
   requested_punched_at: string;
   requested_punch_type: string | null;
@@ -1820,4 +1845,184 @@ export async function reviewPunchAdjustmentAction(
   });
   if (!response.ok) return { ok: false, error: "Erro ao revisar solicitação." };
   return { ok: true, data: await response.json() };
+}
+
+export interface RequesterStat {
+  employee_id: number;
+  name: string;
+  avatar_url: string | null;
+  count: number;
+}
+
+export interface AdjustmentStats {
+  monthly_trend: Array<{ month: string; count: number }>;
+  top_requesters: RequesterStat[];
+  least_requesters: RequesterStat[];
+}
+
+export async function fetchAdjustmentStats(): Promise<AdjustmentStats | null> {
+  const response = await authedFetch("/timeclock/adjustments/stats");
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export interface PunchExcusal {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_avatar_url: string | null;
+  reference_date: string;
+  minutes: number | null;
+  reason: string;
+  created_by_user_id: number | null;
+  created_at: string;
+}
+
+export interface PunchExcusalListResponse {
+  items: PunchExcusal[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchPunchExcusals(params: {
+  page?: number;
+  pageSize?: number;
+}): Promise<PunchExcusalListResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  const response = await authedFetch(`/timeclock/excusals?${query}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  return response.json();
+}
+
+export async function createPunchExcusalAction(body: {
+  employee_id: number;
+  reference_date: string;
+  minutes?: number;
+  reason: string;
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/excusals", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao abonar ponto." };
+  return { ok: true, data: await response.json() };
+}
+
+// ---------------------------------------------------------------------------
+// Espelho de ponto
+// ---------------------------------------------------------------------------
+
+export interface MirrorDay {
+  date: string;
+  first_in: string | null;
+  first_out: string | null;
+  second_in: string | null;
+  second_out: string | null;
+  credit_minutes: number;
+  debit_minutes: number;
+  break_minutes: number;
+  worked_minutes: number;
+  overtime_50_minutes: number;
+  overtime_100_minutes: number;
+  overtime_50_value: number | null;
+  overtime_100_value: number | null;
+  night_differential_minutes: number;
+  balance_minutes: number;
+  notes: string;
+}
+
+export interface MirrorTotals {
+  credit_minutes: number;
+  debit_minutes: number;
+  break_minutes: number;
+  worked_minutes: number;
+  overtime_50_minutes: number;
+  overtime_100_minutes: number;
+  overtime_50_value: number | null;
+  overtime_100_value: number | null;
+  night_differential_minutes: number;
+  balance_minutes: number;
+}
+
+export interface EmployeeMirror {
+  employee_id: number;
+  employee_name: string;
+  employee_avatar_url: string | null;
+  sector_name: string | null;
+  days: MirrorDay[];
+  totals: MirrorTotals;
+}
+
+export async function fetchTimeclockMirror(params: {
+  employeeId: number;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<{ ok: true; data: EmployeeMirror } | { ok: false; error: string }> {
+  const query = new URLSearchParams({
+    employee_id: String(params.employeeId),
+    date_from: params.dateFrom,
+    date_to: params.dateTo,
+  });
+  const response = await authedFetch(`/timeclock/mirror?${query}`);
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: response.status === 404 ? "Funcionário não encontrado." : "Erro ao gerar o espelho.",
+    };
+  }
+  return { ok: true, data: await response.json() };
+}
+
+export async function fetchSectorMirror(params: {
+  sectorId: number;
+  dateFrom: string;
+  dateTo: string;
+}): Promise<{ ok: true; data: EmployeeMirror[] } | { ok: false; error: string }> {
+  const query = new URLSearchParams({
+    sector_id: String(params.sectorId),
+    date_from: params.dateFrom,
+    date_to: params.dateTo,
+  });
+  const response = await authedFetch(`/timeclock/mirror/by-sector?${query}`);
+  if (!response.ok) return { ok: false, error: "Erro ao gerar o espelho do setor." };
+  const body = await response.json();
+  return { ok: true, data: body.mirrors };
+}
+
+export interface Holiday {
+  id: number;
+  date: string;
+  name: string;
+}
+
+export async function fetchHolidays(): Promise<Holiday[]> {
+  const response = await authedFetch("/timeclock/holidays");
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createHolidayAction(body: { date: string; name: string }): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/holidays", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message =
+      payload?.detail?.code === "duplicate_date"
+        ? "Já existe um feriado cadastrado nesta data."
+        : "Erro ao criar feriado.";
+    return { ok: false, error: message };
+  }
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteHolidayAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/holidays/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: "Erro ao excluir feriado." };
+  return { ok: true };
 }

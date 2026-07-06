@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { Bell, Check, CheckCheck, MessageSquareText } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   fetchNotifications, markNotificationRead, markAllNotificationsRead,
 } from "@/app/actions";
 import type { NotificationItem } from "@/app/actions";
 
+const ENTITY_ROUTES: Record<string, string> = {
+  punch_adjustment_request: "/ponto/ajustes",
+  punch_excusal: "/ponto/ajustes",
+};
+
 export function NotificationPanel() {
+  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -36,6 +43,12 @@ export function NotificationPanel() {
     await markAllNotificationsRead();
     setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
     setUnread(0);
+  }
+
+  function handleOpen(n: NotificationItem) {
+    if (!n.read_at) handleRead(n.id);
+    const route = n.entity_type ? ENTITY_ROUTES[n.entity_type] : undefined;
+    if (route) router.push(route);
   }
 
   function categoryIcon(category: string) {
@@ -74,10 +87,10 @@ export function NotificationPanel() {
           <article
             key={n.id}
             className={n.read_at ? "notification-item read" : "notification-item"}
-            onClick={() => !n.read_at && handleRead(n.id)}
+            onClick={() => handleOpen(n)}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter" && !n.read_at) handleRead(n.id); }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleOpen(n); }}
             aria-label={`${n.title}${n.read_at ? "" : " — não lida"}`}
           >
             <span className={`notification-icon ${n.read_at ? "" : "blue"}`}>

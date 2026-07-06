@@ -81,6 +81,8 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/settings/brevo` | `settings.edit` | salva configuração do Brevo |
 | `GET` | `/settings/notification-recipients` | `settings.view` | destinatários por módulo |
 | `PUT` | `/settings/notification-recipients/{module}` | `settings.edit` | define destinatários de um módulo |
+| `GET` | `/settings/timeclock` | `settings.view` | HE paga em dinheiro + salário por cargo |
+| `POST` | `/settings/timeclock` | `settings.edit` | salva HE paga em dinheiro + salário por cargo |
 | `POST` | `/attachments` | Tenant Bearer (multipart) | upload de anexo para entidade |
 | `GET` | `/attachments?entity_type=&entity_id=` | Tenant Bearer | lista anexos de uma entidade |
 | `GET` | `/attachments/{id}/download` | Tenant Bearer | download do arquivo |
@@ -935,3 +937,61 @@ POST /timeclock/hour-bank/{employee_id}/initial-balance (hour_bank.manage) { eff
 GET  /timeclock/adjustments              (punch_adjustment.view)   ?status&employee_id → fila de solicitações
 POST /timeclock/adjustments/{id}/review  (punch_adjustment.manage) { approve, review_notes? } → aprova (cria/corrige o TimePunch) ou rejeita
 ```
+
+### Abono de ponto e estatísticas de ajuste (`/timeclock`) (2026-07-06)
+
+Documentação completa em [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06).
+
+```
+GET  /timeclock/adjustments/stats                       (punch_adjustment.view) → tendência mensal (6 meses) + top 5/bottom 5 solicitantes
+GET  /timeclock/excusals                                (punch_adjustment.view) ?employee_id → lista abonos concedidos
+POST /timeclock/excusals                                (timeclock.manage) { employee_id, reference_date, minutes?, reason } → concede abono (404 se employee_id não pertence à empresa)
+```
+
+Abono cria um `HourBankEntry(source="excused")` que neutraliza o saldo do dia (sem apagar o lançamento `"calculated"`), e notifica os demais usuários com permissão `punch_adjustment.manage`/`*` (exceto quem criou).
+
+### Espelho de ponto (`/timeclock/mirror`) (2026-07-06)
+
+Documentação completa em [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06).
+
+```
+GET /timeclock/mirror           (timeclock.view) ?employee_id&date_from&date_to → grade diária (batidas, crédito/débito, HE 50%/100%, adicional noturno, saldo)
+GET /timeclock/mirror/by-sector (timeclock.view) ?sector_id&date_from&date_to → { mirrors: [...] } com um espelho por funcionário ativo do setor
+GET /timeclock/mirror/export    (timeclock.view) ?employee_id&date_from&date_to&format=xlsx|pdf → mesmo relatório em Excel ou PDF (só por funcionário individual)
+```
+
+HE 100% considera domingo, folga agendada (`ScheduleEntry` com `shift_id IS NULL`) **ou feriado cadastrado** em `/timeclock/holidays`. Adicional noturno aplica a hora noturna reduzida da CLT (art. 73 §1º) combinada com o adicional de 20%.
+
+Frontend: `/ponto/espelho`, com seletor "Filtrar por: Funcionário/Setor". Download via proxy Next.js (`web/app/api/ponto/espelho/export/route.ts`) — o browser não tem acesso ao JWT `httpOnly`, então a rota interna lê o token no servidor e repassa `Authorization: Bearer` para a API.
+
+### Feriados (`/timeclock/holidays`) (2026-07-06)
+
+```
+GET    /timeclock/holidays       (holiday.view)   ?year? → lista feriados do tenant (opcionalmente filtrado por ano)
+POST   /timeclock/holidays       (holiday.manage) { date, name } → cria feriado (409 duplicate_date se já existe feriado nessa data)
+DELETE /timeclock/holidays/{id}  (holiday.manage) → remove feriado
+```
+
+Frontend: `/ponto/feriados`. Usado exclusivamente para qualificar HE 100% no espelho de ponto (ver acima) — sem integração com base nacional/municipal de feriados.
+
+### Hora extra paga em dinheiro (`/settings/timeclock`) (2026-07-06)
+
+Documentação completa em [escala-de-trabalho.md](escala-de-trabalho.md#hora-extra-paga-em-dinheiro-2026-07-06).
+
+```
+GET  /settings/timeclock (settings.view) → { overtime_paid_in_cash, cargo_salaries: {cargo: salário} }
+POST /settings/timeclock (settings.edit) { overtime_paid_in_cash, cargo_salaries } → salva configuração
+```
+
+Quando `overtime_paid_in_cash=true`, `GET /timeclock/mirror`/`/mirror/by-sector` passam a incluir `overtime_50_value`/`overtime_100_value` (em R$, `null` quando não há salário resolvível) em cada dia e nos totais. `Employee` ganhou o campo `salary` (`PATCH /employees/{id}`, também em `GET /employees/{id}` como parte do `EmployeeDetailedSummary`) — usado com prioridade sobre `cargo_salaries[job_title]`. Quando o toggle está ligado e há salário resolvível, `POST /timeclock/hour-bank/{id}/recalculate` para de somar a HE ao saldo do banco de horas (só o déficit continua sendo banco de horas negativo).
+
+Frontend: toggle e tabela de "salário-base por cargo" em `/configuracoes` (aba "Ponto"); campo "Salário" em `/cadastros/funcionarios`; valor em R$ exibido sob os minutos de HE 50%/100% em `/ponto/espelho`; aviso em `/ponto/banco-de-horas` quando o toggle está ligado.
+
+### Relatórios — ocorrências e SLA de solicitações fiscais (`/reports`) (2026-07-05)
+
+```
+GET /reports/occurrences         (report.view) ?date_from&date_to → total, por status, por setor, taxa de conclusão, atrasadas, tendência diária
+GET /reports/fiscal-requests-sla (report.view) ?date_from&date_to → total, por status/tipo, sla_compliance_pct, tempo médio de resolução, breakdown por estado de SLA, tendência diária
+```
+
+Sem `date_from`/`date_to`, usa o mês corrente. Frontend: `/relatorios`. Sem exportação (não há endpoint de export nesta primeira entrega).

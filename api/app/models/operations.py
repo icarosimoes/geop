@@ -787,6 +787,22 @@ class LegacyImportRun(Base):
 # ---------------------------------------------------------------------------
 
 
+class Holiday(Base, TenantMixin, TimestampMixin):
+    """Feriado (nacional, estadual ou municipal) cadastrado manualmente pelo
+    tenant, usado para qualificar um dia como dia de descanso no cálculo de
+    hora extra 100% do espelho de ponto (ver mirror.py)."""
+
+    __tablename__ = "holidays"
+    __table_args__ = (
+        UniqueConstraint("company_id", "date", name="uq_holidays_company_date"),
+        Index("ix_holidays_date", "company_id", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    date: Mapped[date] = mapped_column(Date)
+    name: Mapped[str] = mapped_column(String(120))
+
+
 class Shift(Base, TenantMixin, TimestampMixin):
     __tablename__ = "shifts"
 
@@ -907,6 +923,32 @@ class HourBankEntry(Base, TenantMixin):
     # (saldo migrado de outro sistema, lançado manualmente pelo RH).
     source: Mapped[str] = mapped_column(String(20), default="calculated")
     notes: Mapped[str | None] = mapped_column(Text)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PunchExcusal(Base, TenantMixin):
+    """Abono concedido diretamente pelo RH (sem aprovação — quem cria já é o
+    aprovador), justificando um dia ou uma quantidade de minutos sem impactar
+    o banco de horas do funcionário."""
+
+    __tablename__ = "punch_excusals"
+    __table_args__ = (
+        Index("ix_punch_excusals_employee", "company_id", "employee_id"),
+        Index("ix_punch_excusals_date", "company_id", "reference_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    reference_date: Mapped[date] = mapped_column(Date)
+    # Nulo = abona o dia inteiro (usa o expected_minutes da escala do dia).
+    minutes: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(Text)
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
     )

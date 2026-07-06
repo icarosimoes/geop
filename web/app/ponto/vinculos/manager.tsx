@@ -70,23 +70,31 @@ export function EnrollmentManager() {
           gap: "var(--sp-3)",
           padding: "var(--sp-4) var(--sp-5)",
           borderBottom: "1px solid var(--field-border)",
+          flexWrap: "wrap",
+          alignItems: "flex-end",
         }}
       >
-        <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required style={{ flex: 1 }}>
-          <option value="">Selecione o funcionário...</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.name}
-            </option>
-          ))}
-        </select>
-        <input
-          value={externalId}
-          onChange={(e) => setExternalId(e.target.value)}
-          placeholder="Matrícula cadastrada no relógio"
-          required
-          style={{ flex: 1 }}
-        />
+        <div className="report-filter-field" style={{ flex: "1 1 220px" }}>
+          <label htmlFor="enrollment_employee">Funcionário</label>
+          <select id="enrollment_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+            <option value="">Selecione o funcionário...</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="report-filter-field" style={{ flex: "1 1 220px" }}>
+          <label htmlFor="enrollment_external_id">Matrícula no relógio</label>
+          <input
+            id="enrollment_external_id"
+            value={externalId}
+            onChange={(e) => setExternalId(e.target.value)}
+            placeholder="Ex.: 1001"
+            required
+          />
+        </div>
         <button className="primary-button" type="submit" disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Plus size={16} /> {saving ? "Vinculando..." : "Vincular"}
         </button>

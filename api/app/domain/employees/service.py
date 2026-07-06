@@ -31,6 +31,7 @@ IMPORT_FIELDS = (
     "hire_date",
     "termination_date",
     "registration_number",
+    "salary",
 )
 
 
@@ -111,6 +112,7 @@ async def create_employee(
     hire_date: str | None = None,
     termination_date: str | None = None,
     registration_number: str | None = None,
+    salary: float | None = None,
     sector_id: int | None = None,
 ) -> Employee:
     record = Employee(
@@ -134,6 +136,7 @@ async def create_employee(
         hire_date=hire_date,
         termination_date=termination_date,
         registration_number=registration_number,
+        salary=salary,
         sector_id=sector_id,
     )
     session.add(record)

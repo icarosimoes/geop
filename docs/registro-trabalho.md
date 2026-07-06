@@ -630,3 +630,60 @@ Migration `20260705_0048_hour_bank_punch_adjustments.py`. Detalhes completos em 
 - 4 novas permissões: `hour_bank.view`, `hour_bank.manage`, `punch_adjustment.view`, `punch_adjustment.manage`.
 - 13 testes novos (`test_hour_bank.py`, `test_punch_adjustments.py`); suíte completa em 545 testes passando. `web/` e `colaborador/` com typecheck e build limpos.
 - Escopo definido a partir de benchmarking de concorrentes (Sólides Ponto, Flash Controle de Jornada, PontoSimples); itens não priorizados nesta rodada ficam registrados no backlog (férias, sobreaviso, assinatura eletrônica, exportação AFD/ACJEF, integração com ERP de folha).
+
+## 2026-07-06 — Relatórios, abono de ponto com notificações e Espelho de Ponto
+
+### Relatórios (`/relatorios`)
+
+- Novo domínio `api/app/domain/reports/` (`report.view`, migration `20260705_0049`): `GET /reports/occurrences` (por status/setor, taxa de conclusão, tendência diária) e `GET /reports/fiscal-requests-sla` (por status/tipo, `sla_compliance_pct`, breakdown de estado de SLA via `compute_sla_status()` já existente em `app/core/sla.py`, tendência diária). Sem período informado, usa o mês corrente.
+- Frontend `/relatorios`: filtro de período na querystring, gráficos de barra reaproveitando o padrão visual do dashboard. Sem exportação nesta entrega (nenhuma tela do sistema tinha export funcionando até então).
+
+### Ajustes e abono de ponto — tela redesenhada + notificações
+
+- Tela `/ponto/ajustes` redesenhada: abas Pendentes/Aprovados/Rejeitados/Todos (`.segmented`) no lugar do `<select>`, painel de estatísticas (tendência mensal de ajustes + ranking de solicitantes mais/menos frequentes, com avatar), e botões "Ajustar Ponto"/"Abonar Ponto" abrindo drawers laterais.
+- **Abono de ponto** (`PunchExcusal`, novo): lançado diretamente pelo RH (sem aprovação — quem cria já é quem aprova), neutraliza o banco de horas do dia sem apagar o lançamento `"calculated"`. Detalhes em [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06).
+- **Bug de isolamento entre tenants corrigido**: `create_punch_excusal` não validava se `employee_id` pertencia à empresa do usuário logado — corrigido para retornar 404.
+- **Notificações conectadas ao sino**: abono agora notifica outros gestores (excluindo quem criou); clicar numa notificação de ajuste/abono navega para `/ponto/ajustes` (antes só marcava como lida).
+- Novos componentes reutilizáveis: `web/components/avatar.tsx` (imagem com fallback de iniciais) e `web/components/employee-autocomplete.tsx` (busca com filtro por nome, reaproveitando o padrão de `UserAutocomplete` já existente em `operational-module.tsx`, mas com `searchEmployees`).
+
+### Espelho de Ponto (`/ponto/espelho`)
+
+- Grade diária por funcionário/período (1ª/2ª entrada-saída, intervalo, trabalhado, crédito/débito, HE 50%/100%, adicional noturno, saldo) + exportação Excel/PDF. Detalhes completos, incluindo as regras de cálculo assumidas e os cortes de escopo deliberados (sem feriados, sem "hora noturna reduzida", um colaborador por vez, sem AFD/ACJEF), em [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06).
+- Primeiro uso, no projeto, do padrão de proxy de download via Route Handler Next.js (`web/app/api/ponto/espelho/export/route.ts`) — necessário porque o JWT é `httpOnly` e o browser não pode chamar a API externa diretamente para baixar um arquivo.
+
+### Achados de infraestrutura de testes
+
+- A suíte de testes (`api/tests/`) roda contra o mesmo banco de desenvolvimento — não há `TEST_DATABASE_URL` isolado. Isso causa acúmulo de dados de teste no ambiente de dev a cada execução, e uma colisão real: `test_hour_bank.py::test_recalculate_hour_bank_matches_exact_shift` usa a data hardcoded `2026-07-06`, que colide com a batida de demonstração que o script de seed fictício de ponto gera ancorada em "hoje" quando a data fictícia do ambiente cai exatamente nesse dia. Não corrigido nesta rodada (exigiria banco de teste isolado ou revisão das datas hardcoded) — registrado no backlog.
+- Nenhum teste automatizado (`pytest`) foi adicionado para abono/espelho/notificações — verificação foi manual (curl + navegador headless via skill `run-web`).
+
+### Padronização visual dos formulários de filtro (módulo Ponto)
+
+Revisão UI/UX de todas as telas de `/ponto` (Batidas, Banco de Horas, Dispositivos, Vínculos, Escalas de Trabalho, Espelho, Contracheques), verificada telas por tela com a skill `run-web` (Playwright headless) comparando screenshot antes/depois e conferindo `getComputedStyle` quando a diferença visual não era óbvia. Padrão documentado em [web-rotas-ui.md](web-rotas-ui.md#padrão-de-campo-e-filtro-report-filter-field) para ser seguido em toda tela nova.
+
+- **Bug real corrigido**: botões `.primary-button`/`.secondary-button` dentro de `.module-toolbar` (Batidas, Cadastros → Funcionários) ficavam com texto branco sobre fundo branco — completamente invisíveis — por conflito de especificidade CSS (`.module-toolbar button` com seletor elemento+classe vencia `.primary-button` de classe única). Corrigido com regras `.module-toolbar .primary-button`/`.secondary-button` de maior especificidade.
+- **Bug real corrigido**: `<input type="date">` soltos (fora de `<label>`) dentro de `.module-toolbar` herdavam `width: 100%` de uma regra pensada para o padrão de busca com ícone, forçando cada campo a quebrar sozinho numa linha cheia. Escopo da regra reduzido para `.module-toolbar label input`.
+- Criadas as classes reutilizáveis `.report-filter-field` (label acima do campo + borda/altura padrão), `.report-filter-group` (subgrupo que quebra linha como bloco), `.col-num`/`.balance-negative` (alinhamento numérico em tabelas com saldo/minutos) e `.nav-arrow-button` (navegação `‹ ›` fora de paginação de tabela) em `web/app/globals.css`.
+- Estilizado o seletor nativo de arquivo (`input[type="file"]`) via `::file-selector-button`/`::-webkit-file-upload-button` para parecer um `secondary-button` — usado em Contracheques.
+- Aplicado em Espelho de Ponto, Banco de Horas, Dispositivos, Vínculos e Escalas de Trabalho, que antes usavam `<input>`/`<select>` sem classe (borda cinza nativa `rgb(118,118,118)`, cantos retos).
+- **Limitação de verificação**: o botão de escolha de arquivo (`::file-selector-button`) não renderiza estilizado no Chromium headless shell usado pela skill `run-web` neste ambiente (a mesma engine aplica o CSS via `getComputedStyle` mas não pinta com ele) — comportamento correto esperado em Chrome/Edge/Firefox reais, mas não pôde ser confirmado visualmente aqui. Vale conferir num browser real na próxima vez que a tela de Contracheques for tocada.
+
+### Cadastro de Funcionários: formulário de criação/edição virou modal sobreposto
+
+- `/cadastros/funcionarios` tinha um formulário de 18 campos que era inserido *inline* na página (empurrando a tabela para baixo) tanto para criar quanto para editar. Reativado o padrão `.modal-layer`/`.record-modal`/`.form-grid` (já existente em `globals.css`, mas sem nenhum uso no código até então) — clicar em "Novo funcionário" ou no lápis de editar agora abre um modal centralizado com backdrop, em vez de deformar o layout da lista.
+- `.record-modal.has-timeline` (720px) é aplicado dinamicamente quando "Ver histórico" está aberto, para caber a tabela de timeline ao lado/abaixo do formulário sem espremer os campos.
+- Fechamento por clique no backdrop (`stopPropagation` no card interno) ou pelo X no header, seguindo o mesmo padrão do drawer usado em `/ponto/ajustes`.
+- Botões "Importar CSV"/"Novo funcionário" no toolbar deixaram de ficar escondidos enquanto o formulário estava aberto (não fazia mais sentido escondê-los, já que o formulário não ocupa mais espaço da página).
+
+### Calendário de Escalas: horário do turno visível na célula
+
+- Cada célula do calendário em `/ponto/escalas` mostrava só o nome do turno (ex.: "Tarde"); agora mostra também o horário (`15:00–23:00`) abaixo do nome, usando os campos `start_time`/`end_time` que a API já retornava em `CalendarEntry` mas o frontend não exibia.
+
+## 2026-07-06 — Conformidade CLT no espelho de ponto: feriados, hora noturna reduzida e filtro por setor
+
+Implementação dos três itens pendentes de P11 (feriados, hora noturna reduzida, filtro por equipe) a pedido explícito do usuário, após ele revisar o backlog de conformidade do módulo Ponto. Detalhes completos em [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06).
+
+- **Feriados**: novo modelo `Holiday` (`holidays`, migration `20260706_0051`, com RLS e permissões `holiday.view`/`holiday.manage` seedadas na mesma migration). CRUD simples em `/ponto/feriados`, primeira tela nova construída já usando o padrão `report-filter-field` documentado hoje mais cedo. `get_holiday_dates()` busca as datas do período uma vez por chamada do espelho (não uma query por dia). Feriado entra na regra de HE 100% (`is_rest_day`) e aparece na coluna Observações.
+- **Hora noturna reduzida**: `mirror.py` mudou de `total * 0.20` para `total * NIGHT_COMBINED_RATE`, onde `NIGHT_COMBINED_RATE = (60/52.5 - 1) + 0.20 ≈ 0,342857` — soma o efeito da hora noturna reduzida (CLT art. 73 §1º: hora noturna = 52min30s de relógio) com o adicional de 20%, aplicado como um único percentual sobre os minutos noturnos reais (simplificação assumida e documentada, em vez de recalcular a jornada em "horas noturnas" separadamente).
+- **Filtro por Setor**: `GET /timeclock/mirror/by-sector` (`build_sector_mirrors()`) itera os funcionários ativos do setor e reaproveita `build_employee_mirror()` por funcionário — sem otimização de N+1 entre funcionários. Frontend ganhou um seletor "Filtrar por: Funcionário/Setor"; no modo Setor renderiza um card de espelho por funcionário. Exportação Excel/PDF continua só por funcionário individual (não há export em lote por setor).
+- **Testes**: `api/tests/test_holidays.py` (5 testes novos) cobre CRUD de feriados (incluindo conflito de data duplicada), HE 100% com feriado, a taxa combinada do adicional noturno, e o espelho por setor. Suíte completa: 544 passando (era 539 antes desta rodada).
+- **Correção incidental**: o horário do turno (não só o nome) passou a aparecer nas células do calendário de `/ponto/escalas`, e o formulário de criar/editar funcionário em `/cadastros/funcionarios` deixou de ser inline e virou modal sobreposto (`.record-modal`), a pedido do usuário na mesma sessão.

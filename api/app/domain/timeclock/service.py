@@ -3,7 +3,7 @@ import secrets
 from datetime import date, datetime, time, timedelta
 
 import bcrypt
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,16 +12,19 @@ from app.core.cache import invalidate_dashboard
 from app.core.validators import normalize_doc
 from app.domain.attachments.service import create_attachment
 from app.domain.notifications.service import create_notification
+from app.domain.settings.router import get_company_setting
 from app.domain.timeclock.schemas import RotatingPattern, WeeklyPattern
 from app.models import (
     Company,
     Employee,
     EmployeeCredential,
     EmployeePayslip,
+    Holiday,
     HourBankEntry,
     Location,
     Permission,
     PunchAdjustmentRequest,
+    PunchExcusal,
     Role,
     ScheduleEntry,
     Shift,
@@ -656,6 +659,78 @@ async def delete_enrollment(
 
 
 # ---------------------------------------------------------------------------
+# Feriados (calendário para qualificar HE 100% no espelho de ponto)
+# ---------------------------------------------------------------------------
+
+
+async def list_holidays(
+    session: AsyncSession, company_id: int, *, year: int | None = None
+) -> list[Holiday]:
+    stmt = select(Holiday).where(Holiday.company_id == company_id)
+    if year is not None:
+        stmt = stmt.where(func.extract("year", Holiday.date) == year)
+    stmt = stmt.order_by(Holiday.date)
+    return list((await session.scalars(stmt)).all())
+
+
+async def get_holiday_dates(
+    session: AsyncSession, company_id: int, start_date: date, end_date: date
+) -> set[date]:
+    rows = await session.scalars(
+        select(Holiday.date).where(
+            Holiday.company_id == company_id,
+            Holiday.date >= start_date,
+            Holiday.date <= end_date,
+        )
+    )
+    return set(rows.all())
+
+
+async def create_holiday(
+    session: AsyncSession, company_id: int, actor_id: int, *, holiday_date: date, name: str
+) -> Holiday:
+    record = Holiday(company_id=company_id, date=holiday_date, name=name)
+    session.add(record)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raise ValueError("duplicate_date") from None
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="holiday",
+        entity_id=record.id,
+        event_type="create",
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record
+
+
+async def delete_holiday(
+    session: AsyncSession, company_id: int, actor_id: int, holiday_id: int
+) -> bool:
+    record = await session.scalar(
+        select(Holiday).where(Holiday.id == holiday_id, Holiday.company_id == company_id)
+    )
+    if record is None:
+        return False
+    await session.delete(record)
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="holiday",
+        entity_id=holiday_id,
+        event_type="delete",
+    )
+    await session.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Batidas
 # ---------------------------------------------------------------------------
 
@@ -849,6 +924,18 @@ async def list_punches(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_salary(
+    employee_salary: float | None, job_title: str | None, cargo_salaries: dict
+) -> float | None:
+    """Salário individual do funcionário, com fallback para o salário-base do
+    cargo (config de tenant) quando o funcionário não tem `salary` cadastrado."""
+    if employee_salary is not None:
+        return float(employee_salary)
+    if job_title and job_title.strip() in cargo_salaries:
+        return float(cargo_salaries[job_title.strip()])
+    return None
+
+
 def _shift_expected_minutes(shift: Shift | None) -> int:
     if shift is None:
         return 0
@@ -865,20 +952,28 @@ def _shift_expected_minutes(shift: Shift | None) -> int:
     return max(total, 0)
 
 
-def _pair_punches_worked_minutes(punches: list[TimePunch]) -> int:
-    """Pareia batidas 'in'/'out' em ordem cronológica e soma a duração dos pares
-    completos. Batidas sem tipo definido ou desemparelhadas são ignoradas. Turnos
-    noturnos cuja batida de saída cai no dia seguinte são contados no dia da
-    batida de saída, não no dia do turno — limitação conhecida do MVP."""
+def _pair_punches(punches: list[TimePunch]) -> list[tuple[datetime, datetime]]:
+    """Pareia batidas 'in'/'out' em ordem cronológica, retornando os pares
+    completos (entrada, saída). Batidas sem tipo definido ou desemparelhadas
+    são ignoradas. Turnos noturnos cuja batida de saída cai no dia seguinte
+    são contados no dia da batida de saída, não no dia do turno — limitação
+    conhecida do MVP."""
     ordered = sorted(punches, key=lambda p: p.punched_at)
-    total_minutes = 0
+    pairs: list[tuple[datetime, datetime]] = []
     open_in: datetime | None = None
     for punch in ordered:
         if punch.punch_type == "in":
             open_in = punch.punched_at
         elif punch.punch_type == "out" and open_in is not None:
-            total_minutes += int((punch.punched_at - open_in).total_seconds() // 60)
+            pairs.append((open_in, punch.punched_at))
             open_in = None
+    return pairs
+
+
+def _pair_punches_worked_minutes(punches: list[TimePunch]) -> int:
+    total_minutes = sum(
+        int((out - inn).total_seconds() // 60) for inn, out in _pair_punches(punches)
+    )
     return max(total_minutes, 0)
 
 
@@ -906,6 +1001,24 @@ async def recalculate_hour_bank(
     for punch in punches:
         punches_by_date.setdefault(punch.punched_at.date(), []).append(punch)
 
+    holiday_dates = await get_holiday_dates(session, company_id, start_date, end_date)
+    timeclock_settings = await get_company_setting(session, company_id, "timeclock")
+    employee_row = (
+        await session.execute(
+            select(Employee.salary, Employee.job_title).where(
+                Employee.id == employee_id, Employee.company_id == company_id
+            )
+        )
+    ).first()
+    employee_salary, job_title = employee_row if employee_row else (None, None)
+    salary = _resolve_salary(
+        employee_salary, job_title, timeclock_settings.get("cargo_salaries", {})
+    )
+    # Só exclui HE do banco de horas se o toggle estiver ligado E houver um
+    # salário resolvível (individual ou por cargo) — sem isso, a HE não teria
+    # como ser paga em dinheiro e teria que continuar virando banco de horas.
+    overtime_paid_in_cash = bool(timeclock_settings.get("overtime_paid_in_cash")) and bool(salary)
+
     affected = 0
     current = start_date
     while current <= end_date:
@@ -914,6 +1027,20 @@ async def recalculate_hour_bank(
         )
         expected_minutes = 0 if forced_status else _shift_expected_minutes(shift)
         worked_minutes = _pair_punches_worked_minutes(punches_by_date.get(current, []))
+
+        is_rest_day = (
+            forced_status == "day_off" or current.weekday() == 6 or current in holiday_dates
+        )
+        if overtime_paid_in_cash:
+            # HE (50%/100%) é paga em dinheiro (ver espelho de ponto), não vira
+            # saldo de banco de horas — só o déficit (trabalhou menos que o
+            # esperado) continua sendo banco de horas negativo.
+            overtime_minutes = (
+                worked_minutes if is_rest_day else max(0, worked_minutes - expected_minutes)
+            )
+            balance_minutes = worked_minutes - expected_minutes - overtime_minutes
+        else:
+            balance_minutes = worked_minutes - expected_minutes
 
         entry = await session.scalar(
             select(HourBankEntry).where(
@@ -933,7 +1060,7 @@ async def recalculate_hour_bank(
             session.add(entry)
         entry.expected_minutes = expected_minutes
         entry.worked_minutes = worked_minutes
-        entry.balance_minutes = worked_minutes - expected_minutes
+        entry.balance_minutes = balance_minutes
         entry.created_by_user_id = actor_id
         affected += 1
         current += timedelta(days=1)
@@ -999,21 +1126,31 @@ async def get_hour_bank_summary(
 # ---------------------------------------------------------------------------
 
 
-async def _notify_punch_adjustment_managers(
-    session: AsyncSession, company_id: int, employee_name: str, request_id: int
+async def _notify_punch_managers(
+    session: AsyncSession,
+    company_id: int,
+    *,
+    title: str,
+    body: str,
+    entity_type: str,
+    entity_id: int,
+    exclude_user_id: int | None = None,
 ) -> None:
+    filters = [
+        User.company_id == company_id,
+        User.active.is_(True),
+        User.deleted_at.is_(None),
+        Permission.code.in_(["punch_adjustment.manage", "*"]),
+    ]
+    if exclude_user_id is not None:
+        filters.append(User.id != exclude_user_id)
     user_ids = (
         await session.scalars(
             select(User.id)
             .join(Role, Role.id == User.role_id)
             .join(role_permissions, role_permissions.c.role_id == Role.id)
             .join(Permission, Permission.id == role_permissions.c.permission_id)
-            .where(
-                User.company_id == company_id,
-                User.active.is_(True),
-                User.deleted_at.is_(None),
-                Permission.code.in_(["punch_adjustment.manage", "*"]),
-            )
+            .where(*filters)
             .distinct()
         )
     ).all()
@@ -1022,12 +1159,25 @@ async def _notify_punch_adjustment_managers(
             session,
             company_id=company_id,
             user_id=uid,
-            title=f"Nova solicitação de ajuste de ponto de {employee_name}",
-            body="Aguardando aprovação no Portal Administrativo.",
+            title=title,
+            body=body,
             category="create",
-            entity_type="punch_adjustment_request",
-            entity_id=request_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
         )
+
+
+async def _notify_punch_adjustment_managers(
+    session: AsyncSession, company_id: int, employee_name: str, request_id: int
+) -> None:
+    await _notify_punch_managers(
+        session,
+        company_id,
+        title=f"Nova solicitação de ajuste de ponto de {employee_name}",
+        body="Aguardando aprovação no Portal Administrativo.",
+        entity_type="punch_adjustment_request",
+        entity_id=request_id,
+    )
 
 
 async def create_punch_adjustment_request(
@@ -1088,7 +1238,7 @@ async def list_punch_adjustment_requests(
     total = await session.scalar(select(func.count(PunchAdjustmentRequest.id)).where(*filters)) or 0
     rows = (
         await session.execute(
-            select(PunchAdjustmentRequest, Employee.name)
+            select(PunchAdjustmentRequest, Employee.name, Employee.avatar_url)
             .join(Employee, Employee.id == PunchAdjustmentRequest.employee_id)
             .where(*filters)
             .order_by(PunchAdjustmentRequest.created_at.desc())
@@ -1163,6 +1313,174 @@ async def review_punch_adjustment_request(
     await session.commit()
     await session.refresh(record)
     return record, None
+
+
+async def create_punch_excusal(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    *,
+    employee_id: int,
+    reference_date: date,
+    minutes: int | None,
+    reason: str,
+) -> PunchExcusal | None:
+    """Abona um dia (ou uma quantidade de minutos) do funcionário, neutralizando
+    o impacto no banco de horas sem apagar o lançamento 'calculated' do dia."""
+    employee_exists = await session.scalar(
+        select(Employee.id).where(
+            Employee.id == employee_id,
+            Employee.company_id == company_id,
+            Employee.deleted_at.is_(None),
+        )
+    )
+    if employee_exists is None:
+        return None
+
+    shift, forced_status = await _resolve_schedule_for_date(
+        session, company_id, employee_id, reference_date
+    )
+    expected_minutes = 0 if forced_status else _shift_expected_minutes(shift)
+    excused_minutes = minutes if minutes is not None else expected_minutes
+
+    record = PunchExcusal(
+        company_id=company_id,
+        employee_id=employee_id,
+        reference_date=reference_date,
+        minutes=minutes,
+        reason=reason,
+        created_by_user_id=actor_id,
+    )
+    session.add(record)
+
+    entry = await session.scalar(
+        select(HourBankEntry).where(
+            HourBankEntry.company_id == company_id,
+            HourBankEntry.employee_id == employee_id,
+            HourBankEntry.reference_date == reference_date,
+            HourBankEntry.source == "excused",
+        )
+    )
+    if entry is None:
+        entry = HourBankEntry(
+            company_id=company_id,
+            employee_id=employee_id,
+            reference_date=reference_date,
+            source="excused",
+        )
+        session.add(entry)
+    entry.expected_minutes = excused_minutes
+    entry.worked_minutes = excused_minutes
+    entry.balance_minutes = 0
+    entry.notes = reason
+    entry.created_by_user_id = actor_id
+
+    await session.flush()
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=actor_id,
+        entity_type="punch_excusal",
+        entity_id=record.id,
+        event_type="create",
+    )
+    employee_name = await session.scalar(select(Employee.name).where(Employee.id == employee_id))
+    await _notify_punch_managers(
+        session,
+        company_id,
+        title=f"Abono de ponto lançado para {employee_name or 'funcionário'}",
+        body=f"{excused_minutes} minuto(s) abonado(s) em {reference_date.strftime('%d/%m/%Y')}.",
+        entity_type="punch_excusal",
+        entity_id=record.id,
+        exclude_user_id=actor_id,
+    )
+    await session.commit()
+    await invalidate_dashboard(company_id)
+    await session.refresh(record)
+    return record
+
+
+async def list_punch_excusals(
+    session: AsyncSession,
+    company_id: int,
+    page: int,
+    page_size: int,
+    *,
+    employee_id: int | None = None,
+) -> tuple[list[tuple], int]:
+    filters = [PunchExcusal.company_id == company_id]
+    if employee_id is not None:
+        filters.append(PunchExcusal.employee_id == employee_id)
+
+    total = await session.scalar(select(func.count(PunchExcusal.id)).where(*filters)) or 0
+    rows = (
+        await session.execute(
+            select(PunchExcusal, Employee.name, Employee.avatar_url)
+            .join(Employee, Employee.id == PunchExcusal.employee_id)
+            .where(*filters)
+            .order_by(PunchExcusal.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    return rows, total
+
+
+async def get_punch_adjustment_stats(session: AsyncSession, company_id: int) -> dict:
+    now = datetime.now()
+    months: list[date] = []
+    cursor = now.replace(day=1)
+    for _ in range(6):
+        months.append(cursor.date())
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    months.reverse()
+    period_start = datetime.combine(months[0], time.min)
+
+    month_trunc = func.date_trunc(literal_column("'month'"), PunchAdjustmentRequest.created_at)
+    trend_rows = (
+        await session.execute(
+            select(month_trunc, func.count(PunchAdjustmentRequest.id))
+            .where(
+                PunchAdjustmentRequest.company_id == company_id,
+                PunchAdjustmentRequest.created_at >= period_start,
+            )
+            .group_by(month_trunc)
+        )
+    ).all()
+    counts_by_month = {d.date().replace(day=1).isoformat(): c for d, c in trend_rows}
+    monthly_trend = [
+        {"month": m.isoformat(), "count": counts_by_month.get(m.isoformat(), 0)} for m in months
+    ]
+
+    by_employee_rows = (
+        await session.execute(
+            select(
+                PunchAdjustmentRequest.employee_id,
+                Employee.name,
+                Employee.avatar_url,
+                func.count(PunchAdjustmentRequest.id),
+            )
+            .join(Employee, Employee.id == PunchAdjustmentRequest.employee_id)
+            .where(PunchAdjustmentRequest.company_id == company_id)
+            .group_by(PunchAdjustmentRequest.employee_id, Employee.name, Employee.avatar_url)
+        )
+    ).all()
+
+    ranked_desc = sorted(by_employee_rows, key=lambda r: r[3], reverse=True)
+    top_requesters = [
+        {"employee_id": eid, "name": name, "avatar_url": avatar, "count": count}
+        for eid, name, avatar, count in ranked_desc[:5]
+    ]
+    least_requesters = [
+        {"employee_id": eid, "name": name, "avatar_url": avatar, "count": count}
+        for eid, name, avatar, count in sorted(by_employee_rows, key=lambda r: r[3])[:5]
+    ]
+
+    return {
+        "monthly_trend": monthly_trend,
+        "top_requesters": top_requesters,
+        "least_requesters": least_requesters,
+    }
 
 
 # ---------------------------------------------------------------------------

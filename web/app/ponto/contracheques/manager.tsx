@@ -84,37 +84,40 @@ export function PayslipImportManager({ user }: { user: TenantUser }) {
         </p>
         <button
           type="button"
+          className="secondary-button"
           onClick={downloadTemplate}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)", marginBottom: "var(--sp-4)" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "var(--sp-4)" }}
         >
           <Download size={16} /> Baixar modelo de manifesto
         </button>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)", maxWidth: 480 }}>
-          <label>
-            Manifesto (.csv)
+        <div className="report-filter-bar" style={{ margin: 0, boxShadow: "none" }}>
+          <div className="report-filter-field">
+            <label htmlFor="manifest_file">Manifesto (.csv)</label>
             <input
+              id="manifest_file"
               type="file"
               accept=".csv,text/csv"
               onChange={(e) => setManifest(e.target.files?.[0] ?? null)}
               disabled={importing}
             />
-          </label>
-          <label>
-            Arquivo com os PDFs (.zip)
+          </div>
+          <div className="report-filter-field">
+            <label htmlFor="archive_file">Arquivo com os PDFs (.zip)</label>
             <input
+              id="archive_file"
               type="file"
               accept=".zip,application/zip"
               onChange={(e) => setArchive(e.target.files?.[0] ?? null)}
               disabled={importing}
             />
-          </label>
+          </div>
           <button
             className="primary-button"
             type="button"
             onClick={handleImport}
             disabled={!manifest || !archive || importing}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
             <Upload size={16} /> {importing ? "Importando..." : "Importar contracheques"}
           </button>

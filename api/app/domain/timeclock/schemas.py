@@ -199,6 +199,7 @@ class PunchAdjustmentSummary(BaseModel):
     id: int
     employee_id: int
     employee_name: str
+    employee_avatar_url: str | None = None
     punch_id: int | None
     requested_punched_at: datetime
     requested_punch_type: str | None
@@ -221,6 +222,111 @@ class PunchAdjustmentListResponse(BaseModel):
 class PunchAdjustmentReview(BaseModel):
     approve: bool
     review_notes: str | None = None
+
+
+class RequesterStat(BaseModel):
+    employee_id: int
+    name: str
+    avatar_url: str | None
+    count: int
+
+
+class AdjustmentMonthTrend(BaseModel):
+    month: str
+    count: int
+
+
+class AdjustmentStatsResponse(BaseModel):
+    monthly_trend: list[AdjustmentMonthTrend]
+    top_requesters: list[RequesterStat]
+    least_requesters: list[RequesterStat]
+
+
+class PunchExcusalCreate(BaseModel):
+    employee_id: int
+    reference_date: date
+    minutes: int | None = None
+    reason: str = Field(min_length=3)
+
+
+class PunchExcusalSummary(BaseModel):
+    id: int
+    employee_id: int
+    employee_name: str
+    employee_avatar_url: str | None = None
+    reference_date: date
+    minutes: int | None
+    reason: str
+    created_by_user_id: int | None
+    created_at: datetime
+
+
+class PunchExcusalListResponse(BaseModel):
+    items: list[PunchExcusalSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class DayMirrorEntry(BaseModel):
+    date: date
+    first_in: datetime | None
+    first_out: datetime | None
+    second_in: datetime | None
+    second_out: datetime | None
+    credit_minutes: int
+    debit_minutes: int
+    break_minutes: int
+    worked_minutes: int
+    overtime_50_minutes: int
+    overtime_100_minutes: int
+    overtime_50_value: float | None = None
+    overtime_100_value: float | None = None
+    night_differential_minutes: int
+    balance_minutes: int
+    notes: str
+
+
+class MirrorTotals(BaseModel):
+    credit_minutes: int
+    debit_minutes: int
+    break_minutes: int
+    worked_minutes: int
+    overtime_50_minutes: int
+    overtime_100_minutes: int
+    overtime_50_value: float | None = None
+    overtime_100_value: float | None = None
+    night_differential_minutes: int
+    balance_minutes: int
+
+
+class EmployeeMirrorResponse(BaseModel):
+    employee_id: int
+    employee_name: str
+    employee_avatar_url: str | None
+    sector_name: str | None
+    days: list[DayMirrorEntry]
+    totals: MirrorTotals
+
+
+class SectorMirrorResponse(BaseModel):
+    mirrors: list[EmployeeMirrorResponse]
+
+
+# ---------------------------------------------------------------------------
+# Feriados
+# ---------------------------------------------------------------------------
+
+
+class HolidayCreate(BaseModel):
+    date: date
+    name: str
+
+
+class HolidaySummary(BaseModel):
+    id: int
+    date: date
+    name: str
 
 
 # ---------------------------------------------------------------------------

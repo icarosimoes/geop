@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Landmark, Plug, Shield, ShieldCheck, User } from "lucide-react";
+import { Clock, Landmark, Plug, Shield, ShieldCheck, User } from "lucide-react";
 import type { TenantUser } from "@/lib/api";
-import { CompanySettingsSection, BrevoSettingsSection, EvolutionSettingsSection, ProfileForm } from "@/components/settings-sections";
+import { CompanySettingsSection, BrevoSettingsSection, EvolutionSettingsSection, TimeclockSettingsSection, ProfileForm } from "@/components/settings-sections";
 import { OperationalModule } from "@/components/operational-module";
 import { RoleManager } from "@/components/role-manager";
 import type { ModuleDefinition } from "@/lib/module-definitions";
@@ -13,6 +13,7 @@ const tabs = [
   { key: "estabelecimento", label: "Estabelecimento", icon: Landmark },
   { key: "usuarios", label: "Usuários", icon: ShieldCheck },
   { key: "perfis", label: "Perfis de acesso", icon: Shield },
+  { key: "ponto", label: "Ponto", icon: Clock },
   { key: "integracoes", label: "Integrações", icon: Plug },
   { key: "conta", label: "Minha conta", icon: User },
 ] as const;
@@ -85,6 +86,7 @@ export function SettingsTabs({
         {activeTab === "perfis" && roles && permissionGroups && (
           <RoleManager roles={roles} permissionGroups={permissionGroups} user={user} />
         )}
+        {activeTab === "ponto" && <TimeclockSettingsSection />}
         {activeTab === "integracoes" && (
           <div className="settings-form">
             <BrevoSettingsSection />

@@ -77,36 +77,47 @@ export function DeviceManager() {
         onSubmit={handleCreate}
         style={{
           display: "flex",
+          flexDirection: "column",
           gap: "var(--sp-3)",
           padding: "var(--sp-4) var(--sp-5)",
           borderBottom: "1px solid var(--field-border)",
-          flexWrap: "wrap",
         }}
       >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nome do relógio (ex.: Recepção)"
-          required
-          style={{ flex: 2, minWidth: 200 }}
-        />
-        <input
-          value={serial}
-          onChange={(e) => setSerial(e.target.value)}
-          placeholder="Número de série (opcional)"
-          style={{ flex: 1, minWidth: 160 }}
-        />
-        <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={{ flex: 1, minWidth: 160 }}>
-          <option value="">Local (opcional)</option>
-          {locations.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.name}
-            </option>
-          ))}
-        </select>
-        <button className="primary-button" type="submit" disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Plus size={16} /> {saving ? "Criando..." : "Adicionar"}
-        </button>
+        <div className="report-filter-field">
+          <label htmlFor="device_name">Nome do relógio</label>
+          <input
+            id="device_name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex.: Recepção"
+            required
+          />
+        </div>
+        <div className="report-filter-group">
+          <div className="report-filter-field" style={{ flex: "1 1 200px" }}>
+            <label htmlFor="device_serial">Número de série</label>
+            <input
+              id="device_serial"
+              value={serial}
+              onChange={(e) => setSerial(e.target.value)}
+              placeholder="Opcional"
+            />
+          </div>
+          <div className="report-filter-field" style={{ flex: "1 1 200px" }}>
+            <label htmlFor="device_location">Local</label>
+            <select id="device_location" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              <option value="">Opcional</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="primary-button" type="submit" disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Plus size={16} /> {saving ? "Criando..." : "Adicionar"}
+          </button>
+        </div>
       </form>
 
       {newToken && (

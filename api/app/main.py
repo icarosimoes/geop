@@ -38,6 +38,7 @@ from app.domain.platform.webhook_router import router as asaas_webhook_router
 from app.domain.preventive_plans.router import router as preventive_plans_router
 from app.domain.procedures.router import router as procedures_router
 from app.domain.registries.router import router as registries_router
+from app.domain.reports.router import router as reports_router
 from app.domain.roles.router import router as roles_router
 from app.domain.settings.router import router as settings_router
 from app.domain.shift_reports.router import router as shift_reports_router
@@ -137,6 +138,7 @@ v1_router.include_router(dashboard_router)
 v1_router.include_router(employees_router)
 v1_router.include_router(occurrences_router)
 v1_router.include_router(fiscal_requests_router)
+v1_router.include_router(reports_router)
 v1_router.include_router(users_router)
 v1_router.include_router(registries_router)
 v1_router.include_router(modules_router)

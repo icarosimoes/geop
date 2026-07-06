@@ -75,6 +75,7 @@ def _to_detailed_summary(employee, external_ids=None, sector_name=None) -> Emplo
         hire_date=employee.hire_date,
         termination_date=employee.termination_date,
         registration_number=employee.registration_number,
+        salary=float(employee.salary) if employee.salary is not None else None,
         sector_id=employee.sector_id,
         sector_name=sector_name,
         created_at=employee.created_at,
@@ -163,6 +164,7 @@ async def create_employee_endpoint(
         hire_date=body.hire_date,
         termination_date=body.termination_date,
         registration_number=body.registration_number,
+        salary=body.salary,
         sector_id=body.sector_id,
     )
     return _to_summary(record)
