@@ -83,6 +83,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
   const [resetPin, setResetPin] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [sectors, setSectors] = useState<RegistryOption[]>([]);
+  const [functions, setFunctions] = useState<RegistryOption[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<TimelineEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -115,6 +116,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
 
   useEffect(() => {
     fetchRegistryOptions("Setor").then(setSectors);
+    fetchRegistryOptions("Função").then(setFunctions);
   }, []);
 
   function resetForm() {
@@ -558,12 +560,17 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
           </div>
           <div>
             <label>Cargo</label>
-            <input
-              type="text"
+            <select
               value={formData.job_title ?? ""}
               onChange={(e) => setField("job_title", e.target.value)}
-              placeholder="Recepcionista, Camareira..."
-            />
+            >
+              <option value="">—</option>
+              {functions.map((fn) => (
+                <option key={fn.id} value={fn.name}>
+                  {fn.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label>Matrícula</label>

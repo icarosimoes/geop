@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { loginAction } from "@/app/actions";
 
 export default function LoginPage() {
@@ -12,6 +13,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [tenants, setTenants] = useState<{ id: number; name: string }[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<number | null>(null);
+
+  function resetTenants() {
+    setTenants([]);
+    setSelectedTenant(null);
+    setError("");
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,68 +40,72 @@ export default function LoginPage() {
 
   return (
     <main className="tenant-login-page">
-      <section className="tenant-login-copy">
+      <div className="tenant-login-brand">
         <span className="tenant-login-logo">R</span>
-        <div>
-          <p className="eyebrow">REGISTRO</p>
-          <h1>Operação organizada, decisões mais rápidas.</h1>
-          <p>Ocorrências, inspeções, reuniões e equipes no mesmo lugar.</p>
-        </div>
-        <small>Plataforma SaaS multitenant</small>
-      </section>
+        <strong>Registro</strong>
+        <span>Gestão operacional hoteleira</span>
+      </div>
 
-      <section className="tenant-login-form-wrap">
-        <div className="tenant-login-card">
+      <div className="tenant-login-card">
+        {tenants.length > 1 ? (
+          <button type="button" className="tenant-login-back" onClick={resetTenants}>
+            <ArrowLeft size={14} /> Trocar e-mail
+          </button>
+        ) : (
           <p className="eyebrow">Bem-vindo</p>
-          <h2>Acesse sua empresa</h2>
-          <p>Entre com seu e-mail e senha.</p>
-          {error && <div className="login-error">{error}</div>}
-          <form onSubmit={handleSubmit}>
-            <label>
-              E-mail
-              <input
-                name="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setTenants([]); setSelectedTenant(null); }}
-                autoComplete="username"
-              />
-            </label>
-            <label>
-              Senha
-              <input
-                name="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </label>
-            {tenants.length > 1 && (
-              <fieldset className="tenant-selector">
-                <legend>Selecione a empresa</legend>
-                {tenants.map((t) => (
-                  <label key={t.id} className={`tenant-option${selectedTenant === t.id ? " selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="tenant"
-                      value={t.id}
-                      checked={selectedTenant === t.id}
-                      onChange={() => setSelectedTenant(t.id)}
-                    />
-                    {t.name}
-                  </label>
-                ))}
-              </fieldset>
-            )}
-            <button type="submit" disabled={isPending || (tenants.length > 1 && !selectedTenant)}>
-              {isPending ? "Entrando..." : "Entrar no Registro"}
-            </button>
-          </form>
-        </div>
-      </section>
+        )}
+        <h2>{tenants.length > 1 ? "Selecione a empresa" : "Acesse sua conta"}</h2>
+        <p>
+          {tenants.length > 1
+            ? `O e-mail ${email} tem acesso a mais de uma empresa.`
+            : "Entre com seu e-mail e senha — a empresa é identificada automaticamente."}
+        </p>
+        {error && <div className="login-error">{error}</div>}
+        <form onSubmit={handleSubmit}>
+          <label>
+            E-mail
+            <input
+              name="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); resetTenants(); }}
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            Senha
+            <input
+              name="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {tenants.length > 1 && (
+            <fieldset className="tenant-selector">
+              <legend>Empresa</legend>
+              {tenants.map((t) => (
+                <label key={t.id} className={`tenant-option${selectedTenant === t.id ? " selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name="tenant"
+                    value={t.id}
+                    checked={selectedTenant === t.id}
+                    onChange={() => setSelectedTenant(t.id)}
+                  />
+                  {t.name}
+                </label>
+              ))}
+            </fieldset>
+          )}
+          <button type="submit" disabled={isPending || (tenants.length > 1 && !selectedTenant)}>
+            {isPending ? "Entrando..." : "Entrar"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

@@ -108,6 +108,15 @@ O `globals.css` utiliza um sistema de design tokens para garantir consistência 
 
 Todo novo CSS deve usar esses tokens em vez de valores hardcoded.
 
+## Tela de login (2026-07-06)
+
+`/login` (`web/app/login/page.tsx`) foi redesenhada para um card único centralizado sobre um fundo gradiente azul (`.tenant-login-page`), substituindo o layout anterior de duas colunas (copy de marketing à esquerda + form à direita). Não existe campo manual de "empresa/unidade" — o tenant é resolvido automaticamente a partir do e-mail:
+
+- Login com e-mail+senha em uma única chamada a `POST /auth/login` (`loginAction` em `app/actions.ts`, inalterado).
+- Se o e-mail pertence a **um único** tenant, o login já completa e redireciona direto para `/dashboard`.
+- Se o e-mail pertence a **mais de um** tenant, a API responde `422` com `detail.code === "multi_tenant"` e a lista de empresas; o mesmo card então troca o conteúdo para um seletor de empresa (`.tenant-selector`/`.tenant-option`, cards clicáveis) sem recarregar a página, com um botão "Trocar e-mail" para reiniciar o fluxo.
+- Classes novas/renomeadas em `globals.css`: `.tenant-login-brand` (logo + nome acima do card), `.tenant-login-back`. Removidas: `.tenant-login-copy`, `.tenant-login-form-wrap` (painel de marketing lateral, não existe mais).
+
 ## Padrão de campo e filtro (`report-filter-field`)
 
 Obrigatório em toda tela nova e em qualquer formulário de filtro/criação inline (fora de modal `record-modal` e de drawer `kanban-create-form`, que já têm o próprio padrão). Estabelecido em 2026-07-06 ao padronizar o módulo Ponto (Espelho, Banco de Horas, Dispositivos, Vínculos, Escalas, Contracheques, Batidas).

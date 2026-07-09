@@ -3,11 +3,12 @@
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TenantUser } from "@/lib/api";
-import type { EvolutionSettings, BrevoSettings, CompanyInfo, TimeclockSettings } from "@/app/actions";
+import type { EvolutionSettings, BrevoSettings, CompanyInfo, RegistryOption, TimeclockSettings } from "@/app/actions";
 import {
   getEvolutionSettings, saveEvolutionSettings,
   getBrevoSettings, saveBrevoSettings,
   getTimeclockSettings, saveTimeclockSettings,
+  fetchRegistryOptions,
 } from "@/app/actions";
 
 function formatPhone(v: string): string {
@@ -183,6 +184,7 @@ export function TimeclockSettingsSection() {
   const [config, setConfig] = useState<TimeclockSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [functions, setFunctions] = useState<RegistryOption[]>([]);
   const [newCargo, setNewCargo] = useState("");
   const [newCargoSalary, setNewCargoSalary] = useState("");
 
@@ -190,6 +192,7 @@ export function TimeclockSettingsSection() {
     getTimeclockSettings().then(setConfig).catch(() =>
       setConfig({ overtime_paid_in_cash: false, cargo_salaries: {} })
     );
+    fetchRegistryOptions("Função").then(setFunctions);
   }, []);
 
   async function persist(next: TimeclockSettings) {
@@ -284,13 +287,17 @@ export function TimeclockSettingsSection() {
         </table>
         <div className="report-filter-bar" style={{ marginTop: "var(--sp-3)" }}>
           <div className="report-filter-field">
-            <label>Cargo</label>
-            <input
-              type="text"
-              value={newCargo}
-              onChange={(e) => setNewCargo(e.target.value)}
-              placeholder="Camareira, Recepcionista..."
-            />
+            <label htmlFor="cargo_salary_function">Cargo</label>
+            <select id="cargo_salary_function" value={newCargo} onChange={(e) => setNewCargo(e.target.value)}>
+              <option value="">Selecione a função...</option>
+              {functions
+                .filter((fn) => !(fn.name in config.cargo_salaries))
+                .map((fn) => (
+                  <option key={fn.id} value={fn.name}>
+                    {fn.name}
+                  </option>
+                ))}
+            </select>
           </div>
           <div className="report-filter-field">
             <label>Salário</label>
