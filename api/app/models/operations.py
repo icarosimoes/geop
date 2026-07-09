@@ -770,6 +770,140 @@ class ChecklistExecutionItem(Base):
     checked_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+# ---------------------------------------------------------------------------
+# Contract Management
+# ---------------------------------------------------------------------------
+
+
+class Supplier(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "suppliers"
+    __table_args__ = (Index("ix_suppliers_company_active", "company_id", "active"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255))
+    document: Mapped[str | None] = mapped_column(String(20))
+    document_type: Mapped[str | None] = mapped_column(String(10))  # cnpj | cpf
+    category: Mapped[str | None] = mapped_column(String(120))
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    website: Mapped[str | None] = mapped_column(String(255))
+    address_street: Mapped[str | None] = mapped_column(String(255))
+    address_number: Mapped[str | None] = mapped_column(String(20))
+    address_complement: Mapped[str | None] = mapped_column(String(120))
+    address_city: Mapped[str | None] = mapped_column(String(120))
+    address_state: Mapped[str | None] = mapped_column(String(2))
+    address_zip: Mapped[str | None] = mapped_column(String(10))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class SupplierContact(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "supplier_contacts"
+    __table_args__ = (Index("ix_supplier_contacts_supplier", "supplier_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(160))
+    role: Mapped[str | None] = mapped_column(String(120))
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    whatsapp: Mapped[str | None] = mapped_column(String(30))
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+CONTRACT_STATUSES = (
+    "rascunho",
+    "aguardando_aprovacao",
+    "ativo",
+    "em_renovacao",
+    "suspenso",
+    "encerrado",
+    "cancelado",
+)
+
+CONTRACT_TYPES = (
+    "servico",
+    "fornecimento",
+    "locacao",
+    "comodato",
+    "consultoria",
+    "licenca",
+    "manutencao",
+    "outro",
+)
+
+
+class Contract(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "contracts"
+    __table_args__ = (
+        Index("ix_contracts_company_status", "company_id", "status"),
+        Index("ix_contracts_company_end_date", "company_id", "end_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    number: Mapped[str | None] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(255))
+    contract_type: Mapped[str] = mapped_column(String(40), default="servico")
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id", ondelete="SET NULL"))
+    responsible_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(40), default="rascunho", index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    conditions: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    signed_at: Mapped[date | None] = mapped_column(Date)
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    alert_days: Mapped[int] = mapped_column(Integer, default=60)
+    auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
+    indexer: Mapped[str | None] = mapped_column(String(20))  # ipca|igpm|inpc|fixo
+    total_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    monthly_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="BRL")
+    payment_frequency: Mapped[str | None] = mapped_column(String(20))
+    payment_day: Mapped[int | None] = mapped_column(Integer)
+    cost_center: Mapped[str | None] = mapped_column(String(120))
+    budget_category: Mapped[str | None] = mapped_column(String(120))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ContractAmendment(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "contract_amendments"
+    __table_args__ = (Index("ix_contract_amendments_contract", "contract_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id", ondelete="CASCADE"))
+    amendment_type: Mapped[str] = mapped_column(String(40))  # prazo|valor|objeto|outros
+    description: Mapped[str] = mapped_column(Text)
+    new_end_date: Mapped[date | None] = mapped_column(Date)
+    new_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    signed_at: Mapped[date | None] = mapped_column(Date)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+
+class ContractApprovalStep(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "contract_approval_steps"
+    __table_args__ = (Index("ix_contract_approval_steps_contract", "contract_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    contract_id: Mapped[int] = mapped_column(ForeignKey("contracts.id", ondelete="CASCADE"))
+    step_order: Mapped[int] = mapped_column(Integer, default=1)
+    approver_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # pendente|aprovado|rejeitado
+    status: Mapped[str] = mapped_column(String(20), default="pendente")
+    comment: Mapped[str | None] = mapped_column(Text)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class LegacyImportRun(Base):
     __tablename__ = "legacy_import_runs"
 

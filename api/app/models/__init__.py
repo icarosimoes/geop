@@ -8,6 +8,11 @@ from app.models.employees import (
 from app.models.identity import Company, Permission, Role, User, role_permissions
 from app.models.operations import (
     ApartmentInspection,
+    Contract,
+    ContractAmendment,
+    ContractApprovalStep,
+    Supplier,
+    SupplierContact,
     ApartmentInspectionItem,
     Attachment,
     AuditEvent,
@@ -70,6 +75,11 @@ from app.models.platform import (
 
 __all__ = [
     "ApartmentInspection",
+    "Contract",
+    "ContractAmendment",
+    "ContractApprovalStep",
+    "Supplier",
+    "SupplierContact",
     "ApartmentInspectionItem",
     "Attachment",
     "AuditEvent",
