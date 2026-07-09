@@ -191,7 +191,7 @@ td strong { font-weight: 600; }
 .muted { color: var(--muted); }
 .status { display: inline-flex; align-items: center; gap: 6px; padding: 5px var(--sp-2); border-radius: var(--radius-pill); font-size: var(--font-xs); font-weight: 700; }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.status-progress { color: var(--blue); background: #eaf3ff; }.status-waiting { color: var(--yellow); background: var(--yellow-soft); }.status-done { color: #17774b; background: #e7f6ef; }
+.status-progress { color: var(--blue); background: #eaf3ff; }.status-waiting { color: var(--yellow); background: var(--yellow-soft); }.status-done { color: #17774b; background: #e7f6ef; }.status-danger { color: var(--red); background: var(--red-soft); }.status-neutral { color: var(--muted); background: #f2f4f7; }
 .module-badge { display: inline-block; padding: 3px 8px; border-radius: var(--radius-pill); font-size: var(--font-xs); font-weight: 600; background: #f0f3f8; color: var(--label); white-space: nowrap; }
 .empty-search { min-height: 240px; display: grid; place-content: center; justify-items: center; gap: var(--sp-2); color: var(--muted); }
 .right-column { display: grid; align-content: start; gap: var(--sp-5); }

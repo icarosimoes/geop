@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import NamedTuple
 
 from sqlalchemy import func, or_, select
@@ -108,7 +108,10 @@ async def create_supplier(
     supplier = Supplier(company_id=company_id, **data)
     session.add(supplier)
     await session.flush()
-    await record_event(session, company_id, user_id, "supplier", supplier.id, "created", {})
+    await record_event(
+        session, company_id=company_id, user_id=user_id, entity_type="supplier",
+        entity_id=supplier.id, event_type="created",
+    )
     await session.commit()
     await session.refresh(supplier)
     return supplier
@@ -131,7 +134,10 @@ async def update_supplier(
         setattr(supplier, k, v)
     diff = compute_diff(old, data)
     if diff:
-        await record_event(session, company_id, user_id, "supplier", supplier.id, "updated", diff)
+        await record_event(
+            session, company_id=company_id, user_id=user_id, entity_type="supplier",
+            entity_id=supplier.id, event_type="updated", diff=diff,
+        )
     await session.commit()
     await session.refresh(supplier)
     return supplier
@@ -149,8 +155,11 @@ async def delete_supplier(
     )
     if not supplier:
         return False
-    supplier.deleted_at = datetime.now(UTC)
-    await record_event(session, company_id, user_id, "supplier", supplier.id, "deleted", {})
+    supplier.deleted_at = datetime.now()
+    await record_event(
+        session, company_id=company_id, user_id=user_id, entity_type="supplier",
+        entity_id=supplier.id, event_type="deleted",
+    )
     await session.commit()
     return True
 
@@ -219,7 +228,8 @@ async def create_supplier_contact(
     session.add(contact)
     await session.flush()
     await record_event(
-        session, company_id, user_id, "supplier_contact", contact.id, "created", {}
+        session, company_id=company_id, user_id=user_id, entity_type="supplier_contact",
+        entity_id=contact.id, event_type="created",
     )
     await session.commit()
     await session.refresh(contact)
@@ -258,7 +268,8 @@ async def update_supplier_contact(
     for k, v in data.items():
         setattr(contact, k, v)
     await record_event(
-        session, company_id, user_id, "supplier_contact", contact.id, "updated", {}
+        session, company_id=company_id, user_id=user_id, entity_type="supplier_contact",
+        entity_id=contact.id, event_type="updated",
     )
     await session.commit()
     await session.refresh(contact)
@@ -277,7 +288,7 @@ async def delete_supplier_contact(
     )
     if not contact:
         return False
-    contact.deleted_at = datetime.now(UTC)
+    contact.deleted_at = datetime.now()
     await session.commit()
     return True
 
@@ -434,7 +445,10 @@ async def create_contract(
         )
         session.add(step)
 
-    await record_event(session, company_id, user_id, "contract", contract.id, "created", {})
+    await record_event(
+        session, company_id=company_id, user_id=user_id, entity_type="contract",
+        entity_id=contract.id, event_type="created",
+    )
     await session.commit()
     await session.refresh(contract)
     return contract
@@ -461,7 +475,10 @@ async def update_contract(
         setattr(contract, k, v)
     diff = compute_diff(old, data)
     if diff:
-        await record_event(session, company_id, user_id, "contract", contract.id, "updated", diff)
+        await record_event(
+            session, company_id=company_id, user_id=user_id, entity_type="contract",
+            entity_id=contract.id, event_type="updated", diff=diff,
+        )
     await session.commit()
     await session.refresh(contract)
     return contract
@@ -487,13 +504,9 @@ async def update_contract_status(
     old_status = contract.status
     contract.status = new_status
     await record_event(
-        session,
-        company_id,
-        user_id,
-        "contract",
-        contract.id,
-        "status_changed",
-        {"from": old_status, "to": new_status, "comment": comment},
+        session, company_id=company_id, user_id=user_id, entity_type="contract",
+        entity_id=contract.id, event_type="status_changed",
+        diff={"from": old_status, "to": new_status, "comment": comment},
     )
     await session.commit()
     await session.refresh(contract)
@@ -512,8 +525,11 @@ async def delete_contract(
     )
     if not contract:
         return False
-    contract.deleted_at = datetime.now(UTC)
-    await record_event(session, company_id, user_id, "contract", contract.id, "deleted", {})
+    contract.deleted_at = datetime.now()
+    await record_event(
+        session, company_id=company_id, user_id=user_id, entity_type="contract",
+        entity_id=contract.id, event_type="deleted",
+    )
     await session.commit()
     return True
 
@@ -556,8 +572,9 @@ async def create_amendment(
 
     await session.flush()
     await record_event(
-        session, company_id, user_id, "contract", contract_id, "amendment_added",
-        {"type": data["amendment_type"]},
+        session, company_id=company_id, user_id=user_id, entity_type="contract",
+        entity_id=contract_id, event_type="amendment_added",
+        diff={"type": data["amendment_type"]},
     )
     await session.commit()
     await session.refresh(amendment)
@@ -599,13 +616,13 @@ async def decide_approval(
 
     step.status = "aprovado" if approved else "rejeitado"
     step.comment = comment
-    step.decided_at = datetime.now(UTC)
+    step.decided_at = datetime.now()
 
     if not approved:
         contract.status = "rascunho"
         await record_event(
-            session, company_id, user_id, "contract", contract_id, "rejected",
-            {"comment": comment},
+            session, company_id=company_id, user_id=user_id, entity_type="contract",
+            entity_id=contract_id, event_type="rejected", diff={"comment": comment},
         )
     else:
         pending = await session.scalar(
@@ -617,12 +634,14 @@ async def decide_approval(
         if (pending or 0) == 0:
             contract.status = "ativo"
             await record_event(
-                session, company_id, user_id, "contract", contract_id, "approved", {}
+                session, company_id=company_id, user_id=user_id, entity_type="contract",
+                entity_id=contract_id, event_type="approved",
             )
         else:
             await record_event(
-                session, company_id, user_id, "contract", contract_id,
-                "step_approved", {"step_order": step.step_order},
+                session, company_id=company_id, user_id=user_id, entity_type="contract",
+                entity_id=contract_id, event_type="step_approved",
+                diff={"step_order": step.step_order},
             )
 
     await session.commit()

@@ -163,6 +163,16 @@ O formulário de cadastro contém o campo "Nome" em todas as categorias. A categ
 
 A rota `/cadastros/estabelecimento` possui uma page estática dedicada (`web/app/cadastros/estabelecimento/page.tsx`) em vez de usar a rota dinâmica `[sub]`. Isso porque o estabelecimento não é um registry — usa layout `company` com o componente `CompanySettingsSection`, que exibe e edita os dados cadastrais do tenant (nome, e-mail, CNPJ, fuso horário). A rota estática tem prioridade sobre a dinâmica no Next.js.
 
+### Fornecedores (`/cadastros/fornecedores`)
+
+Fornecedores tinha nascido como uma aba dentro de `/contratos` (Contratos/Fornecedores no mesmo componente monolítico). Movido em 2026-07-09 para `app/cadastros/fornecedores/` (page.tsx + manager.tsx + actions.ts próprios), seguindo o padrão de cadastro com CRUD dedicado (como `funcionarios/`), não o padrão genérico `[sub]/page.tsx` — fornecedor tem CRUD complexo com contatos aninhados, incompatível com o registry simples de nome+categoria. `contratos/actions.ts` manteve só `listSupplierOptionsAction`/`SupplierOption`, usados pelo `<select>` de fornecedor no formulário de contrato; o restante do CRUD (criar/editar/excluir fornecedor e contatos) foi para `cadastros/fornecedores/actions.ts`.
+
+## Contratos (`/contratos`)
+
+Redesenhado em 2026-07-09: o componente original (`contracts-manager.tsx`) tinha sido construído contra um conjunto de variáveis CSS que não existem neste projeto (`--text-muted`, `--border`, `--input-bg`, `--primary`, `--bg`, `--hover-bg`), então a tela nunca teve a aparência pretendida — caía nos estilos default do browser. Reescrito para usar o sistema de design real do app: `.module-heading`/`.module-panel`/`.module-toolbar`/`.module-table-wrap`/`.module-pagination` para a listagem, `.modal-layer`+`.record-modal` (`has-timeline` no modal de detalhe, mais largo) para criar/editar e para o detalhe com abas (Informações/Financeiro/Aditivos/Aprovações), e o sistema de `.status`/`.status-progress|waiting|done` existente — que ganhou duas variantes novas, `.status-danger` (vermelho) e `.status-neutral` (cinza), reaproveitáveis por qualquer módulo que precise de mais de 3 estados (ver `app/globals.css`).
+
+Corrigidos dois bugs de backend descobertos ao testar o CRUD pela primeira vez (nenhum teste automatizado cobria suppliers/contracts): `record_event()` era chamado com argumentos posicionais em `app/domain/contracts/service.py` inteiro, mas a função só aceita `session` posicional (resto é keyword-only) — toda mutação (criar/editar/excluir fornecedor e contrato, aditivo, aprovação) quebrava com `TypeError`. E `deleted_at`/`decided_at` eram setados com `datetime.now(UTC)` (aware) contra colunas `TIMESTAMP WITHOUT TIME ZONE` — `datetime.now()` (naive) é a convenção usada em todos os outros domínios do projeto.
+
 ## Tratativa (timeline de conversa)
 
 Todo registro operacional possui uma timeline de tratativa (`history`) no estilo de conversa de ticket. A thread aparece em dois lugares:
