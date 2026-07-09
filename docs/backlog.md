@@ -409,6 +409,28 @@ deploy anterior:
    `200` em `/login` dos 4 domínios; `docker service logs` dos 4 serviços sem
    erro/exception/traceback após o rollout.
 
+## Implantação em produção (2026-07-09, 2ª do dia) — concluída manualmente (CI ainda indisponível)
+
+`git push origin main` (commit `598bc203`: Fornecedores movido para Cadastros, Contratos
+redesenhado com o design system real, 2 bugs de backend corrigidos em `contracts/service.py`)
+feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy manual:
+
+1. **Só API e web** — este commit não tocou `admin/` nem `colaborador/`, então apenas as imagens
+   `api` e `web` foram buildadas localmente (`sha-598bc203724187d47fdcb6dc19c9b20bc44609ca`, RAM
+   livre na VPS ~482MB) e enviadas ao GHCR; `registro_admin`/`registro_colaborador` não foram
+   tocados.
+2. **Sem migration** — `alembic_version` seguiu em `20260709_0054` (nenhuma mudança de schema
+   neste commit, só bugfix de `service.py` e refactor de frontend).
+3. **Backup do Postgres mesmo assim** — por precaução, dado que o commit mexe em
+   `record_event`/exclusões (`deleted_at`/`decided_at`); dump em
+   `/opt/registro/registro_pre_deploy_20260709_205059.dump`.
+4. **`docker service update --image ... --detach`** só para `registro_api` e `registro_web` —
+   convergiram em 2/2 cada.
+5. **Validação pós-deploy** — `/api/v1/health` e `/api/v1/health/ready` 200 (banco/cache
+   conectados); `200` em `/login` dos 4 domínios; logs da API sem erro. Web mostrou dois
+   `Failed to find Server Action "..."` nos logs — ruído esperado de rolling deploy (sessão de
+   cliente com Server Action ID da build anterior), não relacionado às mudanças.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
