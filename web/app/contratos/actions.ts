@@ -1,0 +1,306 @@
+"use server";
+
+import { getValidToken, tryRefreshToken } from "@/lib/auth";
+
+const apiUrl = process.env.API_URL ?? "http://localhost:8000/api/v1";
+
+async function authFetch(path: string, init?: RequestInit) {
+  const token = await getValidToken();
+  const res = await fetch(`${apiUrl}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    cache: "no-store",
+  });
+  if (res.status === 401) {
+    const newToken = await tryRefreshToken();
+    if (!newToken) throw new Error("unauthorized");
+    return fetch(`${apiUrl}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${newToken}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      cache: "no-store",
+    });
+  }
+  return res;
+}
+
+export type ContractSummary = {
+  id: number;
+  number: string | null;
+  title: string;
+  contract_type: string;
+  supplier_name: string | null;
+  responsible_name: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  total_value: string | null;
+  monthly_value: string | null;
+  alert_days: number;
+  days_until_expiry: number | null;
+  expiry_alert: boolean;
+  updated_at: string;
+};
+
+export type ContractAmendment = {
+  id: number;
+  contract_id: number;
+  amendment_type: string;
+  description: string;
+  new_end_date: string | null;
+  new_value: string | null;
+  signed_at: string | null;
+  created_by_name: string | null;
+  created_at: string;
+};
+
+export type ContractApprovalStep = {
+  id: number;
+  step_order: number;
+  approver_user_id: number;
+  approver_name: string | null;
+  status: string;
+  comment: string | null;
+  decided_at: string | null;
+};
+
+export type ContractDetail = {
+  id: number;
+  number: string | null;
+  title: string;
+  contract_type: string;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  responsible_user_id: number | null;
+  responsible_name: string | null;
+  status: string;
+  description: string | null;
+  conditions: string | null;
+  notes: string | null;
+  signed_at: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  alert_days: number;
+  auto_renew: boolean;
+  indexer: string | null;
+  total_value: string | null;
+  monthly_value: string | null;
+  currency: string;
+  payment_frequency: string | null;
+  payment_day: number | null;
+  cost_center: string | null;
+  budget_category: string | null;
+  amendments: ContractAmendment[];
+  approval_steps: ContractApprovalStep[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupplierContact = {
+  id: number;
+  supplier_id: number;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  is_primary: boolean;
+  notes: string | null;
+  created_at: string;
+};
+
+export type SupplierSummary = {
+  id: number;
+  name: string;
+  document: string | null;
+  category: string | null;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+  contact_count: number;
+  contract_count: number;
+  updated_at: string;
+};
+
+export type SupplierDetail = {
+  id: number;
+  name: string;
+  document: string | null;
+  document_type: string | null;
+  category: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  active: boolean;
+  notes: string | null;
+  contacts: SupplierContact[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupplierOption = { id: number; name: string; document: string | null };
+
+// ---- Contracts ----
+
+export async function listContractsAction(params?: {
+  page?: number; search?: string; status?: string; contract_type?: string;
+  supplier_id?: number; expiring_in_days?: number;
+}): Promise<{ items: ContractSummary[]; total: number; page: number; page_size: number }> {
+  const q = new URLSearchParams();
+  q.set("page", String(params?.page ?? 1));
+  q.set("page_size", "20");
+  if (params?.search) q.set("search", params.search);
+  if (params?.status) q.set("status", params.status);
+  if (params?.contract_type) q.set("contract_type", params.contract_type);
+  if (params?.supplier_id) q.set("supplier_id", String(params.supplier_id));
+  if (params?.expiring_in_days != null) q.set("expiring_in_days", String(params.expiring_in_days));
+  const res = await authFetch(`/contracts?${q}`);
+  if (!res.ok) throw new Error("api_error");
+  return res.json();
+}
+
+export async function getContractAction(id: number): Promise<ContractDetail> {
+  const res = await authFetch(`/contracts/${id}`);
+  if (!res.ok) throw new Error("api_error");
+  return res.json();
+}
+
+export async function createContractAction(data: Record<string, unknown>): Promise<{ ok: boolean; error?: string; data?: ContractDetail }> {
+  try {
+    const res = await authFetch("/contracts", { method: "POST", body: JSON.stringify(data) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err?.detail?.message ?? "Erro ao criar contrato." };
+    }
+    return { ok: true, data: await res.json() };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function updateContractAction(id: number, data: Record<string, unknown>): Promise<{ ok: boolean; error?: string; data?: ContractDetail }> {
+  try {
+    const res = await authFetch(`/contracts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao atualizar contrato." };
+    return { ok: true, data: await res.json() };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function updateContractStatusAction(id: number, status: string, comment?: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, comment }) });
+    if (!res.ok) return { ok: false, error: "Erro ao atualizar status." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function deleteContractAction(id: number): Promise<{ ok: boolean }> {
+  const res = await authFetch(`/contracts/${id}`, { method: "DELETE" });
+  return { ok: res.ok };
+}
+
+export async function createAmendmentAction(contractId: number, data: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/${contractId}/amendments`, { method: "POST", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao criar aditivo." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function approveContractAction(contractId: number, approved: boolean, comment?: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/${contractId}/approve`, { method: "POST", body: JSON.stringify({ approved, comment }) });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err?.detail?.message ?? "Erro ao aprovar contrato." };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+// ---- Suppliers ----
+
+export async function listSuppliersAction(params?: { page?: number; search?: string }): Promise<{ items: SupplierSummary[]; total: number; page: number; page_size: number }> {
+  const q = new URLSearchParams();
+  q.set("page", String(params?.page ?? 1));
+  q.set("page_size", "20");
+  if (params?.search) q.set("search", params.search);
+  const res = await authFetch(`/contracts/suppliers?${q}`);
+  if (!res.ok) throw new Error("api_error");
+  return res.json();
+}
+
+export async function getSupplierAction(id: number): Promise<SupplierDetail> {
+  const res = await authFetch(`/contracts/suppliers/${id}`);
+  if (!res.ok) throw new Error("api_error");
+  return res.json();
+}
+
+export async function listSupplierOptionsAction(): Promise<SupplierOption[]> {
+  const res = await authFetch("/contracts/suppliers/options");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createSupplierAction(data: Record<string, unknown>): Promise<{ ok: boolean; error?: string; data?: SupplierDetail }> {
+  try {
+    const res = await authFetch("/contracts/suppliers", { method: "POST", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao criar fornecedor." };
+    return { ok: true, data: await res.json() };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function updateSupplierAction(id: number, data: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/suppliers/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao atualizar fornecedor." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function deleteSupplierAction(id: number): Promise<{ ok: boolean }> {
+  const res = await authFetch(`/contracts/suppliers/${id}`, { method: "DELETE" });
+  return { ok: res.ok };
+}
+
+export async function createContactAction(supplierId: number, data: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/suppliers/${supplierId}/contacts`, { method: "POST", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao criar contato." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function updateContactAction(contactId: number, data: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await authFetch(`/contracts/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify(data) });
+    if (!res.ok) return { ok: false, error: "Erro ao atualizar contato." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function deleteContactAction(contactId: number): Promise<{ ok: boolean }> {
+  const res = await authFetch(`/contracts/contacts/${contactId}`, { method: "DELETE" });
+  return { ok: res.ok };
+}
