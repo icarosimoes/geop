@@ -379,6 +379,36 @@ manualmente, com uma mudança de estratégia em relação ao deploy anterior:
    (`registro`/`api`/`painel`/`colaborador.registro.solidsd.com.br`); `docker service logs` do
    `registro_api` sem erro/exception/traceback logo após o rollout.
 
+## Implantação em produção (2026-07-09) — concluída manualmente (CI ainda indisponível)
+
+`git push origin main` (commit `1e535e66`: redesign da tela de login + cargos via registro
+"Função" em vez de texto livre) feito normalmente; o GitHub Actions segue com a conta travada
+por "billing issue" (mesma causa dos deploys de 2026-07-05 e 2026-07-06, ainda não resolvida) —
+`Publish images` e `CI` falham em segundos. Deploy feito manualmente, mesmo procedimento do
+deploy anterior:
+
+1. **Build local, não na VPS** — RAM livre na VPS estava em ~205MB no momento (compartilhada com
+   aloji, becond, solidguardian, evolution etc.); as 4 imagens (`api`, `web`, `admin`,
+   `colaborador`) foram buildadas localmente (`docker build --target production`, tag
+   `sha-1e535e669f0034c9e78fbdc765385dfd8ec2572a`) e enviadas ao GHCR usando o token do `gh auth`
+   (escopo `write:packages`) via `docker login ghcr.io`.
+2. **Backup do Postgres** — `pg_dump -Fc` dentro do container `registro_db`, copiado para
+   `/opt/registro/registro_pre_deploy_20260709_195955.dump`; integridade validada com
+   `pg_restore --list` (792 entradas no TOC) antes de prosseguir.
+3. **Migrations 0053 e 0054** — `alembic_version` estava em `20260707_0052`; aplicadas o módulo
+   novo de Contratos e Fornecedores (`suppliers`, `contracts`, `amendments`, `approvals` — só
+   tabelas novas, nenhuma alteração em tabela existente) via o procedimento de rede overlay
+   temporária + `docker run` em [deploy-swarm.md](infra/deploy-swarm.md#migrations-no-swarm).
+   Confirmado `SELECT version_num FROM alembic_version` = `20260709_0054`.
+4. **`docker service update --image ... --detach`** para os 4 serviços — rolling update limpo,
+   réplicas convergidas (`registro_api` 2/2, `registro_web` 2/2, `registro_admin` 1/1,
+   `registro_colaborador` 1/1) na imagem nova.
+5. **Validação pós-deploy** — `/api/v1/health` 200; `/api/v1/health/ready` deu um `502`
+   transitório durante o próprio rollout (nenhuma requisição correspondente nos logs da API) e
+   passou a responder `200` com `database`/`cache` conectados de forma estável logo em seguida;
+   `200` em `/login` dos 4 domínios; `docker service logs` dos 4 serviços sem
+   erro/exception/traceback após o rollout.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
