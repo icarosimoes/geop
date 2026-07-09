@@ -40,6 +40,9 @@ Company
   ├── ChecklistExecution ──► ChecklistExecutionItem
   ├── StockItem ──► StockMovement (→ WorkOrder, Occurrence)
   ├── ShiftHandoff (pendências entre turnos → ShiftReport)
+  ├── Supplier ──► SupplierContact
+  ├── Contract ──► ContractAmendment
+  │     └── ContractApprovalStep (fluxo sequential por aprovador)
   ├── ModuleRecord (genérico: inspeções, obra, manutenção, mural)
   ├── TimeClockDevice ──► TimePunch (relógio físico, webhook Control iD)
   ├── EmployeeCredential (PIN do Portal do Colaborador, 1:1 com Employee)
@@ -73,6 +76,7 @@ Company
 | Checklists recorrentes | `checklist_templates` → `checklist_template_items`, `checklist_executions` → `checklist_execution_items` | templates com itens reutilizáveis; execuções geradas por agenda via `POST /checklists/generate`. Cada item tem checked/checked_at individual. Status: pendente → concluido. Permissões: `checklist.view/create/edit/delete` |
 | Estoque e materiais | `stock_items`, `stock_movements` | itens com quantity/min_quantity/unit/category/location. Movimentações (entrada/saída/ajuste) vinculáveis a `work_orders` e `occurrences`. Saída valida estoque. Permissões: `stock.view/create/edit/delete` |
 | Pendências de turno | `shift_handoffs` | comunicação entre turnos com fluxo pendente → lido → resolvido. Direcionável por turno (morning/afternoon/night) e data. Vínculo opcional com `shift_reports`. Confirmação de leitura e resolução com timestamps. Permissões: `handoff.view/create/edit/delete` |
+| Contratos | `suppliers`, `supplier_contacts`, `contracts`, `contract_amendments`, `contract_approval_steps` | fornecedores com contatos múltiplos; contratos com ciclo de vida (rascunho → em_aprovacao → ativo → suspenso/encerrado); fluxo de aprovação sequential por etapas; aditivos (prazo/valor/objeto/outros) que atualizam campos do contrato; integração financeira (custo/orçamento/pagamento). Anexos via sistema genérico (`entity_type="contract"`). Permissões: `contract.view/create/edit/delete/approve` |
 | Participantes de ocorrências | `occurrence_participants` | junction table (occurrence_id, user_id) para participantes de ocorrências |
 | Notificações | `notifications`, `notification_preferences` | por tenant e usuário, `title`, `body`, `category`, `entity_type`/`entity_id` (link opcional ao registro), `read_at` para leitura, `email_sent_at` para tracking de entrega. Preferências por módulo (in_app/email) em `notification_preferences`. Destinatários por módulo em `company_settings` (chave `notification_recipients`) |
 | Anexos | `attachments` | por tenant, `entity_type`/`entity_id` polimórfico, `filename`, `content_type`, `size_bytes`, `storage_key` (MinIO/S3), `uploaded_by_user_id` (inclui `entity_type="employee_payslip"`) |

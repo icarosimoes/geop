@@ -179,6 +179,23 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/bulletin` | `bulletin.create` | cria aviso no mural |
 | `PATCH` | `/bulletin/{id}` | `bulletin.edit` | atualiza aviso do mural |
 | `DELETE` | `/bulletin/{id}` | `bulletin.delete` | soft delete de aviso do mural |
+| `GET` | `/contracts/suppliers` | `contract.view` | fornecedores paginados (filtro: search, active_only) |
+| `GET` | `/contracts/suppliers/options` | `contract.view` | lista simplificada para autocomplete |
+| `GET` | `/contracts/suppliers/{id}` | `contract.view` | detalhe do fornecedor com contatos |
+| `POST` | `/contracts/suppliers` | `contract.create` | cria fornecedor |
+| `PATCH` | `/contracts/suppliers/{id}` | `contract.edit` | atualiza fornecedor |
+| `DELETE` | `/contracts/suppliers/{id}` | `contract.delete` | soft delete de fornecedor |
+| `POST` | `/contracts/suppliers/{id}/contacts` | `contract.edit` | adiciona contato ao fornecedor |
+| `PATCH` | `/contracts/contacts/{id}` | `contract.edit` | atualiza contato |
+| `DELETE` | `/contracts/contacts/{id}` | `contract.edit` | remove contato |
+| `GET` | `/contracts` | `contract.view` | contratos paginados (filtros: search, status, contract_type, supplier_id, expiring_in_days) |
+| `GET` | `/contracts/{id}` | `contract.view` | detalhe com aditivos e etapas de aprovação |
+| `POST` | `/contracts` | `contract.create` | cria contrato com fluxo de aprovação opcional (`approver_user_ids`) |
+| `PATCH` | `/contracts/{id}` | `contract.edit` | atualiza dados do contrato |
+| `PATCH` | `/contracts/{id}/status` | `contract.edit` | altera status manualmente |
+| `DELETE` | `/contracts/{id}` | `contract.delete` | soft delete de contrato |
+| `POST` | `/contracts/{id}/amendments` | `contract.edit` | registra aditivo (atualiza end_date/total_value no contrato) |
+| `POST` | `/contracts/{id}/approve` | `contract.approve` | aprovador decide sua etapa (`{approved, comment?}`) |
 
 ### Login
 
