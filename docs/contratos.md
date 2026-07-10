@@ -166,15 +166,18 @@ Abas:
 - **Contratos** — tabela com título, tipo, fornecedor, vigência (badge de vencimento próximo), valor mensal e status
 - **Fornecedores** — tabela com nome, documento, categoria, contato, contagem de contratos
 
-Drawer de detalhe do contrato com 4 sub-abas:
+Modal de detalhe do contrato (`record-modal`) com 5 sub-abas:
 - **Informações** — dados gerais, datas, responsável, fornecedor
 - **Financeiro** — valores, moeda, indexador, frequência de pagamento, centro de custo, categoria orçamentária
 - **Aditivos** — histórico de aditivos com formulário inline para novo aditivo
 - **Aprovação** — etapas do fluxo com painel de decisão se o usuário logado é aprovador pendente
+- **Anexos** — upload, download e exclusão de arquivos (ex: PDF do contrato assinado manualmente)
 
-Drawer de detalhe do fornecedor:
+Modal de detalhe do fornecedor:
 - Dados cadastrais completos
 - Lista de contatos com formulário inline para adicionar/editar
+
+Ambos os módulos (Contratos e Fornecedores) usam o mesmo padrão visual sobreposto: `modal-layer`/`record-modal` para criar/editar/detalhar, sem navegação para páginas separadas.
 
 ## Migrations
 
@@ -185,11 +188,15 @@ Drawer de detalhe do fornecedor:
 
 ## Anexos
 
-Contratos usam o sistema genérico de anexos existente:
+Contratos usam o sistema genérico de anexos (`api/app/domain/attachments/`, storage MinIO):
 
 ```
-POST /attachments          → entity_type="contract", entity_id=<id>
-GET  /attachments?entity_type=contract&entity_id=<id>
+POST   /attachments                                    → entity_type="contract", entity_id=<id>
+GET    /attachments?entity_type=contract&entity_id=<id>
+GET    /attachments/{attachment_id}/download
+DELETE /attachments/{attachment_id}
 ```
 
-Não requer nenhuma adaptação no backend.
+Requereu adicionar `"contract"` em `ALLOWED_ENTITY_TYPES` (`api/app/domain/attachments/service.py`) — os demais endpoints já eram genéricos.
+
+No frontend, o link de download passa por um proxy autenticado em `web/app/api/attachments/[id]/download/route.ts`, já que o endpoint da API exige Bearer token (uma tag `<a href>` não consegue enviar header de autorização).

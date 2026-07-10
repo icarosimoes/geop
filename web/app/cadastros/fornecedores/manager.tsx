@@ -2,7 +2,7 @@
 
 import {
   ChevronLeft, ChevronRight, Phone, Mail,
-  Plus, Search, Trash2, X, Edit2, Star,
+  Plus, Search, Trash2, X, Edit2, Star, Users,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { SupplierContact, SupplierDetail, SupplierSummary } from "./actions";
@@ -37,75 +37,49 @@ function SupplierForm({
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="drawer-form">
+    <form ref={formRef} onSubmit={handleSubmit}>
+      {error && <div className="kanban-form-error">{error}</div>}
+
+      <label>Nome / Razão social *<input name="name" required defaultValue={initial?.name} /></label>
+
       <div className="form-grid">
-        <div className="field span-2">
-          <label>Nome / Razão social *</label>
-          <input name="name" required defaultValue={initial?.name} />
-        </div>
-        <div className="field">
-          <label>Tipo de documento</label>
+        <label>Tipo de documento
           <select name="document_type" defaultValue={initial?.document_type ?? ""}>
             <option value="">— Selecione —</option>
             <option value="cnpj">CNPJ</option>
             <option value="cpf">CPF</option>
           </select>
-        </div>
-        <div className="field">
-          <label>CPF/CNPJ</label>
-          <input name="document" defaultValue={initial?.document ?? ""} placeholder="00.000.000/0000-00" />
-        </div>
-        <div className="field span-2">
-          <label>Categoria</label>
-          <input name="category" defaultValue={initial?.category ?? ""} placeholder="Ex: Tecnologia, Limpeza, Segurança..." />
-        </div>
-        <div className="field">
-          <label>E-mail</label>
-          <input type="email" name="email" defaultValue={initial?.email ?? ""} />
-        </div>
-        <div className="field">
-          <label>Telefone</label>
-          <input name="phone" defaultValue={initial?.phone ?? ""} />
-        </div>
-        <div className="field span-2">
-          <label>Website</label>
-          <input name="website" defaultValue={initial?.website ?? ""} placeholder="https://" />
-        </div>
-        <div className="field-section-title span-2">Endereço</div>
-        <div className="field span-2">
-          <label>Logradouro</label>
-          <input name="address_street" defaultValue={initial?.address_street ?? ""} />
-        </div>
-        <div className="field">
-          <label>Número</label>
-          <input name="address_number" defaultValue={initial?.address_number ?? ""} />
-        </div>
-        <div className="field">
-          <label>Complemento</label>
-          <input name="address_complement" defaultValue={initial?.address_complement ?? ""} />
-        </div>
-        <div className="field">
-          <label>Cidade</label>
-          <input name="address_city" defaultValue={initial?.address_city ?? ""} />
-        </div>
-        <div className="field" style={{ maxWidth: 80 }}>
-          <label>UF</label>
-          <input name="address_state" maxLength={2} defaultValue={initial?.address_state ?? ""} placeholder="SP" />
-        </div>
-        <div className="field">
-          <label>CEP</label>
-          <input name="address_zip" defaultValue={initial?.address_zip ?? ""} placeholder="00000-000" />
-        </div>
-        <div className="field span-2">
-          <label>Observações</label>
-          <textarea name="notes" rows={2} defaultValue={initial?.notes ?? ""} />
-        </div>
+        </label>
+        <label>CPF/CNPJ<input name="document" defaultValue={initial?.document ?? ""} placeholder="00.000.000/0000-00" /></label>
       </div>
-      {error && <p className="form-error">{error}</p>}
-      <div className="drawer-actions">
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="btn-primary" disabled={loading}>{loading ? "Salvando…" : initial ? "Salvar" : "Criar fornecedor"}</button>
+
+      <label>Categoria<input name="category" defaultValue={initial?.category ?? ""} placeholder="Ex: Tecnologia, Limpeza, Segurança..." /></label>
+
+      <div className="form-grid">
+        <label>E-mail<input type="email" name="email" defaultValue={initial?.email ?? ""} /></label>
+        <label>Telefone<input name="phone" defaultValue={initial?.phone ?? ""} /></label>
       </div>
+
+      <label>Website<input name="website" defaultValue={initial?.website ?? ""} placeholder="https://" /></label>
+
+      <fieldset className="form-section">
+        <legend>Endereço</legend>
+        <label>Logradouro<input name="address_street" defaultValue={initial?.address_street ?? ""} /></label>
+        <div className="form-grid">
+          <label>Número<input name="address_number" defaultValue={initial?.address_number ?? ""} /></label>
+          <label>Complemento<input name="address_complement" defaultValue={initial?.address_complement ?? ""} /></label>
+          <label>Cidade<input name="address_city" defaultValue={initial?.address_city ?? ""} /></label>
+          <label>UF<input name="address_state" maxLength={2} defaultValue={initial?.address_state ?? ""} placeholder="SP" /></label>
+        </div>
+        <label>CEP<input name="address_zip" defaultValue={initial?.address_zip ?? ""} placeholder="00000-000" /></label>
+      </fieldset>
+
+      <label>Observações<textarea name="notes" rows={2} defaultValue={initial?.notes ?? ""} /></label>
+
+      <footer>
+        <button type="button" onClick={onCancel}>Cancelar</button>
+        <button type="submit" disabled={loading}>{loading ? "Salvando…" : initial ? "Salvar" : "Criar fornecedor"}</button>
+      </footer>
     </form>
   );
 }
@@ -129,22 +103,19 @@ function ContactForm({ supplierId, onSave, onCancel }: { supplierId: number; onS
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="inline-form">
+    <form ref={formRef} onSubmit={handleSubmit} className="form-section" style={{ marginBottom: "var(--sp-4)" }}>
       <div className="form-grid">
-        <div className="field"><label>Nome *</label><input name="name" required /></div>
-        <div className="field"><label>Cargo</label><input name="role" /></div>
-        <div className="field"><label>E-mail</label><input type="email" name="email" /></div>
-        <div className="field"><label>Telefone</label><input name="phone" /></div>
-        <div className="field"><label>WhatsApp</label><input name="whatsapp" /></div>
-        <div className="field">
-          <label>Contato principal</label>
-          <label className="checkbox-wrap"><input type="checkbox" name="is_primary" /><span>Sim</span></label>
-        </div>
+        <label>Nome *<input name="name" required /></label>
+        <label>Cargo<input name="role" /></label>
+        <label>E-mail<input type="email" name="email" /></label>
+        <label>Telefone<input name="phone" /></label>
+        <label>WhatsApp<input name="whatsapp" /></label>
+        <label className="checkbox-row"><input type="checkbox" name="is_primary" /> Contato principal</label>
       </div>
-      <div className="drawer-actions">
-        <button type="button" className="btn-secondary" onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="btn-primary" disabled={loading}>{loading ? "Salvando…" : "Adicionar contato"}</button>
-      </div>
+      <footer>
+        <button type="button" onClick={onCancel}>Cancelar</button>
+        <button type="submit" disabled={loading}>{loading ? "Salvando…" : "Adicionar contato"}</button>
+      </footer>
     </form>
   );
 }
@@ -159,7 +130,7 @@ export function SupplierManager() {
   const [loading, setLoading] = useState(true);
 
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierDetail | null>(null);
-  const [drawerMode, setDrawerMode] = useState<"none" | "form" | "detail">("none");
+  const [modalMode, setModalMode] = useState<"none" | "form" | "detail">("none");
   const [showContactForm, setShowContactForm] = useState(false);
 
   useEffect(() => {
@@ -177,11 +148,11 @@ export function SupplierManager() {
   async function openSupplierDetail(id: number) {
     const detail = await getSupplierAction(id);
     setSelectedSupplier(detail);
-    setDrawerMode("detail");
+    setModalMode("detail");
   }
 
-  function closeDrawer() {
-    setDrawerMode("none");
+  function closeModal() {
+    setModalMode("none");
     setSelectedSupplier(null);
     setShowContactForm(false);
   }
@@ -189,7 +160,7 @@ export function SupplierManager() {
   async function handleCreateSupplier(data: Record<string, unknown>) {
     const res = await createSupplierAction(data);
     if (!res.ok) throw new Error(res.error);
-    closeDrawer();
+    closeModal();
     await refreshSuppliers();
   }
 
@@ -199,14 +170,14 @@ export function SupplierManager() {
     if (!res.ok) throw new Error(res.error);
     const updated = await getSupplierAction(selectedSupplier.id);
     setSelectedSupplier(updated);
-    setDrawerMode("detail");
+    setModalMode("detail");
     await refreshSuppliers();
   }
 
   async function handleDeleteSupplier(id: number) {
     if (!confirm("Excluir este fornecedor?")) return;
     await deleteSupplierAction(id);
-    closeDrawer();
+    closeModal();
     await refreshSuppliers();
   }
 
@@ -215,225 +186,203 @@ export function SupplierManager() {
 
   return (
     <>
-      <div className="heading-actions">
-        <button className="btn-primary" onClick={() => setDrawerMode("form")}>
-          <Plus size={16} /> Novo fornecedor
-        </button>
-      </div>
-
-      <div className="list-toolbar">
-        <div className="search-wrap">
-          <Search size={15} />
-          <input
-            placeholder="Buscar fornecedor…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { setPage(1); refreshSuppliers(1, search); }
-            }}
-          />
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Cadastros</p>
+          <h1>Fornecedores</h1>
+          <p>Cadastro de fornecedores e contatos usados nos contratos.</p>
         </div>
-      </div>
+        <button className="primary-button" onClick={() => { setSelectedSupplier(null); setModalMode("form"); }}>
+          <Plus size={18} /> Novo fornecedor
+        </button>
+      </header>
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>CNPJ/CPF</th>
-              <th>Categoria</th>
-              <th>Contato</th>
-              <th>Contratos</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && suppliers.length === 0 && (
-              <tr><td colSpan={6} className="empty-cell">Nenhum fornecedor encontrado.</td></tr>
-            )}
-            {suppliers.map((s) => (
-              <tr key={s.id} className="clickable" onClick={() => openSupplierDetail(s.id)}>
-                <td><div className="cell-title">{s.name}</div></td>
-                <td>{s.document ?? "—"}</td>
-                <td>{s.category ?? "—"}</td>
-                <td>
-                  {s.email && <div className="cell-sub"><Mail size={12} /> {s.email}</div>}
-                  {s.phone && <div className="cell-sub"><Phone size={12} /> {s.phone}</div>}
-                </td>
-                <td>
-                  <span className="badge badge-blue">{s.contract_count} contrato{s.contract_count !== 1 ? "s" : ""}</span>
-                </td>
-                <td><span className={`badge ${s.active ? "badge-green" : "badge-grey"}`}>{s.active ? "Ativo" : "Inativo"}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {pages > 1 && (
-          <div className="pagination">
-            <button disabled={page <= 1} onClick={() => { const p = page - 1; setPage(p); refreshSuppliers(p); }}><ChevronLeft size={16} /></button>
-            <span>{page} / {pages}</span>
-            <button disabled={page >= pages} onClick={() => { const p = page + 1; setPage(p); refreshSuppliers(p); }}><ChevronRight size={16} /></button>
+      <section className="module-panel">
+        <div className="module-toolbar">
+          <label>
+            <Search size={18} />
+            <input
+              placeholder="Buscar fornecedor..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { setPage(1); refreshSuppliers(1, search); }
+              }}
+            />
+          </label>
+        </div>
+
+        {!loading && suppliers.length === 0 ? (
+          <div className="module-state">
+            <Users />
+            <strong>Nenhum fornecedor encontrado</strong>
+            <span>Ajuste a busca ou cadastre um novo fornecedor.</span>
+          </div>
+        ) : (
+          <div className="module-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>CNPJ/CPF</th>
+                  <th>Categoria</th>
+                  <th>Contato</th>
+                  <th>Contratos</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {suppliers.map((s) => (
+                  <tr key={s.id} onClick={() => openSupplierDetail(s.id)}>
+                    <td><strong>{s.name}</strong></td>
+                    <td>{s.document ?? "—"}</td>
+                    <td>{s.category ?? "—"}</td>
+                    <td>
+                      {s.email && <div className="cell-sub"><Mail size={12} /> {s.email}</div>}
+                      {s.phone && <div className="cell-sub"><Phone size={12} /> {s.phone}</div>}
+                    </td>
+                    <td>{s.contract_count} contrato{s.contract_count !== 1 ? "s" : ""}</td>
+                    <td><span className={`status ${s.active ? "status-done" : "status-neutral"}`}>{s.active ? "Ativo" : "Inativo"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
 
-      {drawerMode !== "none" && (
-        <div className="drawer-overlay" onClick={closeDrawer}>
-          <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="drawer-header">
-              <h2>
-                {drawerMode === "form" && (selectedSupplier ? "Editar fornecedor" : "Novo fornecedor")}
-                {drawerMode === "detail" && selectedSupplier?.name}
-              </h2>
-              <button className="btn-icon" onClick={closeDrawer}><X size={20} /></button>
+        <footer className="module-pagination">
+          <span>{total} fornecedor{total !== 1 ? "es" : ""}</span>
+          {pages > 1 && (
+            <div>
+              <button disabled={page <= 1} onClick={() => { const p = page - 1; setPage(p); refreshSuppliers(p); }}><ChevronLeft size={16} /></button>
+              <span>{page} / {pages}</span>
+              <button disabled={page >= pages} onClick={() => { const p = page + 1; setPage(p); refreshSuppliers(p); }}><ChevronRight size={16} /></button>
             </div>
+          )}
+        </footer>
+      </section>
 
-            {drawerMode === "form" && (
-              <SupplierForm
-                initial={selectedSupplier}
-                onSave={selectedSupplier ? handleUpdateSupplier : handleCreateSupplier}
-                onCancel={closeDrawer}
-              />
-            )}
+      {/* Create / edit modal */}
+      {modalMode === "form" && (
+        <div className="modal-layer" role="presentation" onClick={closeModal}>
+          <section className="record-modal" role="dialog" aria-modal="true" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <span>Cadastros</span>
+                <h2>{selectedSupplier ? "Editar fornecedor" : "Novo fornecedor"}</h2>
+              </div>
+              <button className="icon-button" onClick={closeModal}><X /></button>
+            </header>
+            <SupplierForm
+              initial={selectedSupplier}
+              onSave={selectedSupplier ? handleUpdateSupplier : handleCreateSupplier}
+              onCancel={closeModal}
+            />
+          </section>
+        </div>
+      )}
 
-            {drawerMode === "detail" && selectedSupplier && (
-              <div className="drawer-content">
-                <div className="detail-meta-row">
-                  <span className={`badge ${selectedSupplier.active ? "badge-green" : "badge-grey"}`}>{selectedSupplier.active ? "Ativo" : "Inativo"}</span>
-                  {selectedSupplier.category && <span className="badge badge-blue">{selectedSupplier.category}</span>}
-                </div>
-                <div className="status-actions">
-                  <button className="btn-sm btn-secondary" onClick={() => setDrawerMode("form")}>
-                    <Edit2 size={14} /> Editar
-                  </button>
-                  <button className="btn-sm btn-red" onClick={() => handleDeleteSupplier(selectedSupplier.id)}>
-                    <Trash2 size={14} /> Excluir
-                  </button>
-                </div>
+      {/* Detail modal */}
+      {modalMode === "detail" && selectedSupplier && (
+        <div className="modal-layer" role="presentation" onClick={closeModal}>
+          <section className="record-modal has-timeline" role="dialog" aria-modal="true" style={{ maxWidth: 780 }} onClick={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <span>#{selectedSupplier.id}</span>
+                <h2>{selectedSupplier.name}</h2>
+              </div>
+              <button className="icon-button" onClick={closeModal}><X /></button>
+            </header>
 
-                <div className="detail-fields">
-                  {selectedSupplier.document && <div className="detail-field"><label>CNPJ/CPF</label><span>{selectedSupplier.document}</span></div>}
-                  {selectedSupplier.email && <div className="detail-field"><label>E-mail</label><a href={`mailto:${selectedSupplier.email}`}>{selectedSupplier.email}</a></div>}
-                  {selectedSupplier.phone && <div className="detail-field"><label>Telefone</label><span>{selectedSupplier.phone}</span></div>}
-                  {selectedSupplier.website && <div className="detail-field span-2"><label>Website</label><a href={selectedSupplier.website} target="_blank" rel="noopener noreferrer">{selectedSupplier.website}</a></div>}
-                  {(selectedSupplier.address_street) && (
-                    <div className="detail-field span-2">
-                      <label>Endereço</label>
-                      <span>{[selectedSupplier.address_street, selectedSupplier.address_number, selectedSupplier.address_complement, selectedSupplier.address_city, selectedSupplier.address_state, selectedSupplier.address_zip].filter(Boolean).join(", ")}</span>
-                    </div>
-                  )}
-                  {selectedSupplier.notes && <div className="detail-field span-2"><label>Observações</label><p className="text-block">{selectedSupplier.notes}</p></div>}
-                </div>
+            <form onSubmit={(e) => e.preventDefault()}>
+              <div className="supplier-badges">
+                <span className={`status ${selectedSupplier.active ? "status-done" : "status-neutral"}`}>{selectedSupplier.active ? "Ativo" : "Inativo"}</span>
+                {selectedSupplier.category && <span className="status status-neutral">{selectedSupplier.category}</span>}
+              </div>
 
-                <div className="section-header">
-                  <span>Contatos ({selectedSupplier.contacts.length})</span>
-                  {!showContactForm && (
-                    <button className="btn-sm btn-secondary" onClick={() => setShowContactForm(true)}>
-                      <Plus size={14} /> Adicionar
-                    </button>
-                  )}
-                </div>
-                {showContactForm && (
-                  <ContactForm
-                    supplierId={selectedSupplier.id}
-                    onSave={async () => {
-                      setShowContactForm(false);
-                      const updated = await getSupplierAction(selectedSupplier.id);
-                      setSelectedSupplier(updated);
-                    }}
-                    onCancel={() => setShowContactForm(false)}
-                  />
+              <div className="supplier-actions">
+                <button type="button" className="secondary-button" onClick={() => setModalMode("form")}>
+                  <Edit2 size={14} /> Editar
+                </button>
+                <button type="button" className="secondary-button" style={{ color: "var(--red)" }} onClick={() => handleDeleteSupplier(selectedSupplier.id)}>
+                  <Trash2 size={14} /> Excluir
+                </button>
+              </div>
+
+              <div className="form-grid">
+                {selectedSupplier.document && <label>CNPJ/CPF<span>{selectedSupplier.document}</span></label>}
+                {selectedSupplier.email && <label>E-mail<span><a href={`mailto:${selectedSupplier.email}`}>{selectedSupplier.email}</a></span></label>}
+                {selectedSupplier.phone && <label>Telefone<span>{selectedSupplier.phone}</span></label>}
+                {selectedSupplier.website && (
+                  <label style={{ gridColumn: "1 / -1" }}>Website<span><a href={selectedSupplier.website} target="_blank" rel="noopener noreferrer">{selectedSupplier.website}</a></span></label>
                 )}
-                {selectedSupplier.contacts.length === 0 && !showContactForm && (
-                  <p className="empty-section">Nenhum contato cadastrado.</p>
+                {selectedSupplier.address_street && (
+                  <label style={{ gridColumn: "1 / -1" }}>Endereço<span>{[selectedSupplier.address_street, selectedSupplier.address_number, selectedSupplier.address_complement, selectedSupplier.address_city, selectedSupplier.address_state, selectedSupplier.address_zip].filter(Boolean).join(", ")}</span></label>
                 )}
-                {selectedSupplier.contacts.map((c: SupplierContact) => (
-                  <div key={c.id} className="contact-card">
-                    <div className="contact-header">
-                      <div>
-                        <strong>{c.name}</strong>
-                        {c.is_primary && <Star size={12} className="primary-star" />}
-                        {c.role && <span className="cell-sub">{c.role}</span>}
-                      </div>
-                      <button className="btn-icon-sm" onClick={async () => {
+                {selectedSupplier.notes && (
+                  <label style={{ gridColumn: "1 / -1" }}>Observações<span style={{ whiteSpace: "pre-wrap", fontWeight: 400 }}>{selectedSupplier.notes}</span></label>
+                )}
+              </div>
+
+              <div className="section-header">
+                <strong>Contatos ({selectedSupplier.contacts.length})</strong>
+                {!showContactForm && (
+                  <button type="button" className="secondary-button" onClick={() => setShowContactForm(true)}>
+                    <Plus size={14} /> Adicionar
+                  </button>
+                )}
+              </div>
+              {showContactForm && (
+                <ContactForm
+                  supplierId={selectedSupplier.id}
+                  onSave={async () => {
+                    setShowContactForm(false);
+                    const updated = await getSupplierAction(selectedSupplier.id);
+                    setSelectedSupplier(updated);
+                  }}
+                  onCancel={() => setShowContactForm(false)}
+                />
+              )}
+              {selectedSupplier.contacts.length === 0 && !showContactForm && (
+                <p className="empty-hint">Nenhum contato cadastrado.</p>
+              )}
+              {selectedSupplier.contacts.map((c: SupplierContact) => (
+                <div key={c.id} className="timeline-entry">
+                  {c.is_primary && <Star size={14} className="primary-star" />}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong>{c.name}{c.role && <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {c.role}</span>}</strong>
+                      <button type="button" className="icon-button" onClick={async () => {
                         if (!confirm("Remover contato?")) return;
                         await deleteContactAction(c.id);
                         const updated = await getSupplierAction(selectedSupplier.id);
                         setSelectedSupplier(updated);
                       }}><Trash2 size={14} /></button>
                     </div>
-                    {c.email && <div className="cell-sub"><Mail size={12} /> {c.email}</div>}
-                    {c.phone && <div className="cell-sub"><Phone size={12} /> {c.phone}</div>}
-                    {c.whatsapp && <div className="cell-sub"><Phone size={12} /> WhatsApp: {c.whatsapp}</div>}
-                    {c.notes && <p className="cell-sub">{c.notes}</p>}
+                    {c.email && <small style={{ display: "block", color: "var(--muted)" }}>{c.email}</small>}
+                    {c.phone && <small style={{ display: "block", color: "var(--muted)" }}>{c.phone}</small>}
+                    {c.whatsapp && <small style={{ display: "block", color: "var(--muted)" }}>WhatsApp: {c.whatsapp}</small>}
+                    {c.notes && <small style={{ display: "block", color: "var(--muted)" }}>{c.notes}</small>}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+            </form>
+          </section>
         </div>
       )}
 
       <style>{`
-        .heading-actions { display:flex; gap:8px; justify-content:flex-end; margin-bottom:12px; }
-        .list-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
-        .search-wrap { display:flex; align-items:center; gap:6px; background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; min-width:220px; }
-        .search-wrap input { border:none; background:none; outline:none; font-size:.875rem; width:100%; }
-        .data-table-wrap { overflow-x:auto; }
-        .data-table { width:100%; border-collapse:collapse; font-size:.875rem; }
-        .data-table th { text-align:left; padding:8px 12px; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); border-bottom:1px solid var(--border); }
-        .data-table td { padding:10px 12px; border-bottom:1px solid var(--border-light,#f0f0f0); vertical-align:top; }
-        .data-table tr.clickable { cursor:pointer; }
-        .data-table tr.clickable:hover td { background:var(--hover-bg,rgba(0,0,0,.03)); }
-        .cell-title { font-weight:500; }
-        .cell-sub { font-size:.8rem; color:var(--text-muted); display:flex; align-items:center; gap:4px; margin-top:2px; }
-        .empty-cell { text-align:center; color:var(--text-muted); padding:32px; }
-        .pagination { display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:12px; font-size:.85rem; }
-        .pagination button { padding:4px 8px; border:1px solid var(--border); border-radius:4px; background:none; cursor:pointer; }
-        .pagination button:disabled { opacity:.4; cursor:default; }
-        .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:.75rem; font-weight:600; }
-        .badge-grey { background:#f3f4f6; color:#374151; }
-        .badge-green { background:#d1fae5; color:#065f46; }
-        .badge-blue { background:#dbeafe; color:#1d4ed8; }
-        .badge-red { background:#fee2e2; color:#991b1b; }
-        .btn-primary { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:var(--primary,#2563eb); color:#fff; border:none; border-radius:6px; font-size:.875rem; font-weight:500; cursor:pointer; }
-        .btn-secondary { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:none; border:1px solid var(--border); border-radius:6px; font-size:.875rem; cursor:pointer; }
-        .btn-icon { background:none; border:none; cursor:pointer; color:var(--text-muted); }
-        .btn-icon-sm { background:none; border:none; cursor:pointer; color:var(--text-muted); padding:2px; }
-        .btn-sm { display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:6px; font-size:.8rem; cursor:pointer; border:none; }
-        .btn-red { background:#fee2e2; color:#991b1b; }
-        .btn-sm.btn-secondary { background:var(--input-bg); border:1px solid var(--border); color:var(--text); }
-        .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:100; display:flex; justify-content:flex-end; }
-        .drawer-panel { width:min(680px,95vw); background:var(--bg,#fff); height:100vh; overflow-y:auto; display:flex; flex-direction:column; }
-        .drawer-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 16px; border-bottom:1px solid var(--border); }
-        .drawer-header h2 { font-size:1.1rem; font-weight:600; margin:0; }
-        .drawer-form { padding:16px 24px 24px; overflow-y:auto; flex:1; }
-        .drawer-content { padding:16px 24px; overflow-y:auto; flex:1; }
-        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        .field { display:flex; flex-direction:column; gap:4px; }
-        .field.span-2 { grid-column:span 2; }
-        .field label { font-size:.8rem; font-weight:500; color:var(--text-muted); }
-        .field input, .field select, .field textarea { padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:.875rem; background:var(--input-bg,#fff); }
-        .field-section-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); padding-top:8px; border-top:1px solid var(--border-light,#f0f0f0); }
-        .checkbox-wrap { display:flex; align-items:center; gap:8px; font-size:.875rem; cursor:pointer; }
-        .form-error { color:#991b1b; font-size:.85rem; margin-top:8px; }
-        .drawer-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; padding-top:12px; border-top:1px solid var(--border-light,#f0f0f0); }
-        .inline-form { background:var(--hover-bg,rgba(0,0,0,.02)); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin:8px 0 12px; }
-        .detail-meta-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-        .status-actions { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-        .detail-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
-        .detail-field { display:flex; flex-direction:column; gap:2px; }
-        .detail-field.span-2 { grid-column:span 2; }
-        .detail-field label { font-size:.75rem; font-weight:500; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
-        .detail-field span, .detail-field a { font-size:.875rem; }
-        .text-block { font-size:.875rem; white-space:pre-wrap; margin:0; line-height:1.5; }
-        .section-header { display:flex; align-items:center; justify-content:space-between; margin:12px 0 8px; }
-        .section-header span { font-weight:600; font-size:.9rem; }
-        .empty-section { color:var(--text-muted); font-size:.875rem; text-align:center; padding:16px; }
-        .contact-card { padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; }
-        .contact-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:4px; }
-        .contact-header strong { font-size:.875rem; }
-        .primary-star { color:#f59e0b; margin-left:4px; }
+        .supplier-badges { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+        .supplier-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+        .cell-sub { font-size: var(--font-xs); color: var(--muted); display: flex; align-items: center; gap: 4px; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; }
+        .empty-hint { color: var(--muted); font-size: var(--font-sm); text-align: center; padding: var(--sp-5) 0; }
+        .timeline-entry { display: flex; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+        .timeline-entry:last-child { border-bottom: 0; }
+        .primary-star { color: #f59e0b; margin-top: 3px; }
+        .checkbox-row { display: flex !important; flex-direction: row !important; align-items: center; gap: var(--sp-2); }
+        .checkbox-row input { width: auto !important; min-height: 0 !important; }
+        .record-modal.has-timeline label > span { font-size: var(--font-base); font-weight: 400; color: var(--ink); }
       `}</style>
     </>
   );

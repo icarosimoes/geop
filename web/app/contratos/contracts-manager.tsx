@@ -1,9 +1,11 @@
 "use client";
 
+import type { AttachmentItem } from "@/app/actions";
+import { deleteAttachmentAction, fetchAttachments, uploadAttachmentAction } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 import {
   Search, Plus, X, AlertTriangle, CheckCircle2, Clock, FileText,
-  Ban, RefreshCw, Edit2, Trash2, ChevronLeft, ChevronRight,
+  Ban, RefreshCw, Edit2, Trash2, ChevronLeft, ChevronRight, Paperclip, Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ContractDetail, ContractSummary, SupplierOption } from "./actions";
@@ -12,6 +14,81 @@ import {
   deleteContractAction, getContractAction, listContractsAction,
   listSupplierOptionsAction, updateContractAction, updateContractStatusAction,
 } from "./actions";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ---- Attachments Panel ----
+
+function ContractAttachments({ contractId }: { contractId: number }) {
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function refresh() {
+    setLoading(true);
+    setAttachments(await fetchAttachments("contract", contractId));
+    setLoading(false);
+  }
+
+  useEffect(() => { refresh(); }, [contractId]);
+
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError("");
+    for (const file of Array.from(files)) {
+      const res = await uploadAttachmentAction("contract", contractId, file);
+      if (!res.ok) setError(res.error ?? "Erro ao enviar anexo.");
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    await refresh();
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm("Excluir este anexo?")) return;
+    await deleteAttachmentAction(id);
+    await refresh();
+  }
+
+  return (
+    <div>
+      <div className="section-header">
+        <strong>Anexos ({attachments.length})</strong>
+        <button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+          <Upload size={14} /> {uploading ? "Enviando…" : "Enviar arquivo"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => handleUpload(e.target.files)}
+        />
+      </div>
+      {error && <div className="kanban-form-error">{error}</div>}
+      {!loading && attachments.length === 0 && (
+        <p className="empty-hint">Nenhum anexo. Envie o PDF do contrato assinado.</p>
+      )}
+      {attachments.map((a) => (
+        <div key={a.id} className="timeline-entry">
+          <Paperclip size={16} style={{ marginTop: 3, color: "var(--muted)" }} />
+          <div style={{ flex: 1 }}>
+            <a href={`/api/attachments/${a.id}/download`} target="_blank" rel="noopener noreferrer">{a.filename}</a>
+            <small style={{ display: "block", color: "var(--muted)" }}>{formatFileSize(a.size_bytes)}</small>
+          </div>
+          <button type="button" className="icon-button" onClick={() => handleDelete(a.id)}><Trash2 size={14} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   servico: "Serviço", fornecimento: "Fornecimento", locacao: "Locação",
@@ -239,7 +316,7 @@ export function ContractsManager({
   const [selectedContract, setSelectedContract] = useState<ContractDetail | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
   const [modalMode, setModalMode] = useState<"none" | "form" | "detail">("none");
-  const [detailTab, setDetailTab] = useState<"info" | "financial" | "amendments" | "approvals">("info");
+  const [detailTab, setDetailTab] = useState<"info" | "financial" | "amendments" | "approvals" | "attachments">("info");
   const [showAmendmentForm, setShowAmendmentForm] = useState(false);
   const [approvalComment, setApprovalComment] = useState("");
 
@@ -491,12 +568,13 @@ export function ContractsManager({
               </div>
 
               <div className="detail-tabs">
-                {(["info", "financial", "amendments", "approvals"] as const).map((t) => (
+                {(["info", "financial", "amendments", "approvals", "attachments"] as const).map((t) => (
                   <button key={t} type="button" className={detailTab === t ? "active" : ""} onClick={() => setDetailTab(t)}>
                     {t === "info" && "Informações"}
                     {t === "financial" && "Financeiro"}
                     {t === "amendments" && `Aditivos (${selectedContract.amendments.length})`}
                     {t === "approvals" && `Aprovações (${selectedContract.approval_steps.length})`}
+                    {t === "attachments" && "Anexos"}
                   </button>
                 ))}
               </div>
@@ -613,6 +691,8 @@ export function ContractsManager({
                   ))}
                 </div>
               )}
+
+              {detailTab === "attachments" && <ContractAttachments contractId={selectedContract.id} />}
             </form>
           </section>
         </div>
