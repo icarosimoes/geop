@@ -29,9 +29,7 @@ def upgrade() -> None:
         ),  # noqa: E501
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("code", sa.String(40)),
-        sa.Column(
-            "parent_id", sa.Integer, sa.ForeignKey("cost_centers.id", ondelete="SET NULL")
-        ),  # noqa: E501
+        sa.Column("parent_id", sa.Integer, sa.ForeignKey("cost_centers.id", ondelete="SET NULL")),  # noqa: E501
         sa.Column("active", sa.Boolean, server_default=sa.true()),
         sa.Column("deleted_at", sa.DateTime),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
