@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import NamedTuple
 
 from sqlalchemy import func, or_, select
@@ -50,7 +50,7 @@ async def list_suppliers(
         q = q.where(Supplier.active.is_(True))
 
     total = await session.scalar(select(func.count()).select_from(q.subquery()))
-    rows = (
+    suppliers = (
         await session.execute(
             q.order_by(Supplier.name.asc())
             .offset((page - 1) * page_size)
@@ -58,22 +58,40 @@ async def list_suppliers(
         )
     ).scalars().all()
 
-    result = []
-    for s in rows:
-        cc = await session.scalar(
-            select(func.count()).where(
-                SupplierContact.supplier_id == s.id,
+    if not suppliers:
+        return [], 0
+
+    supplier_ids = [s.id for s in suppliers]
+
+    contact_counts_rows = (
+        await session.execute(
+            select(SupplierContact.supplier_id, func.count().label("cnt"))
+            .where(
+                SupplierContact.supplier_id.in_(supplier_ids),
                 SupplierContact.deleted_at.is_(None),
             )
-        ) or 0
-        ct = await session.scalar(
-            select(func.count()).where(
-                Contract.supplier_id == s.id,
+            .group_by(SupplierContact.supplier_id)
+        )
+    ).all()
+    contact_counts = {r.supplier_id: r.cnt for r in contact_counts_rows}
+
+    contract_counts_rows = (
+        await session.execute(
+            select(Contract.supplier_id, func.count().label("cnt"))
+            .where(
+                Contract.supplier_id.in_(supplier_ids),
                 Contract.company_id == company_id,
                 Contract.deleted_at.is_(None),
             )
-        ) or 0
-        result.append(SupplierRow(s, cc, ct))
+            .group_by(Contract.supplier_id)
+        )
+    ).all()
+    contract_counts = {r.supplier_id: r.cnt for r in contract_counts_rows}
+
+    result = [
+        SupplierRow(s, contact_counts.get(s.id, 0), contract_counts.get(s.id, 0))
+        for s in suppliers
+    ]
     return result, total or 0
 
 
@@ -205,14 +223,6 @@ async def create_supplier_contact(
     if not supplier:
         return None
     if data.get("is_primary"):
-        await session.execute(
-            select(SupplierContact)
-            .where(
-                SupplierContact.supplier_id == supplier_id,
-                SupplierContact.is_primary.is_(True),
-                SupplierContact.deleted_at.is_(None),
-            )
-        )
         primaries = (
             await session.execute(
                 select(SupplierContact).where(
@@ -343,11 +353,15 @@ async def list_contracts(
         q = q.where(Contract.supplier_id == supplier_id)
     if expiring_in_days is not None:
         today = date.today()
-        limit = date.fromordinal(today.toordinal() + expiring_in_days)
-        q = q.where(Contract.end_date.isnot(None), Contract.end_date <= limit)
+        limit = today + timedelta(days=expiring_in_days)
+        q = q.where(
+            Contract.end_date.isnot(None),
+            Contract.end_date >= today,
+            Contract.end_date <= limit,
+        )
 
     total = await session.scalar(select(func.count()).select_from(q.subquery()))
-    rows = (
+    contracts = (
         await session.execute(
             q.order_by(Contract.end_date.asc().nullslast(), Contract.updated_at.desc())
             .offset((page - 1) * page_size)
@@ -355,23 +369,38 @@ async def list_contracts(
         )
     ).scalars().all()
 
-    result = []
-    for c in rows:
-        supplier_name = (
-            await session.scalar(
-                select(Supplier.name).where(Supplier.id == c.supplier_id)
+    if not contracts:
+        return [], total or 0
+
+    supplier_ids = [c.supplier_id for c in contracts if c.supplier_id]
+    responsible_ids = [c.responsible_user_id for c in contracts if c.responsible_user_id]
+
+    supplier_names: dict[int, str] = {}
+    if supplier_ids:
+        rows = (
+            await session.execute(
+                select(Supplier.id, Supplier.name).where(Supplier.id.in_(supplier_ids))
             )
-            if c.supplier_id
-            else None
-        )
-        responsible_name = (
-            await session.scalar(
-                select(User.name).where(User.id == c.responsible_user_id)
+        ).all()
+        supplier_names = {r.id: r.name for r in rows}
+
+    responsible_names: dict[int, str] = {}
+    if responsible_ids:
+        rows = (
+            await session.execute(
+                select(User.id, User.name).where(User.id.in_(responsible_ids))
             )
-            if c.responsible_user_id
-            else None
+        ).all()
+        responsible_names = {r.id: r.name for r in rows}
+
+    result = [
+        ContractRow(
+            c,
+            supplier_names.get(c.supplier_id) if c.supplier_id else None,
+            responsible_names.get(c.responsible_user_id) if c.responsible_user_id else None,
         )
-        result.append(ContractRow(c, supplier_name, responsible_name))
+        for c in contracts
+    ]
     return result, total or 0
 
 
@@ -418,10 +447,18 @@ async def get_contract(
             )
         ).scalars().all()
     )
-    steps = []
-    for step in raw_steps:
-        uname = await session.scalar(select(User.name).where(User.id == step.approver_user_id))
-        steps.append((step, uname))
+
+    approver_ids = [s.approver_user_id for s in raw_steps]
+    approver_names: dict[int, str] = {}
+    if approver_ids:
+        rows = (
+            await session.execute(
+                select(User.id, User.name).where(User.id.in_(approver_ids))
+            )
+        ).all()
+        approver_names = {r.id: r.name for r in rows}
+
+    steps = [(s, approver_names.get(s.approver_user_id)) for s in raw_steps]
     return contract, supplier_name, responsible_name, amendments, steps
 
 
@@ -564,7 +601,6 @@ async def create_amendment(
     )
     session.add(amendment)
 
-    # Apply amendment effects to contract
     if data.get("new_end_date"):
         contract.end_date = data["new_end_date"]
     if data.get("new_value") is not None:
@@ -625,6 +661,7 @@ async def decide_approval(
             entity_id=contract_id, event_type="rejected", diff={"comment": comment},
         )
     else:
+        await session.flush()
         pending = await session.scalar(
             select(func.count()).where(
                 ContractApprovalStep.contract_id == contract_id,

@@ -260,7 +260,10 @@ class ContractUpdate(BaseModel):
 
 
 class ContractStatusUpdate(BaseModel):
-    status: str
+    status: str = Field(
+        ...,
+        pattern="^(rascunho|aguardando_aprovacao|ativo|em_renovacao|suspenso|encerrado|cancelado)$",
+    )
     comment: str | None = None
 
 
