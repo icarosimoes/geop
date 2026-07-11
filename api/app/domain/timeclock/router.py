@@ -507,6 +507,7 @@ async def reset_employee_pin_endpoint(
     new_pin, error = await reset_employee_pin(session, user.company_id, user.id, employee_id)
     if error is not None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
+    assert new_pin is not None
     return EmployeePinResetResponse(pin=new_pin)
 
 
@@ -926,9 +927,20 @@ async def export_mirror_endpoint(
         )
 
     headers = [
-        "Data", "1ª Entrada", "1ª Saída", "2ª Entrada", "2ª Saída",
-        "Crédito", "Débito", "Intervalo", "Trabalhado",
-        "HE 50%", "HE 100%", "Adicional Noturno", "Saldo", "Observações",
+        "Data",
+        "1ª Entrada",
+        "1ª Saída",
+        "2ª Entrada",
+        "2ª Saída",
+        "Crédito",
+        "Débito",
+        "Intervalo",
+        "Trabalhado",
+        "HE 50%",
+        "HE 100%",
+        "Adicional Noturno",
+        "Saldo",
+        "Observações",
     ]
     rows = [
         [

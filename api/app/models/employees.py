@@ -101,9 +101,7 @@ class EmployeeCredential(Base, TenantMixin, TimestampMixin):
     para não misturar cadastro com segredo de autenticação. 1:1 com Employee."""
 
     __tablename__ = "employee_credentials"
-    __table_args__ = (
-        UniqueConstraint("employee_id", name="uq_employee_credentials_employee"),
-    )
+    __table_args__ = (UniqueConstraint("employee_id", name="uq_employee_credentials_employee"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     employee_id: Mapped[int] = mapped_column(

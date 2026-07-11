@@ -100,9 +100,7 @@ async def list_employees_endpoint(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     status: str | None = None,
 ) -> EmployeeListResponse:
-    items, total = await list_employees(
-        session, user.company_id, page, page_size, status=status
-    )
+    items, total = await list_employees(session, user.company_id, page, page_size, status=status)
     return EmployeeListResponse(
         items=[_to_summary(item) for item in items],
         total=total,
@@ -237,7 +235,7 @@ async def import_employees_endpoint(
         raise HTTPException(status_code=400, detail={"code": "empty_file"})
 
     created, failed, results = await import_employees(session, user.company_id, user.id, rows)
-    return EmployeeImportResult(total=len(rows), created=created, failed=failed, results=results)
+    return EmployeeImportResult(total=len(rows), created=created, failed=failed, results=results)  # type: ignore[arg-type]
 
 
 @router.delete("/{employee_id}", status_code=204)

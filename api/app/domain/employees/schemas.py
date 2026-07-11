@@ -21,7 +21,7 @@ def _validate_cpf(value: str | None) -> str | None:
 def _validate_cpf_required(value: str) -> str:
     if not value or not value.strip():
         raise ValueError("CPF é obrigatório")
-    return _validate_cpf(value)
+    return _validate_cpf(value)  # type: ignore[return-value]
 
 
 def _validate_date_format(value: str | None, field_name: str) -> str | None:

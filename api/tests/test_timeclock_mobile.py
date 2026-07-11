@@ -21,6 +21,7 @@ def _reset_login_rate_limit():
     yield
     limiter.reset()
 
+
 MOBILE_LOGIN_URL = "/api/v1/timeclock/mobile/login"
 MOBILE_PIN_URL = "/api/v1/timeclock/mobile/pin"
 MOBILE_PUNCH_URL = "/api/v1/timeclock/mobile/punch"

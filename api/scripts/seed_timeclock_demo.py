@@ -109,8 +109,15 @@ async def main() -> None:
         ]:
             record = await create_registry(session, company_id, actor_id, name, "Local")
             await update_registry(
-                session, company_id, actor_id, record.id, "Local", name,
-                latitude=lat, longitude=lng, geofence_radius_m=150,
+                session,
+                company_id,
+                actor_id,
+                record.id,
+                "Local",
+                name,
+                latitude=lat,
+                longitude=lng,
+                geofence_radius_m=150,
             )
             locais[name] = record.id
         print("locais:", locais)
@@ -194,16 +201,26 @@ async def main() -> None:
                         minutes=variance_in
                     )
                     await create_manual_punch(
-                        session, company_id, actor_id,
-                        employee_id=emp.id, punched_at=checkin, punch_type="in", notes=None,
+                        session,
+                        company_id,
+                        actor_id,
+                        employee_id=emp.id,
+                        punched_at=checkin,
+                        punch_type="in",
+                        notes=None,
                     )
                     if not (day_counter == 15 and idx == 5):  # esquecimento proposital (Rodrigo)
                         checkout = datetime.combine(
                             d, time(punch_end_hour[shift.id], 0)
                         ) + timedelta(minutes=variance_out)
                         await create_manual_punch(
-                            session, company_id, actor_id,
-                            employee_id=emp.id, punched_at=checkout, punch_type="out", notes=None,
+                            session,
+                            company_id,
+                            actor_id,
+                            employee_id=emp.id,
+                            punched_at=checkout,
+                            punch_type="out",
+                            notes=None,
                         )
                 d += timedelta(days=1)
         print("batidas lançadas")
@@ -212,32 +229,48 @@ async def main() -> None:
         for emp in employees:
             await recalculate_hour_bank(session, company_id, actor_id, emp.id, start, today)
         await set_hour_bank_initial_balance(
-            session, company_id, actor_id, employees[0].id, start - timedelta(days=1),
-            180, "Saldo migrado do sistema anterior",
+            session,
+            company_id,
+            actor_id,
+            employees[0].id,
+            start - timedelta(days=1),
+            180,
+            "Saldo migrado do sistema anterior",
         )
         await set_hour_bank_initial_balance(
-            session, company_id, actor_id, employees[7].id, start - timedelta(days=1),
-            -60, "Saldo negativo migrado do sistema anterior",
+            session,
+            company_id,
+            actor_id,
+            employees[7].id,
+            start - timedelta(days=1),
+            -60,
+            "Saldo negativo migrado do sistema anterior",
         )
         print("banco de horas recalculado")
 
         # 8. Ajustes de ponto: 1 pendente, 1 aprovado, 1 rejeitado
         adj_pendente = await create_punch_adjustment_request(
-            session, company_id, employees[5].id,
+            session,
+            company_id,
+            employees[5].id,
             punch_id=None,
             requested_punched_at=datetime.combine(today - timedelta(days=1), time(22, 5)),
             requested_punch_type="out",
             reason="Esqueci de bater a saída ontem, saí no horário normal do turno.",
         )
         adj_aprovar = await create_punch_adjustment_request(
-            session, company_id, employees[8].id,
+            session,
+            company_id,
+            employees[8].id,
             punch_id=None,
             requested_punched_at=datetime.combine(today - timedelta(days=3), time(7, 0)),
             requested_punch_type="in",
             reason="Cheguei mais cedo mas o app não registrou a entrada.",
         )
         adj_rejeitar = await create_punch_adjustment_request(
-            session, company_id, employees[9].id,
+            session,
+            company_id,
+            employees[9].id,
             punch_id=None,
             requested_punched_at=datetime.combine(today - timedelta(days=2), time(13, 30)),
             requested_punch_type="in",
@@ -245,12 +278,20 @@ async def main() -> None:
         )
         assert adj_pendente is not None
         await review_punch_adjustment_request(
-            session, company_id, actor_id, adj_aprovar.id,
-            approve=True, review_notes="Aprovado, confirmado com o supervisor.",
+            session,
+            company_id,
+            actor_id,
+            adj_aprovar.id,
+            approve=True,
+            review_notes="Aprovado, confirmado com o supervisor.",
         )
         await review_punch_adjustment_request(
-            session, company_id, actor_id, adj_rejeitar.id,
-            approve=False, review_notes="Sem registro de geofencing compatível, rejeitado.",
+            session,
+            company_id,
+            actor_id,
+            adj_rejeitar.id,
+            approve=False,
+            review_notes="Sem registro de geofencing compatível, rejeitado.",
         )
         print("ajustes de ponto: 1 pendente, 1 aprovado, 1 rejeitado")
 
@@ -258,7 +299,9 @@ async def main() -> None:
         for emp in employees[:3]:
             for month in ["2026-05", "2026-06"]:
                 attachment = await create_attachment(
-                    session, company_id, actor_id,
+                    session,
+                    company_id,
+                    actor_id,
                     entity_type="employee_payslip",
                     entity_id=emp.id,
                     filename=f"contracheque-{month}.pdf",
@@ -270,7 +313,9 @@ async def main() -> None:
                     print("erro anexo:", attachment)
                     continue
                 await create_employee_payslip(
-                    session, company_id, actor_id,
+                    session,
+                    company_id,
+                    actor_id,
                     employee_id=emp.id,
                     reference_month=date.fromisoformat(f"{month}-01"),
                     attachment_id=attachment.id,
@@ -279,13 +324,20 @@ async def main() -> None:
 
         # 10. Dispositivo de ponto + vínculo (1 funcionário)
         device = await create_device(
-            session, company_id, actor_id,
-            name="Relógio Recepção (Control iD)", model="iDFace",
-            serial_number="DEMO-CTRLID-001", location_id=locais["Recepção Principal"],
+            session,
+            company_id,
+            actor_id,
+            name="Relógio Recepção (Control iD)",
+            model="iDFace",
+            serial_number="DEMO-CTRLID-001",
+            location_id=locais["Recepção Principal"],
         )
         await create_enrollment(
-            session, company_id, actor_id,
-            employee_id=employees[0].id, external_id="1001",
+            session,
+            company_id,
+            actor_id,
+            employee_id=employees[0].id,
+            external_id="1001",
         )
         print("dispositivo:", device.name, "webhook_token:", device.webhook_token)
 

@@ -155,10 +155,14 @@ async def test_import_reimport_same_competencia_updates_attachment(client, sessi
     assert data["results"][0]["status"] == "updated"
 
     rows = (
-        await session.execute(
-            select(EmployeePayslip).where(EmployeePayslip.employee_id == employee.id)
+        (
+            await session.execute(
+                select(EmployeePayslip).where(EmployeePayslip.employee_id == employee.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
 
 

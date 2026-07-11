@@ -84,9 +84,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "user_id", "date", name="uq_schedule_entries_user_date"),
     )
-    op.create_index(
-        "ix_schedule_entries_date", "schedule_entries", ["company_id", "date"]
-    )
+    op.create_index("ix_schedule_entries_date", "schedule_entries", ["company_id", "date"])
     op.create_index(
         "ix_schedule_entries_user_date", "schedule_entries", ["company_id", "user_id", "date"]
     )
@@ -158,9 +156,7 @@ def downgrade() -> None:
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "company_id", "user_id", "weekday", name="uq_work_schedules_user_day"
-        ),
+        sa.UniqueConstraint("company_id", "user_id", "weekday", name="uq_work_schedules_user_day"),
     )
     op.create_index("ix_work_schedules_user", "work_schedules", ["company_id", "user_id"])
     op.execute("ALTER TABLE work_schedules ENABLE ROW LEVEL SECURITY")

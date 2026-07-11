@@ -19,7 +19,12 @@ def upgrade() -> None:
     op.create_table(
         "suppliers",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("company_id", sa.Integer, sa.ForeignKey("companies.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "company_id",
+            sa.Integer,
+            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("document", sa.String(20)),
         sa.Column("document_type", sa.String(10)),
@@ -44,8 +49,18 @@ def upgrade() -> None:
     op.create_table(
         "supplier_contacts",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("company_id", sa.Integer, sa.ForeignKey("companies.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("supplier_id", sa.Integer, sa.ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "company_id",
+            sa.Integer,
+            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
+        sa.Column(
+            "supplier_id",
+            sa.Integer,
+            sa.ForeignKey("suppliers.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("name", sa.String(160), nullable=False),
         sa.Column("role", sa.String(120)),
         sa.Column("email", sa.String(255)),
@@ -62,12 +77,19 @@ def upgrade() -> None:
     op.create_table(
         "contracts",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("company_id", sa.Integer, sa.ForeignKey("companies.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "company_id",
+            sa.Integer,
+            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("number", sa.String(80)),
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("contract_type", sa.String(40), server_default="servico"),
         sa.Column("supplier_id", sa.Integer, sa.ForeignKey("suppliers.id", ondelete="SET NULL")),
-        sa.Column("responsible_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL")),
+        sa.Column(
+            "responsible_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL")
+        ),  # noqa: E501
         sa.Column("created_by_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL")),
         sa.Column("status", sa.String(40), server_default="rascunho"),
         sa.Column("description", sa.Text),
@@ -96,8 +118,18 @@ def upgrade() -> None:
     op.create_table(
         "contract_amendments",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("company_id", sa.Integer, sa.ForeignKey("companies.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("contract_id", sa.Integer, sa.ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "company_id",
+            sa.Integer,
+            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
+        sa.Column(
+            "contract_id",
+            sa.Integer,
+            sa.ForeignKey("contracts.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("amendment_type", sa.String(40), nullable=False),
         sa.Column("description", sa.Text, nullable=False),
         sa.Column("new_end_date", sa.Date),
@@ -112,17 +144,34 @@ def upgrade() -> None:
     op.create_table(
         "contract_approval_steps",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("company_id", sa.Integer, sa.ForeignKey("companies.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("contract_id", sa.Integer, sa.ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "company_id",
+            sa.Integer,
+            sa.ForeignKey("companies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
+        sa.Column(
+            "contract_id",
+            sa.Integer,
+            sa.ForeignKey("contracts.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("step_order", sa.Integer, server_default="1"),
-        sa.Column("approver_user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "approver_user_id",
+            sa.Integer,
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("status", sa.String(20), server_default="pendente"),
         sa.Column("comment", sa.Text),
         sa.Column("decided_at", sa.DateTime),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now()),
     )
-    op.create_index("ix_contract_approval_steps_contract", "contract_approval_steps", ["contract_id"])
+    op.create_index(
+        "ix_contract_approval_steps_contract", "contract_approval_steps", ["contract_id"]
+    )  # noqa: E501
 
 
 def downgrade() -> None:

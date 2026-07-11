@@ -51,9 +51,7 @@ async def list_employees(
     if status:
         filters.append(Employee.status == status)
 
-    total = await session.scalar(
-        select(func.count(Employee.id)).where(and_(*filters))
-    )
+    total = await session.scalar(select(func.count(Employee.id)).where(and_(*filters)))
 
     rows = (
         await session.execute(
@@ -68,10 +66,8 @@ async def list_employees(
     return list(rows), total or 0
 
 
-async def get_employee(
-    session: AsyncSession, company_id: int, employee_id: int
-) -> Employee | None:
-    return await session.scalar(
+async def get_employee(session: AsyncSession, company_id: int, employee_id: int) -> Employee | None:
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Employee).where(
             Employee.id == employee_id,
             Employee.company_id == company_id,
@@ -83,7 +79,7 @@ async def get_employee(
 async def get_sector_name(session: AsyncSession, sector_id: int | None) -> str | None:
     if not sector_id:
         return None
-    return await session.scalar(
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Sector.name).where(Sector.id == sector_id, Sector.deleted_at.is_(None))
     )
 
@@ -209,9 +205,7 @@ async def delete_employee(
     return True
 
 
-async def search_employees(
-    session: AsyncSession, company_id: int, query: str = ""
-) -> list[dict]:
+async def search_employees(session: AsyncSession, company_id: int, query: str = "") -> list[dict]:
     """Search employees by name (for autocomplete/selects)."""
     filters = [
         Employee.company_id == company_id,
@@ -222,12 +216,7 @@ async def search_employees(
         filters.append(Employee.name.ilike(f"%{query}%"))
 
     rows = (
-        await session.execute(
-            select(Employee)
-            .where(*filters)
-            .order_by(Employee.name)
-            .limit(20)
-        )
+        await session.execute(select(Employee).where(*filters).order_by(Employee.name).limit(20))
     ).scalars()
 
     return [{"id": r.id, "name": r.name} for r in rows]
@@ -375,7 +364,7 @@ async def import_employees(
         }
         name = row.get("name")
         try:
-            payload = EmployeeCreate(**row)
+            payload = EmployeeCreate(**row)  # type: ignore[arg-type]
         except ValidationError as exc:
             failed += 1
             message = "; ".join(err["msg"] for err in exc.errors())

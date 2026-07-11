@@ -65,9 +65,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "company_id", "external_id", name="uq_timeclock_enrollment_external"
-        ),
+        sa.UniqueConstraint("company_id", "external_id", name="uq_timeclock_enrollment_external"),
     )
 
     op.create_table(
@@ -87,14 +85,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(
-            ["device_id"], ["time_clock_devices.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["device_id"], ["time_clock_devices.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "device_id", "external_event_id", name="uq_time_punches_device_event"
-        ),
+        sa.UniqueConstraint("device_id", "external_event_id", name="uq_time_punches_device_event"),
     )
     op.create_index(
         "ix_time_punches_user_date", "time_punches", ["company_id", "user_id", "punched_at"]

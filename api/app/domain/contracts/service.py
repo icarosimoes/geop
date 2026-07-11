@@ -52,12 +52,14 @@ async def list_suppliers(
 
     total = await session.scalar(select(func.count()).select_from(q.subquery()))
     suppliers = (
-        await session.execute(
-            q.order_by(Supplier.name.asc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await session.execute(
+                q.order_by(Supplier.name.asc()).offset((page - 1) * page_size).limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     if not suppliers:
         return [], 0
@@ -90,8 +92,7 @@ async def list_suppliers(
     contract_counts = {r.supplier_id: r.cnt for r in contract_counts_rows}
 
     result = [
-        SupplierRow(s, contact_counts.get(s.id, 0), contract_counts.get(s.id, 0))
-        for s in suppliers
+        SupplierRow(s, contact_counts.get(s.id, 0), contract_counts.get(s.id, 0)) for s in suppliers
     ]
     return result, total or 0
 
@@ -109,15 +110,19 @@ async def get_supplier(
     if not supplier:
         return None
     contacts = (
-        await session.execute(
-            select(SupplierContact)
-            .where(
-                SupplierContact.supplier_id == supplier_id,
-                SupplierContact.deleted_at.is_(None),
+        (
+            await session.execute(
+                select(SupplierContact)
+                .where(
+                    SupplierContact.supplier_id == supplier_id,
+                    SupplierContact.deleted_at.is_(None),
+                )
+                .order_by(SupplierContact.is_primary.desc(), SupplierContact.name.asc())
             )
-            .order_by(SupplierContact.is_primary.desc(), SupplierContact.name.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return supplier, list(contacts)
 
 
@@ -128,8 +133,12 @@ async def create_supplier(
     session.add(supplier)
     await session.flush()
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="supplier",
-        entity_id=supplier.id, event_type="created",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="supplier",
+        entity_id=supplier.id,
+        event_type="created",
     )
     await session.commit()
     await session.refresh(supplier)
@@ -154,8 +163,13 @@ async def update_supplier(
     diff = compute_diff(old, data)
     if diff:
         await record_event(
-            session, company_id=company_id, user_id=user_id, entity_type="supplier",
-            entity_id=supplier.id, event_type="updated", diff=diff,
+            session,
+            company_id=company_id,
+            user_id=user_id,
+            entity_type="supplier",
+            entity_id=supplier.id,
+            event_type="updated",
+            diff=diff,
         )
     await session.commit()
     await session.refresh(supplier)
@@ -176,16 +190,18 @@ async def delete_supplier(
         return False
     supplier.deleted_at = datetime.now()
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="supplier",
-        entity_id=supplier.id, event_type="deleted",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="supplier",
+        entity_id=supplier.id,
+        event_type="deleted",
     )
     await session.commit()
     return True
 
 
-async def list_supplier_options(
-    session: AsyncSession, company_id: int
-) -> list[Supplier]:
+async def list_supplier_options(session: AsyncSession, company_id: int) -> list[Supplier]:
     return list(
         (
             await session.execute(
@@ -198,7 +214,9 @@ async def list_supplier_options(
                 .order_by(Supplier.name.asc())
                 .limit(200)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
 
@@ -225,22 +243,30 @@ async def create_supplier_contact(
         return None
     if data.get("is_primary"):
         primaries = (
-            await session.execute(
-                select(SupplierContact).where(
-                    SupplierContact.supplier_id == supplier_id,
-                    SupplierContact.is_primary.is_(True),
-                    SupplierContact.deleted_at.is_(None),
+            (
+                await session.execute(
+                    select(SupplierContact).where(
+                        SupplierContact.supplier_id == supplier_id,
+                        SupplierContact.is_primary.is_(True),
+                        SupplierContact.deleted_at.is_(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for p in primaries:
             p.is_primary = False
     contact = SupplierContact(company_id=company_id, supplier_id=supplier_id, **data)
     session.add(contact)
     await session.flush()
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="supplier_contact",
-        entity_id=contact.id, event_type="created",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="supplier_contact",
+        entity_id=contact.id,
+        event_type="created",
     )
     await session.commit()
     await session.refresh(contact)
@@ -265,22 +291,30 @@ async def update_supplier_contact(
         return None
     if data.get("is_primary"):
         primaries = (
-            await session.execute(
-                select(SupplierContact).where(
-                    SupplierContact.supplier_id == contact.supplier_id,
-                    SupplierContact.is_primary.is_(True),
-                    SupplierContact.deleted_at.is_(None),
-                    SupplierContact.id != contact_id,
+            (
+                await session.execute(
+                    select(SupplierContact).where(
+                        SupplierContact.supplier_id == contact.supplier_id,
+                        SupplierContact.is_primary.is_(True),
+                        SupplierContact.deleted_at.is_(None),
+                        SupplierContact.id != contact_id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for p in primaries:
             p.is_primary = False
     for k, v in data.items():
         setattr(contact, k, v)
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="supplier_contact",
-        entity_id=contact.id, event_type="updated",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="supplier_contact",
+        entity_id=contact.id,
+        event_type="updated",
     )
     await session.commit()
     await session.refresh(contact)
@@ -325,13 +359,16 @@ def _expiry_alert(end_date: date | None, alert_days: int) -> bool:
 async def _generate_contract_number(session: AsyncSession, company_id: int) -> str:
     year = date.today().year
     prefix = f"CTR-{year}-"
-    count = await session.scalar(
-        select(func.count()).where(
-            Contract.company_id == company_id,
-            Contract.number.like(f"{prefix}%"),
-            Contract.deleted_at.is_(None),
+    count = (
+        await session.scalar(
+            select(func.count()).where(
+                Contract.company_id == company_id,
+                Contract.number.like(f"{prefix}%"),
+                Contract.deleted_at.is_(None),
+            )
         )
-    ) or 0
+        or 0
+    )
     return f"{prefix}{count + 1:04d}"
 
 
@@ -377,12 +414,16 @@ async def list_contracts(
 
     total = await session.scalar(select(func.count()).select_from(q.subquery()))
     contracts = (
-        await session.execute(
-            q.order_by(Contract.end_date.asc().nullslast(), Contract.updated_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await session.execute(
+                q.order_by(Contract.end_date.asc().nullslast(), Contract.updated_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     if not contracts:
         return [], total or 0
@@ -402,9 +443,7 @@ async def list_contracts(
     responsible_names: dict[int, str] = {}
     if responsible_ids:
         rows = (
-            await session.execute(
-                select(User.id, User.name).where(User.id.in_(responsible_ids))
-            )
+            await session.execute(select(User.id, User.name).where(User.id.in_(responsible_ids)))
         ).all()
         responsible_names = {r.id: r.name for r in rows}
 
@@ -421,9 +460,16 @@ async def list_contracts(
 
 async def get_contract(
     session: AsyncSession, company_id: int, contract_id: int
-) -> tuple[  # noqa: E501
-    Contract, str | None, str | None, list[ContractAmendment], list[tuple[ContractApprovalStep, str | None]]  # noqa: E501
-] | None:
+) -> (
+    tuple[  # noqa: E501
+        Contract,
+        str | None,
+        str | None,
+        list[ContractAmendment],
+        list[tuple[ContractApprovalStep, str | None]],  # noqa: E501
+    ]
+    | None
+):
     contract = await session.scalar(
         select(Contract).where(
             Contract.id == contract_id,
@@ -451,7 +497,9 @@ async def get_contract(
                 .where(ContractAmendment.contract_id == contract_id)
                 .order_by(ContractAmendment.created_at.desc())
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     raw_steps = list(
         (
@@ -460,16 +508,16 @@ async def get_contract(
                 .where(ContractApprovalStep.contract_id == contract_id)
                 .order_by(ContractApprovalStep.step_order.asc())
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     approver_ids = [s.approver_user_id for s in raw_steps]
     approver_names: dict[int, str] = {}
     if approver_ids:
         rows = (
-            await session.execute(
-                select(User.id, User.name).where(User.id.in_(approver_ids))
-            )
+            await session.execute(select(User.id, User.name).where(User.id.in_(approver_ids)))
         ).all()
         approver_names = {r.id: r.name for r in rows}
 
@@ -501,8 +549,12 @@ async def create_contract(
         session.add(step)
 
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="contract",
-        entity_id=contract.id, event_type="created",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="contract",
+        entity_id=contract.id,
+        event_type="created",
     )
     await session.commit()
     await session.refresh(contract)
@@ -534,28 +586,39 @@ async def update_contract(
     diff = compute_diff(old, fields)
     if diff:
         await record_event(
-            session, company_id=company_id, user_id=user_id, entity_type="contract",
-            entity_id=contract.id, event_type="updated", diff=diff,
+            session,
+            company_id=company_id,
+            user_id=user_id,
+            entity_type="contract",
+            entity_id=contract.id,
+            event_type="updated",
+            diff=diff,
         )
 
     if approver_user_ids is not None and contract.status == "rascunho":
         existing = (
-            await session.execute(
-                select(ContractApprovalStep).where(
-                    ContractApprovalStep.contract_id == contract_id,
+            (
+                await session.execute(
+                    select(ContractApprovalStep).where(
+                        ContractApprovalStep.contract_id == contract_id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for step in existing:
             await session.delete(step)
         await session.flush()
         for i, uid in enumerate(approver_user_ids, start=1):
-            session.add(ContractApprovalStep(
-                company_id=company_id,
-                contract_id=contract_id,
-                step_order=i,
-                approver_user_id=uid,
-            ))
+            session.add(
+                ContractApprovalStep(
+                    company_id=company_id,
+                    contract_id=contract_id,
+                    step_order=i,
+                    approver_user_id=uid,
+                )
+            )
 
     await session.commit()
     await session.refresh(contract)
@@ -582,8 +645,12 @@ async def update_contract_status(
     old_status = contract.status
     contract.status = new_status
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="contract",
-        entity_id=contract.id, event_type="status_changed",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="contract",
+        entity_id=contract.id,
+        event_type="status_changed",
         diff={"from": old_status, "to": new_status, "comment": comment},
     )
     await session.commit()
@@ -605,8 +672,12 @@ async def delete_contract(
         return False
     contract.deleted_at = datetime.now()
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="contract",
-        entity_id=contract.id, event_type="deleted",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="contract",
+        entity_id=contract.id,
+        event_type="deleted",
     )
     await session.commit()
     return True
@@ -631,24 +702,30 @@ async def submit_contract(
         return None
 
     existing_steps = (
-        await session.execute(
-            select(ContractApprovalStep).where(
-                ContractApprovalStep.contract_id == contract_id,
+        (
+            await session.execute(
+                select(ContractApprovalStep).where(
+                    ContractApprovalStep.contract_id == contract_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for step in existing_steps:
         await session.delete(step)
     await session.flush()
 
     ids_to_use = approver_user_ids if approver_user_ids is not None else []
     for i, uid in enumerate(ids_to_use, start=1):
-        session.add(ContractApprovalStep(
-            company_id=company_id,
-            contract_id=contract_id,
-            step_order=i,
-            approver_user_id=uid,
-        ))
+        session.add(
+            ContractApprovalStep(
+                company_id=company_id,
+                contract_id=contract_id,
+                step_order=i,
+                approver_user_id=uid,
+            )
+        )
 
     if ids_to_use:
         contract.status = "aguardando_aprovacao"
@@ -656,8 +733,12 @@ async def submit_contract(
         contract.status = "ativo"
 
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="contract",
-        entity_id=contract_id, event_type="submitted",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="contract",
+        entity_id=contract_id,
+        event_type="submitted",
         diff={"new_status": contract.status},
     )
     await session.commit()
@@ -702,8 +783,12 @@ async def create_amendment(
 
     await session.flush()
     await record_event(
-        session, company_id=company_id, user_id=user_id, entity_type="contract",
-        entity_id=contract_id, event_type="amendment_added",
+        session,
+        company_id=company_id,
+        user_id=user_id,
+        entity_type="contract",
+        entity_id=contract_id,
+        event_type="amendment_added",
         diff={"type": data["amendment_type"]},
     )
     await session.commit()
@@ -751,8 +836,13 @@ async def decide_approval(
     if not approved:
         contract.status = "rascunho"
         await record_event(
-            session, company_id=company_id, user_id=user_id, entity_type="contract",
-            entity_id=contract_id, event_type="rejected", diff={"comment": comment},
+            session,
+            company_id=company_id,
+            user_id=user_id,
+            entity_type="contract",
+            entity_id=contract_id,
+            event_type="rejected",
+            diff={"comment": comment},
         )
     else:
         await session.flush()
@@ -765,13 +855,21 @@ async def decide_approval(
         if (pending or 0) == 0:
             contract.status = "ativo"
             await record_event(
-                session, company_id=company_id, user_id=user_id, entity_type="contract",
-                entity_id=contract_id, event_type="approved",
+                session,
+                company_id=company_id,
+                user_id=user_id,
+                entity_type="contract",
+                entity_id=contract_id,
+                event_type="approved",
             )
         else:
             await record_event(
-                session, company_id=company_id, user_id=user_id, entity_type="contract",
-                entity_id=contract_id, event_type="step_approved",
+                session,
+                company_id=company_id,
+                user_id=user_id,
+                entity_type="contract",
+                entity_id=contract_id,
+                event_type="step_approved",
                 diff={"step_order": step.step_order},
             )
 
@@ -816,7 +914,9 @@ async def list_contract_history(
                 )
                 .order_by(AuditEvent.created_at.desc())
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     user_ids = list({e.user_id for e in events})
@@ -857,7 +957,9 @@ async def run_expiry_alerts(session: AsyncSession) -> int:
                     Contract.responsible_user_id.isnot(None),
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     for contract in active_contracts:
@@ -866,8 +968,11 @@ async def run_expiry_alerts(session: AsyncSession) -> int:
         if contract.auto_renew and days < 0 and contract.status == "ativo":
             contract.status = "em_renovacao"
             await record_event(
-                session, company_id=contract.company_id, user_id=0,
-                entity_type="contract", entity_id=contract.id,
+                session,
+                company_id=contract.company_id,
+                user_id=0,
+                entity_type="contract",
+                entity_id=contract.id,
                 event_type="status_changed",
                 diff={"from": "ativo", "to": "em_renovacao", "comment": "auto_renew"},
             )

@@ -270,7 +270,11 @@ async def update_supplier_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> SupplierOut:
     supplier = await update_supplier(
-        session, user.company_id, user.id, supplier_id, body.model_dump(exclude_none=True),
+        session,
+        user.company_id,
+        user.id,
+        supplier_id,
+        body.model_dump(exclude_none=True),
     )
     if not supplier:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
@@ -279,21 +283,39 @@ async def update_supplier_endpoint(
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     s, contacts = result
     return SupplierOut(
-        id=s.id, name=s.name, document=s.document, document_type=s.document_type,
-        category=s.category, email=s.email, phone=s.phone, website=s.website,
-        address_street=s.address_street, address_number=s.address_number,
-        address_complement=s.address_complement, address_city=s.address_city,
-        address_state=s.address_state, address_zip=s.address_zip,
-        active=s.active, notes=s.notes,
+        id=s.id,
+        name=s.name,
+        document=s.document,
+        document_type=s.document_type,
+        category=s.category,
+        email=s.email,
+        phone=s.phone,
+        website=s.website,
+        address_street=s.address_street,
+        address_number=s.address_number,
+        address_complement=s.address_complement,
+        address_city=s.address_city,
+        address_state=s.address_state,
+        address_zip=s.address_zip,
+        active=s.active,
+        notes=s.notes,
         contacts=[
             SupplierContactOut(
-                id=c.id, supplier_id=c.supplier_id, name=c.name, role=c.role,
-                email=c.email, phone=c.phone, whatsapp=c.whatsapp,
-                is_primary=c.is_primary, notes=c.notes, created_at=c.created_at,
+                id=c.id,
+                supplier_id=c.supplier_id,
+                name=c.name,
+                role=c.role,
+                email=c.email,
+                phone=c.phone,
+                whatsapp=c.whatsapp,
+                is_primary=c.is_primary,
+                notes=c.notes,
+                created_at=c.created_at,
             )
             for c in contacts
         ],
-        created_at=s.created_at, updated_at=s.updated_at,
+        created_at=s.created_at,
+        updated_at=s.updated_at,
     )
 
 
@@ -323,10 +345,16 @@ async def create_contact_endpoint(
     if not contact:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return SupplierContactOut(
-        id=contact.id, supplier_id=contact.supplier_id, name=contact.name,
-        role=contact.role, email=contact.email, phone=contact.phone,
-        whatsapp=contact.whatsapp, is_primary=contact.is_primary,
-        notes=contact.notes, created_at=contact.created_at,
+        id=contact.id,
+        supplier_id=contact.supplier_id,
+        name=contact.name,
+        role=contact.role,
+        email=contact.email,
+        phone=contact.phone,
+        whatsapp=contact.whatsapp,
+        is_primary=contact.is_primary,
+        notes=contact.notes,
+        created_at=contact.created_at,
     )
 
 
@@ -343,10 +371,16 @@ async def update_contact_endpoint(
     if not contact:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return SupplierContactOut(
-        id=contact.id, supplier_id=contact.supplier_id, name=contact.name,
-        role=contact.role, email=contact.email, phone=contact.phone,
-        whatsapp=contact.whatsapp, is_primary=contact.is_primary,
-        notes=contact.notes, created_at=contact.created_at,
+        id=contact.id,
+        supplier_id=contact.supplier_id,
+        name=contact.name,
+        role=contact.role,
+        email=contact.email,
+        phone=contact.phone,
+        whatsapp=contact.whatsapp,
+        is_primary=contact.is_primary,
+        notes=contact.notes,
+        created_at=contact.created_at,
     )
 
 
@@ -379,8 +413,15 @@ async def list_contracts_endpoint(
     expiring_in_days: int | None = None,
 ) -> ContractListResponse:
     rows, total = await list_contracts(
-        session, user.company_id, page, page_size,
-        search, status, contract_type, supplier_id, expiring_in_days,
+        session,
+        user.company_id,
+        page,
+        page_size,
+        search,
+        status,
+        contract_type,
+        supplier_id,
+        expiring_in_days,
     )
     return ContractListResponse(
         items=[
@@ -443,7 +484,12 @@ async def update_contract_endpoint(
 ) -> ContractOut:
     data = body.model_dump(exclude={"approver_user_ids"}, exclude_none=True)
     updated = await update_contract(
-        session, user.company_id, user.id, contract_id, data, body.approver_user_ids,
+        session,
+        user.company_id,
+        user.id,
+        contract_id,
+        data,
+        body.approver_user_ids,
     )
     if not updated:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
@@ -510,11 +556,16 @@ async def create_amendment_endpoint(
     if not amendment:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return ContractAmendmentOut(
-        id=amendment.id, contract_id=amendment.contract_id,
-        amendment_type=amendment.amendment_type, description=amendment.description,
-        new_end_date=amendment.new_end_date, new_value=amendment.new_value,
-        signed_at=amendment.signed_at, created_by_user_id=amendment.created_by_user_id,
-        created_by_name=None, created_at=amendment.created_at,
+        id=amendment.id,
+        contract_id=amendment.contract_id,
+        amendment_type=amendment.amendment_type,
+        description=amendment.description,
+        new_end_date=amendment.new_end_date,
+        new_value=amendment.new_value,
+        signed_at=amendment.signed_at,
+        created_by_user_id=amendment.created_by_user_id,
+        created_by_name=None,
+        created_at=amendment.created_at,
     )
 
 

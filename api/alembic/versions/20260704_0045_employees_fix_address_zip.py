@@ -7,9 +7,9 @@ Create Date: 2026-07-04
 Brazilian CEP format is XXXXX-XXX (9 chars), not 8.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "20260704_0045"
 down_revision = "20260703_0044"
