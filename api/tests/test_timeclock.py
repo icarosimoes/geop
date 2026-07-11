@@ -529,7 +529,12 @@ async def test_webhook_overnight_shift_exit_next_day(client):
     """Bug 3 fim a fim: turno 22:00-06:00, saída de madrugada do dia seguinte deve casar com a escala do dia anterior."""  # noqa: E501
     shift_resp = await client.post(
         SHIFTS_URL,
-        json={"name": "Noite", "start_time": "22:00:00", "end_time": "06:00:00", "tolerance_minutes": 10},  # noqa: E501
+        json={
+            "name": "Noite",
+            "start_time": "22:00:00",
+            "end_time": "06:00:00",
+            "tolerance_minutes": 10,
+        },  # noqa: E501
         headers=HEADERS_A,
     )
     shift_id = shift_resp.json()["id"]
@@ -546,7 +551,9 @@ async def test_webhook_overnight_shift_exit_next_day(client):
         headers=HEADERS_A,
     )
 
-    device_resp = await client.post(DEVICES_URL, json={"name": "Portaria Noturna"}, headers=HEADERS_A)  # noqa: E501
+    device_resp = await client.post(
+        DEVICES_URL, json={"name": "Portaria Noturna"}, headers=HEADERS_A
+    )  # noqa: E501
     token = device_resp.json()["webhook_token"]
     await client.post(
         ENROLLMENTS_URL, json={"employee_id": 1, "external_id": "0077"}, headers=HEADERS_A

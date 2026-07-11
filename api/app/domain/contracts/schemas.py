@@ -286,6 +286,7 @@ class ContractStatusUpdate(BaseModel):
 
 class ContractSubmit(BaseModel):
     """Envia contrato para aprovação, opcionalmente redefinindo os aprovadores."""
+
     approver_user_ids: list[int] | None = None
 
 

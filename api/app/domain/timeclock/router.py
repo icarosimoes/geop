@@ -927,9 +927,20 @@ async def export_mirror_endpoint(
         )
 
     headers = [
-        "Data", "1ª Entrada", "1ª Saída", "2ª Entrada", "2ª Saída",
-        "Crédito", "Débito", "Intervalo", "Trabalhado",
-        "HE 50%", "HE 100%", "Adicional Noturno", "Saldo", "Observações",
+        "Data",
+        "1ª Entrada",
+        "1ª Saída",
+        "2ª Entrada",
+        "2ª Saída",
+        "Crédito",
+        "Débito",
+        "Intervalo",
+        "Trabalhado",
+        "HE 50%",
+        "HE 100%",
+        "Adicional Noturno",
+        "Saldo",
+        "Observações",
     ]
     rows = [
         [

@@ -14,8 +14,20 @@ from reportlab.platypus import (
 )
 
 HEADERS = [
-    "Data", "1ª Entrada", "1ª Saída", "2ª Entrada", "2ª Saída",
-    "Crédito", "Débito", "Interv.", "Trab.", "HE 50%", "HE 100%", "A.N.", "Saldo", "Obs.",
+    "Data",
+    "1ª Entrada",
+    "1ª Saída",
+    "2ª Entrada",
+    "2ª Saída",
+    "Crédito",
+    "Débito",
+    "Interv.",
+    "Trab.",
+    "HE 50%",
+    "HE 100%",
+    "A.N.",
+    "Saldo",
+    "Obs.",
 ]
 
 
@@ -85,7 +97,11 @@ def generate_mirror_pdf(
     rows = [HEADERS] + [_day_row(day) for day in days]
     rows.append(
         [
-            "Totais", "", "", "", "",
+            "Totais",
+            "",
+            "",
+            "",
+            "",
             _fmt_minutes(totals["credit_minutes"]),
             _fmt_minutes(totals["debit_minutes"]),
             _fmt_minutes(totals["break_minutes"]),

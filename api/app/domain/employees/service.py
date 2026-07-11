@@ -51,9 +51,7 @@ async def list_employees(
     if status:
         filters.append(Employee.status == status)
 
-    total = await session.scalar(
-        select(func.count(Employee.id)).where(and_(*filters))
-    )
+    total = await session.scalar(select(func.count(Employee.id)).where(and_(*filters)))
 
     rows = (
         await session.execute(
@@ -68,9 +66,7 @@ async def list_employees(
     return list(rows), total or 0
 
 
-async def get_employee(
-    session: AsyncSession, company_id: int, employee_id: int
-) -> Employee | None:
+async def get_employee(session: AsyncSession, company_id: int, employee_id: int) -> Employee | None:
     return await session.scalar(  # type: ignore[return-value]
         select(Employee).where(
             Employee.id == employee_id,
@@ -209,9 +205,7 @@ async def delete_employee(
     return True
 
 
-async def search_employees(
-    session: AsyncSession, company_id: int, query: str = ""
-) -> list[dict]:
+async def search_employees(session: AsyncSession, company_id: int, query: str = "") -> list[dict]:
     """Search employees by name (for autocomplete/selects)."""
     filters = [
         Employee.company_id == company_id,
@@ -222,12 +216,7 @@ async def search_employees(
         filters.append(Employee.name.ilike(f"%{query}%"))
 
     rows = (
-        await session.execute(
-            select(Employee)
-            .where(*filters)
-            .order_by(Employee.name)
-            .limit(20)
-        )
+        await session.execute(select(Employee).where(*filters).order_by(Employee.name).limit(20))
     ).scalars()
 
     return [{"id": r.id, "name": r.name} for r in rows]

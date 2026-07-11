@@ -75,9 +75,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("employee_id", name="uq_employee_credentials_employee"),
     )
-    op.create_index(
-        "ix_employee_credentials_company", "employee_credentials", ["company_id"]
-    )
+    op.create_index("ix_employee_credentials_company", "employee_credentials", ["company_id"])
 
     # --- employee_payslips ---------------------------------------------------
     op.create_table(

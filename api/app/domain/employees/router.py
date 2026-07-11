@@ -100,9 +100,7 @@ async def list_employees_endpoint(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     status: str | None = None,
 ) -> EmployeeListResponse:
-    items, total = await list_employees(
-        session, user.company_id, page, page_size, status=status
-    )
+    items, total = await list_employees(session, user.company_id, page, page_size, status=status)
     return EmployeeListResponse(
         items=[_to_summary(item) for item in items],
         total=total,

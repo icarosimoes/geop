@@ -51,7 +51,11 @@ def upgrade() -> None:
     )
 
     # Create new indices
-    op.create_index("ix_schedule_entries_employee_date", "schedule_entries", ["company_id", "employee_id", "date"])  # noqa: E501
+    op.create_index(
+        "ix_schedule_entries_employee_date",
+        "schedule_entries",
+        ["company_id", "employee_id", "date"],
+    )  # noqa: E501
 
     # Create new unique constraint
     op.create_unique_constraint(
@@ -128,7 +132,9 @@ def upgrade() -> None:
     )
 
     # Create new index
-    op.create_index("ix_time_punches_employee_date", "time_punches", ["company_id", "employee_id", "punched_at"])  # noqa: E501
+    op.create_index(
+        "ix_time_punches_employee_date", "time_punches", ["company_id", "employee_id", "punched_at"]
+    )  # noqa: E501
 
     # Drop old index
     op.drop_index("ix_time_punches_user_date", table_name="time_punches")
@@ -160,7 +166,9 @@ def downgrade() -> None:
         ondelete="CASCADE",
     )
     op.create_index("ix_schedule_entries_date", "schedule_entries", ["company_id", "date"])
-    op.create_index("ix_schedule_entries_user_date", "schedule_entries", ["company_id", "user_id", "date"])  # noqa: E501
+    op.create_index(
+        "ix_schedule_entries_user_date", "schedule_entries", ["company_id", "user_id", "date"]
+    )  # noqa: E501
     op.create_unique_constraint(
         "uq_schedule_entries_user_date",
         "schedule_entries",
@@ -197,7 +205,9 @@ def downgrade() -> None:
         "time_clock_enrollments",
         ["company_id", "external_id"],
     )
-    op.drop_constraint("fk_time_clock_enrollments_employee_id", "time_clock_enrollments", type_="foreignkey")  # noqa: E501
+    op.drop_constraint(
+        "fk_time_clock_enrollments_employee_id", "time_clock_enrollments", type_="foreignkey"
+    )  # noqa: E501
     op.drop_column("time_clock_enrollments", "employee_id")
 
     # =========================================================================
@@ -221,7 +231,9 @@ def downgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
-    op.create_index("ix_time_punches_user_date", "time_punches", ["company_id", "user_id", "punched_at"])  # noqa: E501
+    op.create_index(
+        "ix_time_punches_user_date", "time_punches", ["company_id", "user_id", "punched_at"]
+    )  # noqa: E501
     op.drop_constraint("fk_time_punches_employee_id", "time_punches", type_="foreignkey")
     op.drop_index("ix_time_punches_employee_date", table_name="time_punches")
     op.drop_column("time_punches", "employee_id")

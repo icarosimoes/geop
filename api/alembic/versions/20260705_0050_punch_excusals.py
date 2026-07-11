@@ -44,12 +44,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_punch_excusals_employee", "punch_excusals", ["company_id", "employee_id"]
-    )
-    op.create_index(
-        "ix_punch_excusals_date", "punch_excusals", ["company_id", "reference_date"]
-    )
+    op.create_index("ix_punch_excusals_employee", "punch_excusals", ["company_id", "employee_id"])
+    op.create_index("ix_punch_excusals_date", "punch_excusals", ["company_id", "reference_date"])
 
     for table in RLS_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")

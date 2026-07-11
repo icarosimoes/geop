@@ -138,9 +138,7 @@ async def test_mirror_by_sector(client):
     assert r.status_code == 201
     sector_id = r.json()["id"]
 
-    r = await client.patch(
-        f"{EMPLOYEES_URL}/1", json={"sector_id": sector_id}, headers=HEADERS_A
-    )
+    r = await client.patch(f"{EMPLOYEES_URL}/1", json={"sector_id": sector_id}, headers=HEADERS_A)
     assert r.status_code == 200
 
     r = await client.get(

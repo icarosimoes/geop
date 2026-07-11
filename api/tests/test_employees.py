@@ -13,9 +13,7 @@ EMPLOYEES_URL = "/api/v1/employees"
 
 @pytest.fixture()
 def mock_employee_storage():
-    with patch(
-        "app.domain.employees.service.upload_file", return_value="fake/employee-avatar.jpg"
-    ):
+    with patch("app.domain.employees.service.upload_file", return_value="fake/employee-avatar.jpg"):
         yield
 
 
@@ -483,12 +481,7 @@ async def test_import_employees_csv(client):
 
 @pytest.mark.asyncio
 async def test_import_employees_csv_partial_failure(client):
-    csv_content = (
-        "name,cpf\n"
-        "Linha Boa,42235698212\n"
-        "Linha CPF Ruim,11111111111\n"
-        "Linha Sem CPF,\n"
-    )
+    csv_content = "name,cpf\nLinha Boa,42235698212\nLinha CPF Ruim,11111111111\nLinha Sem CPF,\n"
     r = await client.post(
         f"{EMPLOYEES_URL}/import",
         files={"file": ("funcionarios.csv", csv_content.encode("utf-8"), "text/csv")},
@@ -506,11 +499,7 @@ async def test_import_employees_csv_partial_failure(client):
 
 @pytest.mark.asyncio
 async def test_import_employees_csv_duplicate_cpf_in_batch(client):
-    csv_content = (
-        "name,cpf\n"
-        "Duplicado Um,94243628548\n"
-        "Duplicado Dois,94243628548\n"
-    )
+    csv_content = "name,cpf\nDuplicado Um,94243628548\nDuplicado Dois,94243628548\n"
     r = await client.post(
         f"{EMPLOYEES_URL}/import",
         files={"file": ("funcionarios.csv", csv_content.encode("utf-8"), "text/csv")},

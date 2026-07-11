@@ -40,7 +40,13 @@ def upgrade() -> None:
         sa.Column("avatar_url", sa.String(500), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),  # noqa: E501
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+            nullable=False,
+        ),  # noqa: E501
         sa.Column("deleted_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
@@ -60,13 +66,21 @@ def upgrade() -> None:
         sa.Column("system", sa.String(40), nullable=False),
         sa.Column("external_id", sa.String(120), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),  # noqa: E501
+        sa.Column(
+            "updated_at",
+            sa.DateTime(),
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+            nullable=False,
+        ),  # noqa: E501
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["employee_id"], ["employees.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "system", "external_id", name="uq_employee_external_id"),
     )
-    op.create_index("ix_employee_external_system", "employee_external_ids", ["company_id", "system"])  # noqa: E501
+    op.create_index(
+        "ix_employee_external_system", "employee_external_ids", ["company_id", "system"]
+    )  # noqa: E501
     op.create_index("ix_employee_external_id", "employee_external_ids", ["employee_id"])
 
     # Enable RLS on both tables

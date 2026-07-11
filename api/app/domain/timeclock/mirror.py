@@ -126,9 +126,7 @@ async def build_day_mirror(
 
     break_minutes = 0
     if len(pairs) >= 2:
-        break_minutes = max(
-            0, int((pairs[1][0] - pairs[0][1]).total_seconds() // 60)
-        )
+        break_minutes = max(0, int((pairs[1][0] - pairs[0][1]).total_seconds() // 60))
 
     night_differential_minutes = sum(_night_differential_minutes(inn, out) for inn, out in pairs)
 
@@ -234,9 +232,7 @@ async def build_employee_mirror(
             round(sum(d["overtime_50_value"] for d in days), 2) if overtime_paid_in_cash else None
         ),
         "overtime_100_value": (
-            round(sum(d["overtime_100_value"] for d in days), 2)
-            if overtime_paid_in_cash
-            else None
+            round(sum(d["overtime_100_value"] for d in days), 2) if overtime_paid_in_cash else None
         ),
     }
 

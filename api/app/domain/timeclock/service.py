@@ -1863,9 +1863,7 @@ async def create_employee_payslip(
 MAX_PAYSLIP_IMPORT_ROWS = 500
 
 
-async def get_employee_by_cpf(
-    session: AsyncSession, company_id: int, cpf: str
-) -> Employee | None:
+async def get_employee_by_cpf(session: AsyncSession, company_id: int, cpf: str) -> Employee | None:
     digits = normalize_doc(cpf)
     if not digits:
         return None
