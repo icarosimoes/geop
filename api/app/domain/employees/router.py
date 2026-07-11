@@ -237,7 +237,7 @@ async def import_employees_endpoint(
         raise HTTPException(status_code=400, detail={"code": "empty_file"})
 
     created, failed, results = await import_employees(session, user.company_id, user.id, rows)
-    return EmployeeImportResult(total=len(rows), created=created, failed=failed, results=results)
+    return EmployeeImportResult(total=len(rows), created=created, failed=failed, results=results)  # type: ignore[arg-type]
 
 
 @router.delete("/{employee_id}", status_code=204)

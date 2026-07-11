@@ -71,7 +71,7 @@ async def list_employees(
 async def get_employee(
     session: AsyncSession, company_id: int, employee_id: int
 ) -> Employee | None:
-    return await session.scalar(
+    return await session.scalar(  # type: ignore[return-value]
         select(Employee).where(
             Employee.id == employee_id,
             Employee.company_id == company_id,
@@ -83,7 +83,7 @@ async def get_employee(
 async def get_sector_name(session: AsyncSession, sector_id: int | None) -> str | None:
     if not sector_id:
         return None
-    return await session.scalar(
+    return await session.scalar(  # type: ignore[return-value]
         select(Sector.name).where(Sector.id == sector_id, Sector.deleted_at.is_(None))
     )
 
@@ -375,7 +375,7 @@ async def import_employees(
         }
         name = row.get("name")
         try:
-            payload = EmployeeCreate(**row)
+            payload = EmployeeCreate(**row)  # type: ignore[arg-type]
         except ValidationError as exc:
             failed += 1
             message = "; ".join(err["msg"] for err in exc.errors())

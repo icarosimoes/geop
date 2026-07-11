@@ -507,6 +507,7 @@ async def reset_employee_pin_endpoint(
     new_pin, error = await reset_employee_pin(session, user.company_id, user.id, employee_id)
     if error is not None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
+    assert new_pin is not None
     return EmployeePinResetResponse(pin=new_pin)
 
 

@@ -128,17 +128,17 @@ async def build_fiscal_sla_report(
 
     total = await session.scalar(select(func.count(FiscalRequest.id)).where(*base)) or 0
 
-    by_status = dict(
+    by_status: dict[str, int] = dict(
         (
             await session.execute(
                 select(FiscalRequest.status, func.count(FiscalRequest.id))
                 .where(*base)
                 .group_by(FiscalRequest.status)
             )
-        ).all()
+        ).all()  # type: ignore[arg-type]
     )
 
-    by_type = dict(
+    by_type: dict[str, int] = dict(
         (
             await session.execute(
                 select(FiscalRequest.request_type, func.count(FiscalRequest.id))
@@ -147,7 +147,7 @@ async def build_fiscal_sla_report(
                 .order_by(func.count(FiscalRequest.id).desc())
                 .limit(8)
             )
-        ).all()
+        ).all()  # type: ignore[arg-type]
     )
 
     rows = (
