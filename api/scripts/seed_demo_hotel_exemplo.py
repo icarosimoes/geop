@@ -172,13 +172,26 @@ async def main() -> None:
         ]:
             rec = await create_registry(session, company_id, actor_id, name, "Local")
             await update_registry(
-                session, company_id, actor_id, rec.id, "Local", name,
-                latitude=lat, longitude=lng, geofence_radius_m=120,
+                session,
+                company_id,
+                actor_id,
+                rec.id,
+                "Local",
+                name,
+                latitude=lat,
+                longitude=lng,
+                geofence_radius_m=120,
             )
             locais[name] = rec.id
 
         funcoes = {}
-        for name in ["Recepcionista", "Camareira", "Técnico de Manutenção", "Cozinheiro", "Gerente"]:
+        for name in [
+            "Recepcionista",
+            "Camareira",
+            "Técnico de Manutenção",
+            "Cozinheiro",
+            "Gerente",
+        ]:
             rec = await create_registry(session, company_id, actor_id, name, "Função")
             funcoes[name] = rec.id
         print("registries criados: setores, locais, funções")
@@ -197,7 +210,9 @@ async def main() -> None:
         employees = []
         for i, (name, setor, funcao) in enumerate(funcionarios_seed, start=1):
             emp = await create_employee(
-                session, company_id, actor_id,
+                session,
+                company_id,
+                actor_id,
                 name=name,
                 cpf=fake_cpf(i),
                 status="active",
@@ -217,11 +232,17 @@ async def main() -> None:
         ).all()
         shift_manha = shifts[0]
         device = await create_device(
-            session, company_id, actor_id,
-            name="Relógio Recepção", model="control_id", serial_number="HE-CTRLID-001",
+            session,
+            company_id,
+            actor_id,
+            name="Relógio Recepção",
+            model="control_id",
+            serial_number="HE-CTRLID-001",
             location_id=locais["Recepção Térreo"],
         )
-        await create_enrollment(session, company_id, actor_id, employee_id=employees[0].id, external_id="1")
+        await create_enrollment(
+            session, company_id, actor_id, employee_id=employees[0].id, external_id="1"
+        )
 
         today = date.today()
         start = today - timedelta(days=14)
@@ -229,21 +250,39 @@ async def main() -> None:
             d = start
             while d <= today:
                 if d.weekday() < 6:
-                    await set_schedule_day(session, company_id, actor_id, emp.id, d, shift_manha.id, None)
-                    await create_manual_punch(
-                        session, company_id, actor_id,
-                        employee_id=emp.id, punched_at=datetime.combine(d, time(7, 0)),
-                        punch_type="in", notes=None,
+                    await set_schedule_day(
+                        session, company_id, actor_id, emp.id, d, shift_manha.id, None
                     )
                     await create_manual_punch(
-                        session, company_id, actor_id,
-                        employee_id=emp.id, punched_at=datetime.combine(d, time(16, 0)),
-                        punch_type="out", notes=None,
+                        session,
+                        company_id,
+                        actor_id,
+                        employee_id=emp.id,
+                        punched_at=datetime.combine(d, time(7, 0)),
+                        punch_type="in",
+                        notes=None,
+                    )
+                    await create_manual_punch(
+                        session,
+                        company_id,
+                        actor_id,
+                        employee_id=emp.id,
+                        punched_at=datetime.combine(d, time(16, 0)),
+                        punch_type="out",
+                        notes=None,
                     )
                 d += timedelta(days=1)
 
-        await create_holiday(session, company_id, actor_id, holiday_date=date(today.year, 9, 7), name="Independência do Brasil")
-        await create_holiday(session, company_id, actor_id, holiday_date=date(today.year, 12, 25), name="Natal")
+        await create_holiday(
+            session,
+            company_id,
+            actor_id,
+            holiday_date=date(today.year, 9, 7),
+            name="Independência do Brasil",
+        )
+        await create_holiday(
+            session, company_id, actor_id, holiday_date=date(today.year, 12, 25), name="Natal"
+        )
         print("ponto: dispositivo, escala e batidas geradas; feriados cadastrados")
 
         # 5. Ocorrências
@@ -255,10 +294,19 @@ async def main() -> None:
             ("Wi-Fi instável na área da piscina", 1),
         ]:
             await create_occurrence(
-                session, company_id, actor_id, actor_name, actor_email,
-                title=title, description=f"Ocorrência de demonstração: {title}.",
-                unit=None, deadline=today + timedelta(days=3), status=status,
-                sector_id=setores["Manutenção"], location_id=None, owner_user_id=actor_id,
+                session,
+                company_id,
+                actor_id,
+                actor_name,
+                actor_email,
+                title=title,
+                description=f"Ocorrência de demonstração: {title}.",
+                unit=None,
+                deadline=today + timedelta(days=3),
+                status=status,
+                sector_id=setores["Manutenção"],
+                location_id=None,
+                owner_user_id=actor_id,
                 notify_user_ids=None,
             )
         print("ocorrências criadas")
@@ -271,10 +319,16 @@ async def main() -> None:
             ("segunda_via", "Segunda via de recibo - quarto 118", "Em andamento"),
         ]:
             await create_fiscal_request(
-                session, company_id, actor_id,
-                request_type=req_type, title=title, apartment="118",
-                requester=ADMIN_NAME, description=f"Solicitação fictícia: {title}.",
-                status=status, payload={},
+                session,
+                company_id,
+                actor_id,
+                request_type=req_type,
+                title=title,
+                apartment="118",
+                requester=ADMIN_NAME,
+                description=f"Solicitação fictícia: {title}.",
+                status=status,
+                payload={},
             )
         print("solicitações fiscais criadas")
 
@@ -286,55 +340,105 @@ async def main() -> None:
             ("Troca de fechadura eletrônica - quarto 512", "alta", "Elétrica"),
         ]:
             await create_work_order(
-                session, company_id, actor_id, actor_name, actor_email,
-                title=title, description=f"OS de demonstração: {title}.",
-                priority=priority, category=category, location_id=None,
-                occurrence_id=None, maintenance_id=None, assigned_user_id=actor_id,
-                notify_user_ids=None, sla_hours=48,
+                session,
+                company_id,
+                actor_id,
+                actor_name,
+                actor_email,
+                title=title,
+                description=f"OS de demonstração: {title}.",
+                priority=priority,
+                category=category,
+                location_id=None,
+                occurrence_id=None,
+                maintenance_id=None,
+                assigned_user_id=actor_id,
+                notify_user_ids=None,
+                sla_hours=48,
             )
         print("ordens de serviço criadas")
 
         # 8. Fornecedores, centros de custo e contratos
         fornecedor1 = await create_supplier(
-            session, company_id, actor_id,
-            {"name": "Limpeza Total Serviços Ltda", "document": fake_cnpj(10),
-             "document_type": "cnpj", "category": "Limpeza", "email": "contato@limpezatotal.com.br"},
+            session,
+            company_id,
+            actor_id,
+            {
+                "name": "Limpeza Total Serviços Ltda",
+                "document": fake_cnpj(10),
+                "document_type": "cnpj",
+                "category": "Limpeza",
+                "email": "contato@limpezatotal.com.br",
+            },
         )
         await create_supplier_contact(
-            session, company_id, actor_id, fornecedor1.id,
-            {"name": "Roberto Dias", "role": "Comercial", "email": "roberto@limpezatotal.com.br",
-             "is_primary": True},
+            session,
+            company_id,
+            actor_id,
+            fornecedor1.id,
+            {
+                "name": "Roberto Dias",
+                "role": "Comercial",
+                "email": "roberto@limpezatotal.com.br",
+                "is_primary": True,
+            },
         )
         fornecedor2 = await create_supplier(
-            session, company_id, actor_id,
-            {"name": "TechNet Internet e Redes", "document": fake_cnpj(11),
-             "document_type": "cnpj", "category": "Tecnologia", "email": "suporte@technet.com.br"},
+            session,
+            company_id,
+            actor_id,
+            {
+                "name": "TechNet Internet e Redes",
+                "document": fake_cnpj(11),
+                "document_type": "cnpj",
+                "category": "Tecnologia",
+                "email": "suporte@technet.com.br",
+            },
         )
 
-        cc_admin = await create_cost_center(session, company_id, actor_id, {"name": "Administração", "code": "ADM-01"})
-        cc_manut = await create_cost_center(session, company_id, actor_id, {"name": "Manutenção", "code": "MAN-01"})
+        cc_admin = await create_cost_center(
+            session, company_id, actor_id, {"name": "Administração", "code": "ADM-01"}
+        )
+        cc_manut = await create_cost_center(
+            session, company_id, actor_id, {"name": "Manutenção", "code": "MAN-01"}
+        )
         await create_cost_center(
-            session, company_id, actor_id,
+            session,
+            company_id,
+            actor_id,
             {"name": "Manutenção Predial", "code": "MAN-02", "parent_id": cc_manut.id},
         )
 
         await create_contract(
-            session, company_id, actor_id,
+            session,
+            company_id,
+            actor_id,
             {
-                "title": "Contrato de limpeza terceirizada", "contract_type": "servico",
-                "supplier_id": fornecedor1.id, "responsible_user_id": actor_id,
-                "status": "ativo", "start_date": today - timedelta(days=180),
-                "end_date": today + timedelta(days=185), "monthly_value": 8500.00,
-                "currency": "BRL", "cost_center_id": cc_admin.id,
+                "title": "Contrato de limpeza terceirizada",
+                "contract_type": "servico",
+                "supplier_id": fornecedor1.id,
+                "responsible_user_id": actor_id,
+                "status": "ativo",
+                "start_date": today - timedelta(days=180),
+                "end_date": today + timedelta(days=185),
+                "monthly_value": 8500.00,
+                "currency": "BRL",
+                "cost_center_id": cc_admin.id,
             },
             [],
         )
         await create_contract(
-            session, company_id, actor_id,
+            session,
+            company_id,
+            actor_id,
             {
-                "title": "Contrato de link de internet dedicado", "contract_type": "fornecimento",
-                "supplier_id": fornecedor2.id, "responsible_user_id": actor_id,
-                "status": "rascunho", "monthly_value": 1200.00, "currency": "BRL",
+                "title": "Contrato de link de internet dedicado",
+                "contract_type": "fornecimento",
+                "supplier_id": fornecedor2.id,
+                "responsible_user_id": actor_id,
+                "status": "rascunho",
+                "monthly_value": 1200.00,
+                "currency": "BRL",
                 "cost_center_id": cc_manut.id,
             },
             [],
@@ -343,10 +447,17 @@ async def main() -> None:
 
         # 9. Reuniões
         await create_meeting(
-            session, company_id, actor_id, actor_name, actor_email,
-            title="Reunião semanal de operações", description="Alinhamento entre setores.",
+            session,
+            company_id,
+            actor_id,
+            actor_name,
+            actor_email,
+            title="Reunião semanal de operações",
+            description="Alinhamento entre setores.",
             scheduled_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(days=2),
-            location="Sala de reuniões", status="Agendada", owner_user_id=actor_id,
+            location="Sala de reuniões",
+            status="Agendada",
+            owner_user_id=actor_id,
             participants=[{"user_id": actor_id, "role": "organizer"}],
             subjects=[{"title": "Ocupação da semana"}, {"title": "Pendências de manutenção"}],
             notify_user_ids=None,
@@ -355,79 +466,154 @@ async def main() -> None:
 
         # 10. Relatórios de turno e passagens de plantão
         await create_shift_report(
-            session, company_id, actor_id, actor_name, actor_email,
-            title="Relatório de turno - manhã", description="Turno tranquilo, sem intercorrências.",
-            shift_date=today, shift_type="Manhã", started_at=datetime.combine(today, time(7, 0)),
-            ended_at=datetime.combine(today, time(15, 0)), status="Concluído",
-            owner_user_id=actor_id, notify_user_ids=None,
+            session,
+            company_id,
+            actor_id,
+            actor_name,
+            actor_email,
+            title="Relatório de turno - manhã",
+            description="Turno tranquilo, sem intercorrências.",
+            shift_date=today,
+            shift_type="Manhã",
+            started_at=datetime.combine(today, time(7, 0)),
+            ended_at=datetime.combine(today, time(15, 0)),
+            status="Concluído",
+            owner_user_id=actor_id,
+            notify_user_ids=None,
         )
         for title, priority in [
             ("Hóspede do 204 aguardando retorno da manutenção", "alta"),
             ("Confirmar chegada de grupo às 14h", "normal"),
         ]:
             await create_handoff(
-                session, company_id, actor_id,
-                title=title, description=f"Passagem de plantão: {title}.",
-                priority=priority, category="Recepção", target_shift="Tarde",
+                session,
+                company_id,
+                actor_id,
+                title=title,
+                description=f"Passagem de plantão: {title}.",
+                priority=priority,
+                category="Recepção",
+                target_shift="Tarde",
                 target_date=today,
             )
         print("relatórios de turno e passagens de plantão criados")
 
         # 11. Estoque
         item1 = await create_stock_item(
-            session, company_id, actor_id,
-            name="Papel higiênico", category="Higiene", unit="pacote",
-            min_quantity=20, current_quantity=45, location_id=locais["Cozinha Industrial"],
+            session,
+            company_id,
+            actor_id,
+            name="Papel higiênico",
+            category="Higiene",
+            unit="pacote",
+            min_quantity=20,
+            current_quantity=45,
+            location_id=locais["Cozinha Industrial"],
         )
         await create_stock_item(
-            session, company_id, actor_id,
-            name="Sabonete líquido", category="Higiene", unit="litro",
-            min_quantity=10, current_quantity=8, location_id=None,
+            session,
+            company_id,
+            actor_id,
+            name="Sabonete líquido",
+            category="Higiene",
+            unit="litro",
+            min_quantity=10,
+            current_quantity=8,
+            location_id=None,
         )
         await create_stock_movement(
-            session, company_id, actor_id,
-            item_id=item1[0].id, movement_type="saida", quantity=5,
-            reason="Reposição dos apartamentos", work_order_id=None, occurrence_id=None,
+            session,
+            company_id,
+            actor_id,
+            item_id=item1[0].id,
+            movement_type="saida",
+            quantity=5,
+            reason="Reposição dos apartamentos",
+            work_order_id=None,
+            occurrence_id=None,
         )
         print("estoque criado")
 
         # 12. Manutenção preventiva
         await create_maintenance_record(
-            session, company_id, actor_id, actor_name, actor_email,
-            title="Verificação do gerador de emergência", description="Teste mensal do gerador.",
-            category="Elétrica", status="Concluído", priority="media",
-            location_id=None, owner_user_id=actor_id, notify_user_ids=None,
+            session,
+            company_id,
+            actor_id,
+            actor_name,
+            actor_email,
+            title="Verificação do gerador de emergência",
+            description="Teste mensal do gerador.",
+            category="Elétrica",
+            status="Concluído",
+            priority="media",
+            location_id=None,
+            owner_user_id=actor_id,
+            notify_user_ids=None,
         )
         await create_preventive_plan(
-            session, company_id, actor_id,
-            name="Manutenção de ar-condicionados", description="Limpeza e checagem de filtros.",
-            recurrence="monthly", category="Refrigeração", priority="media",
-            assigned_user_id=actor_id, location_id=None, sla_hours=24,
+            session,
+            company_id,
+            actor_id,
+            name="Manutenção de ar-condicionados",
+            description="Limpeza e checagem de filtros.",
+            recurrence="monthly",
+            category="Refrigeração",
+            priority="media",
+            assigned_user_id=actor_id,
+            location_id=None,
+            sla_hours=24,
         )
         await create_preventive_plan(
-            session, company_id, actor_id,
-            name="Teste de bombas de piscina", description="Checagem semanal do sistema de filtragem.",
-            recurrence="weekly", category="Hidráulica", priority="baixa",
-            assigned_user_id=actor_id, location_id=locais["Piscina"], sla_hours=8,
+            session,
+            company_id,
+            actor_id,
+            name="Teste de bombas de piscina",
+            description="Checagem semanal do sistema de filtragem.",
+            recurrence="weekly",
+            category="Hidráulica",
+            priority="baixa",
+            assigned_user_id=actor_id,
+            location_id=locais["Piscina"],
+            sla_hours=8,
         )
         print("manutenção preventiva criada")
 
         # 13. Checklists e diários de obra
         await create_checklist_template(
-            session, company_id, actor_id,
-            name="Checklist de limpeza de quartos", description="Checklist padrão de governança.",
-            recurrence="daily", category="Governança", assigned_user_id=actor_id, next_due=today,
-            items=[{"label": "Trocar roupa de cama", "sort_order": 0},
-                   {"label": "Repor amenities", "sort_order": 1},
-                   {"label": "Aspirar carpete", "sort_order": 2}],
+            session,
+            company_id,
+            actor_id,
+            name="Checklist de limpeza de quartos",
+            description="Checklist padrão de governança.",
+            recurrence="daily",
+            category="Governança",
+            assigned_user_id=actor_id,
+            next_due=today,
+            items=[
+                {"label": "Trocar roupa de cama", "sort_order": 0},
+                {"label": "Repor amenities", "sort_order": 1},
+                {"label": "Aspirar carpete", "sort_order": 2},
+            ],
         )
         await create_work_diary(
-            session, company_id, actor_id,
-            diary_date=today, title="Reforma da piscina - dia 1",
-            description="Início dos trabalhos de reforma.", weather="Ensolarado", status="Em andamento",
+            session,
+            company_id,
+            actor_id,
+            diary_date=today,
+            title="Reforma da piscina - dia 1",
+            description="Início dos trabalhos de reforma.",
+            weather="Ensolarado",
+            status="Em andamento",
             owner_user_id=actor_id,
             activities=[{"description": "Remoção do revestimento antigo", "sort_order": 0}],
-            teams=[{"worker_name": "Equipe Reforma Azul", "role": "Pedreiro", "hours_worked": 8, "sort_order": 0}],
+            teams=[
+                {
+                    "worker_name": "Equipe Reforma Azul",
+                    "role": "Pedreiro",
+                    "hours_worked": 8,
+                    "sort_order": 0,
+                }
+            ],
             equipment=[{"equipment_name": "Furadeira industrial", "quantity": 2, "sort_order": 0}],
             observations=[{"content": "Sem intercorrências no primeiro dia.", "sort_order": 0}],
         )
@@ -435,56 +621,109 @@ async def main() -> None:
 
         # 14. Vistorias e checklists de suíte
         suite = await create_inspection_suite(
-            session, company_id, actor_id,
-            name="Checklist padrão de apartamento", description="Itens verificados em toda vistoria.",
-            type="Apartamento", status="Ativo", owner_user_id=actor_id,
-            items=[{"area": "Banheiro", "item_name": "Torneiras e chuveiro", "sort_order": 0},
-                   {"area": "Quarto", "item_name": "Ar-condicionado", "sort_order": 1}],
+            session,
+            company_id,
+            actor_id,
+            name="Checklist padrão de apartamento",
+            description="Itens verificados em toda vistoria.",
+            type="Apartamento",
+            status="Ativo",
+            owner_user_id=actor_id,
+            items=[
+                {"area": "Banheiro", "item_name": "Torneiras e chuveiro", "sort_order": 0},
+                {"area": "Quarto", "item_name": "Ar-condicionado", "sort_order": 1},
+            ],
         )
         await create_apartment_inspection(
-            session, company_id, actor_id,
-            unit="204", apartment="204", inspection_type="Check-out",
+            session,
+            company_id,
+            actor_id,
+            unit="204",
+            apartment="204",
+            inspection_type="Check-out",
             inspection_suite_id=suite["suite"].id,
-            inspector_user_id=actor_id, scheduled_at=datetime.now(UTC).replace(tzinfo=None),
-            completed_at=None, status="Pendente", notes=None,
+            inspector_user_id=actor_id,
+            scheduled_at=datetime.now(UTC).replace(tzinfo=None),
+            completed_at=None,
+            status="Pendente",
+            notes=None,
         )
         await create_check_suite(
-            session, company_id, actor_id,
-            name="Checklist de abertura de recepção", description="Itens diários de abertura.",
-            status="Ativo", owner_user_id=actor_id,
-            items=[{"label": "Conferir caixa", "sort_order": 0}, {"label": "Testar sistema PMS", "sort_order": 1}],
+            session,
+            company_id,
+            actor_id,
+            name="Checklist de abertura de recepção",
+            description="Itens diários de abertura.",
+            status="Ativo",
+            owner_user_id=actor_id,
+            items=[
+                {"label": "Conferir caixa", "sort_order": 0},
+                {"label": "Testar sistema PMS", "sort_order": 1},
+            ],
         )
         print("vistorias e checklists de suíte criados")
 
         # 15. Auditoria operacional
         await create_audit_report(
-            session, company_id, actor_id,
-            report_date=today, shift_type="Manhã", auditor_user_id=actor_id,
-            status="Concluído", notes="Auditoria de rotina sem apontamentos críticos.",
-            items=[{"category": "Recepção", "description": "Atendimento telefônico", "status": "ok", "sort_order": 0},
-                   {"category": "Governança", "description": "Padrão de arrumação dos quartos", "status": "ok", "sort_order": 1}],
+            session,
+            company_id,
+            actor_id,
+            report_date=today,
+            shift_type="Manhã",
+            auditor_user_id=actor_id,
+            status="Concluído",
+            notes="Auditoria de rotina sem apontamentos críticos.",
+            items=[
+                {
+                    "category": "Recepção",
+                    "description": "Atendimento telefônico",
+                    "status": "ok",
+                    "sort_order": 0,
+                },
+                {
+                    "category": "Governança",
+                    "description": "Padrão de arrumação dos quartos",
+                    "status": "ok",
+                    "sort_order": 1,
+                },
+            ],
         )
         print("relatório de auditoria criado")
 
         # 16. Procedimentos e mural de avisos
         for name, link in [
             ("Manual de check-in", "https://hotelexemplo.com.br/manuais/checkin.pdf"),
-            ("Procedimento de emergência de incêndio", "https://hotelexemplo.com.br/manuais/incendio.pdf"),
+            (
+                "Procedimento de emergência de incêndio",
+                "https://hotelexemplo.com.br/manuais/incendio.pdf",
+            ),
         ]:
             await create_procedure(session, company_id, actor_id, name=name, link=link, file=None)
         await create_post(
-            session, company_id, actor_id, actor_name, actor_email,
-            title="Bem-vindos ao novo sistema Registro!", body="A partir de hoje usamos o Registro para gestão operacional.",
-            pinned=True, expires_at=None, notify_user_ids=None,
+            session,
+            company_id,
+            actor_id,
+            actor_name,
+            actor_email,
+            title="Bem-vindos ao novo sistema Registro!",
+            body="A partir de hoje usamos o Registro para gestão operacional.",
+            pinned=True,
+            expires_at=None,
+            notify_user_ids=None,
         )
         print("procedimentos e mural criados")
 
         # 17. Notificações de exemplo para o usuário admin
         for title, body in [
             ("Nova ordem de serviço atribuída a você", "Reparo de vazamento - quarto 204"),
-            ("Contrato próximo do vencimento", "Contrato de limpeza terceirizada vence em 6 meses."),
+            (
+                "Contrato próximo do vencimento",
+                "Contrato de limpeza terceirizada vence em 6 meses.",
+            ),
         ]:
-            await create_notification(session, company_id=company_id, user_id=actor_id, title=title, body=body)
+            await create_notification(
+                session, company_id=company_id, user_id=actor_id, title=title, body=body
+            )
         print("notificações criadas")
 
         print(f"\nOK — tenant '{COMPANY_SLUG}' populado com dados fictícios para apresentação.")
