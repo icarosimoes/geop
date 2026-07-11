@@ -67,7 +67,7 @@ async def list_employees(
 
 
 async def get_employee(session: AsyncSession, company_id: int, employee_id: int) -> Employee | None:
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Employee).where(
             Employee.id == employee_id,
             Employee.company_id == company_id,
@@ -79,7 +79,7 @@ async def get_employee(session: AsyncSession, company_id: int, employee_id: int)
 async def get_sector_name(session: AsyncSession, sector_id: int | None) -> str | None:
     if not sector_id:
         return None
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Sector.name).where(Sector.id == sector_id, Sector.deleted_at.is_(None))
     )
 

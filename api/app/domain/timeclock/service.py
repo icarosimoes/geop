@@ -589,7 +589,7 @@ async def delete_device(
 
 
 async def get_device_by_token(session: AsyncSession, webhook_token: str) -> TimeClockDevice | None:
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(TimeClockDevice).where(
             TimeClockDevice.webhook_token == webhook_token,
             TimeClockDevice.deleted_at.is_(None),
@@ -804,7 +804,7 @@ async def ingest_punch(
             )
         )
         if existing is not None:
-            return existing  # type: ignore[return-value]
+            return existing  # type: ignore[no-any-return]
         raise
     await invalidate_dashboard(company_id)
     await session.refresh(record)
@@ -1538,7 +1538,7 @@ async def _record_employee_action(
 async def get_employee_credential(
     session: AsyncSession, company_id: int, employee_id: int
 ) -> EmployeeCredential | None:
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(EmployeeCredential).where(
             EmployeeCredential.company_id == company_id,
             EmployeeCredential.employee_id == employee_id,
@@ -1818,7 +1818,7 @@ async def get_employee_payslip_for_download(
     session: AsyncSession, company_id: int, employee_id: int, payslip_id: int
 ) -> EmployeePayslip | None:
     """Nunca confia no payslip_id recebido sem checar que pertence a esse employee."""
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(EmployeePayslip).where(
             EmployeePayslip.id == payslip_id,
             EmployeePayslip.company_id == company_id,
@@ -1867,7 +1867,7 @@ async def get_employee_by_cpf(session: AsyncSession, company_id: int, cpf: str) 
     digits = normalize_doc(cpf)
     if not digits:
         return None
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Employee).where(
             Employee.company_id == company_id,
             Employee.cpf == digits,
@@ -1882,7 +1882,7 @@ async def get_employee_by_registration_number(
     registration_number = registration_number.strip()
     if not registration_number:
         return None
-    return await session.scalar(  # type: ignore[return-value]
+    return await session.scalar(  # type: ignore[no-any-return]
         select(Employee).where(
             Employee.company_id == company_id,
             Employee.registration_number == registration_number,
