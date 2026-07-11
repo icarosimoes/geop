@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
 from app.models import (
+    AuditEvent,
     Contract,
     ContractAmendment,
     ContractApprovalStep,
@@ -321,6 +322,19 @@ def _expiry_alert(end_date: date | None, alert_days: int) -> bool:
     return days <= alert_days
 
 
+async def _generate_contract_number(session: AsyncSession, company_id: int) -> str:
+    year = date.today().year
+    prefix = f"CTR-{year}-"
+    count = await session.scalar(
+        select(func.count()).where(
+            Contract.company_id == company_id,
+            Contract.number.like(f"{prefix}%"),
+            Contract.deleted_at.is_(None),
+        )
+    ) or 0
+    return f"{prefix}{count + 1:04d}"
+
+
 class ContractRow(NamedTuple):
     contract: Contract
     supplier_name: str | None
@@ -358,6 +372,7 @@ async def list_contracts(
             Contract.end_date.isnot(None),
             Contract.end_date >= today,
             Contract.end_date <= limit,
+            Contract.status.in_(["ativo", "em_renovacao"]),
         )
 
     total = await session.scalar(select(func.count()).select_from(q.subquery()))
@@ -469,6 +484,9 @@ async def create_contract(
     data: dict,
     approver_user_ids: list[int],
 ) -> Contract:
+    if not data.get("number"):
+        data["number"] = await _generate_contract_number(session, company_id)
+
     contract = Contract(company_id=company_id, created_by_user_id=user_id, **data)
     session.add(contract)
     await session.flush()
@@ -497,6 +515,7 @@ async def update_contract(
     user_id: int,
     contract_id: int,
     data: dict,
+    approver_user_ids: list[int] | None = None,
 ) -> Contract | None:
     contract = await session.scalar(
         select(Contract).where(
@@ -507,15 +526,37 @@ async def update_contract(
     )
     if not contract:
         return None
-    old = {k: getattr(contract, k) for k in data}
-    for k, v in data.items():
+
+    fields = {k: v for k, v in data.items() if k != "approver_user_ids"}
+    old = {k: getattr(contract, k) for k in fields}
+    for k, v in fields.items():
         setattr(contract, k, v)
-    diff = compute_diff(old, data)
+    diff = compute_diff(old, fields)
     if diff:
         await record_event(
             session, company_id=company_id, user_id=user_id, entity_type="contract",
             entity_id=contract.id, event_type="updated", diff=diff,
         )
+
+    if approver_user_ids is not None and contract.status == "rascunho":
+        existing = (
+            await session.execute(
+                select(ContractApprovalStep).where(
+                    ContractApprovalStep.contract_id == contract_id,
+                )
+            )
+        ).scalars().all()
+        for step in existing:
+            await session.delete(step)
+        await session.flush()
+        for i, uid in enumerate(approver_user_ids, start=1):
+            session.add(ContractApprovalStep(
+                company_id=company_id,
+                contract_id=contract_id,
+                step_order=i,
+                approver_user_id=uid,
+            ))
+
     await session.commit()
     await session.refresh(contract)
     return contract
@@ -569,6 +610,59 @@ async def delete_contract(
     )
     await session.commit()
     return True
+
+
+async def submit_contract(
+    session: AsyncSession,
+    company_id: int,
+    user_id: int,
+    contract_id: int,
+    approver_user_ids: list[int] | None,
+) -> Contract | None:
+    """Envia contrato para aprovação; aceito apenas quando status é rascunho."""
+    contract = await session.scalar(
+        select(Contract).where(
+            Contract.id == contract_id,
+            Contract.company_id == company_id,
+            Contract.deleted_at.is_(None),
+        )
+    )
+    if not contract or contract.status != "rascunho":
+        return None
+
+    existing_steps = (
+        await session.execute(
+            select(ContractApprovalStep).where(
+                ContractApprovalStep.contract_id == contract_id,
+            )
+        )
+    ).scalars().all()
+    for step in existing_steps:
+        await session.delete(step)
+    await session.flush()
+
+    ids_to_use = approver_user_ids if approver_user_ids is not None else []
+    for i, uid in enumerate(ids_to_use, start=1):
+        session.add(ContractApprovalStep(
+            company_id=company_id,
+            contract_id=contract_id,
+            step_order=i,
+            approver_user_id=uid,
+        ))
+
+    if ids_to_use:
+        contract.status = "aguardando_aprovacao"
+    else:
+        contract.status = "ativo"
+
+    await record_event(
+        session, company_id=company_id, user_id=user_id, entity_type="contract",
+        entity_id=contract_id, event_type="submitted",
+        diff={"new_status": contract.status},
+    )
+    await session.commit()
+    await session.refresh(contract)
+    return contract
 
 
 # ---------------------------------------------------------------------------
@@ -684,3 +778,120 @@ async def decide_approval(
     await session.commit()
     await session.refresh(contract)
     return contract
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+class HistoryRow(NamedTuple):
+    event: AuditEvent
+    user_name: str | None
+
+
+async def list_contract_history(
+    session: AsyncSession,
+    company_id: int,
+    contract_id: int,
+) -> list[HistoryRow]:
+    contract = await session.scalar(
+        select(Contract).where(
+            Contract.id == contract_id,
+            Contract.company_id == company_id,
+            Contract.deleted_at.is_(None),
+        )
+    )
+    if not contract:
+        return []
+
+    events = list(
+        (
+            await session.execute(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.company_id == company_id,
+                    AuditEvent.entity_type == "contract",
+                    AuditEvent.entity_id == contract_id,
+                )
+                .order_by(AuditEvent.created_at.desc())
+            )
+        ).scalars().all()
+    )
+
+    user_ids = list({e.user_id for e in events})
+    user_names: dict[int, str] = {}
+    if user_ids:
+        rows = (
+            await session.execute(select(User.id, User.name).where(User.id.in_(user_ids)))
+        ).all()
+        user_names = {r.id: r.name for r in rows}
+
+    return [HistoryRow(e, user_names.get(e.user_id)) for e in events]
+
+
+# ---------------------------------------------------------------------------
+# Expiry alerts job
+# ---------------------------------------------------------------------------
+
+
+async def run_expiry_alerts(session: AsyncSession) -> int:
+    """
+    Varre todos os tenants em busca de contratos próximos do vencimento
+    e cria notificações para o responsável. Também transita para em_renovacao
+    contratos vencidos com auto_renew=True.
+    Retorna o número de notificações criadas.
+    """
+    from app.domain.notifications.service import create_notification
+
+    today = date.today()
+    notified = 0
+
+    active_contracts = list(
+        (
+            await session.execute(
+                select(Contract).where(
+                    Contract.deleted_at.is_(None),
+                    Contract.status.in_(["ativo", "em_renovacao"]),
+                    Contract.end_date.isnot(None),
+                    Contract.responsible_user_id.isnot(None),
+                )
+            )
+        ).scalars().all()
+    )
+
+    for contract in active_contracts:
+        days = (contract.end_date - today).days  # type: ignore[operator]
+
+        if contract.auto_renew and days < 0 and contract.status == "ativo":
+            contract.status = "em_renovacao"
+            await record_event(
+                session, company_id=contract.company_id, user_id=0,
+                entity_type="contract", entity_id=contract.id,
+                event_type="status_changed",
+                diff={"from": "ativo", "to": "em_renovacao", "comment": "auto_renew"},
+            )
+            continue
+
+        if 0 <= days <= contract.alert_days:
+            if days == 0:
+                body = "O contrato vence hoje."
+            elif days == 1:
+                body = "O contrato vence amanhã."
+            else:
+                body = f"O contrato vence em {days} dias ({contract.end_date})."
+
+            await create_notification(
+                session,
+                company_id=contract.company_id,
+                user_id=contract.responsible_user_id,  # type: ignore[arg-type]
+                title=f"Contrato próximo do vencimento: {contract.title}",
+                body=body,
+                category="warning",
+                entity_type="contract",
+                entity_id=contract.id,
+            )
+            notified += 1
+
+    await session.commit()
+    return notified

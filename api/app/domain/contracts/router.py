@@ -12,9 +12,12 @@ from app.domain.contracts.schemas import (
     ContractAmendmentOut,
     ContractApprovalStepOut,
     ContractCreate,
+    ContractHistoryItem,
+    ContractHistoryResponse,
     ContractListResponse,
     ContractOut,
     ContractStatusUpdate,
+    ContractSubmit,
     ContractSummary,
     ContractUpdate,
     SupplierContactCreate,
@@ -40,9 +43,12 @@ from app.domain.contracts.service import (
     delete_supplier_contact,
     get_contract,
     get_supplier,
+    list_contract_history,
     list_contracts,
     list_supplier_options,
     list_suppliers,
+    run_expiry_alerts,
+    submit_contract,
     update_contract,
     update_contract_status,
     update_supplier,
@@ -435,9 +441,9 @@ async def update_contract_endpoint(
     user: Annotated[AuthenticatedUser, require_permission("contract.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> ContractOut:
+    data = body.model_dump(exclude={"approver_user_ids"}, exclude_none=True)
     updated = await update_contract(
-        session, user.company_id, user.id, contract_id,
-        body.model_dump(exclude_none=True),
+        session, user.company_id, user.id, contract_id, data, body.approver_user_ids,
     )
     if not updated:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
@@ -468,6 +474,27 @@ async def delete_contract_endpoint(
     deleted = await delete_contract(session, user.company_id, user.id, contract_id)
     if not deleted:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+@router.post("/{contract_id}/submit", response_model=ContractOut)
+async def submit_contract_endpoint(
+    contract_id: int,
+    body: ContractSubmit,
+    user: Annotated[AuthenticatedUser, require_permission("contract.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ContractOut:
+    updated = await submit_contract(
+        session, user.company_id, user.id, contract_id, body.approver_user_ids
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "cannot_submit",
+                "message": "Contrato não está em rascunho ou não foi encontrado.",
+            },
+        )
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
 
 
 @router.post("/{contract_id}/amendments", response_model=ContractAmendmentOut, status_code=201)
@@ -510,3 +537,40 @@ async def approve_contract_endpoint(
             },
         )
     return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
+
+
+@router.get("/{contract_id}/history", response_model=ContractHistoryResponse)
+async def get_contract_history_endpoint(
+    contract_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("contract.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ContractHistoryResponse:
+    rows = await list_contract_history(session, user.company_id, contract_id)
+    if rows is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    items = [
+        ContractHistoryItem(
+            id=r.event.id,
+            event_type=r.event.event_type,
+            diff=r.event.diff,
+            user_id=r.event.user_id,
+            user_name=r.user_name,
+            created_at=r.event.created_at,
+        )
+        for r in rows
+    ]
+    return ContractHistoryResponse(items=items, total=len(items))
+
+
+# ---------------------------------------------------------------------------
+# System jobs
+# ---------------------------------------------------------------------------
+
+
+@router.post("/jobs/expiry-alerts", status_code=200)
+async def run_expiry_alerts_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("platform.admin")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> dict:
+    count = await run_expiry_alerts(session)
+    return {"notified": count}
