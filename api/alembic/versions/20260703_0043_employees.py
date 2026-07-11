@@ -6,9 +6,9 @@ Create Date: 2026-07-03 18:00:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260703_0043"
@@ -40,7 +40,7 @@ def upgrade() -> None:
         sa.Column("avatar_url", sa.String(500), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),  # noqa: E501
         sa.Column("deleted_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
@@ -60,13 +60,13 @@ def upgrade() -> None:
         sa.Column("system", sa.String(40), nullable=False),
         sa.Column("external_id", sa.String(120), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),  # noqa: E501
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["employee_id"], ["employees.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("company_id", "system", "external_id", name="uq_employee_external_id"),
     )
-    op.create_index("ix_employee_external_system", "employee_external_ids", ["company_id", "system"])
+    op.create_index("ix_employee_external_system", "employee_external_ids", ["company_id", "system"])  # noqa: E501
     op.create_index("ix_employee_external_id", "employee_external_ids", ["employee_id"])
 
     # Enable RLS on both tables
@@ -87,8 +87,12 @@ def upgrade() -> None:
     # Use a subquery to ensure uniqueness: for each company, create one emp per user if not exists
     op.execute(
         """
-        INSERT INTO employees (company_id, name, personal_email, user_id, status, created_at, updated_at)
-        SELECT u.company_id, u.name, u.email, u.id, CASE WHEN u.active THEN 'active' ELSE 'inactive' END, u.created_at, u.updated_at
+        INSERT INTO employees
+            (company_id, name, personal_email, user_id, status, created_at, updated_at)
+        SELECT
+            u.company_id, u.name, u.email, u.id,
+            CASE WHEN u.active THEN 'active' ELSE 'inactive' END,
+            u.created_at, u.updated_at
         FROM users u
         WHERE u.deleted_at IS NULL
         """
@@ -136,7 +140,10 @@ def downgrade() -> None:
     op.execute(
         """
         DELETE FROM role_permissions
-        WHERE permission_id IN (SELECT id FROM permissions WHERE code IN ('employee.view', 'employee.manage'))
+        WHERE permission_id IN (
+            SELECT id FROM permissions
+            WHERE code IN ('employee.view', 'employee.manage')
+        )
         """
     )
     op.execute(

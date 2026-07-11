@@ -110,7 +110,7 @@ def test_evaluate_status_overnight_exit_next_day_early():
 
 def test_evaluate_status_overnight_infers_type_near_start():
     shift = _overnight_shift()
-    # Batida às 22:05 sem tipo informado: mais perto do início (22:00) do que do fim (06:00 do dia seguinte)
+    # Batida às 22:05 sem tipo informado: mais perto do início (22:00) do que do fim (06:00 do dia seguinte)  # noqa: E501
     assert evaluate_status(shift, datetime(2026, 7, 6, 22, 5), None) == "on_time"
 
 
@@ -309,7 +309,7 @@ async def test_generate_schedule_rotating(client):
 
 @pytest.mark.asyncio
 async def test_generate_schedule_records_audit_per_employee(client, session):
-    """Bug 4: generate_schedule registra um AuditEvent por employee afetado (entity_id=employee_id)."""
+    """Bug 4: generate_schedule registra um AuditEvent por employee afetado (entity_id=employee_id)."""  # noqa: E501
     from sqlalchemy import select
 
     from app.models import AuditEvent
@@ -526,10 +526,10 @@ async def test_manual_punch_and_correction(client):
 
 @pytest.mark.asyncio
 async def test_webhook_overnight_shift_exit_next_day(client):
-    """Bug 3 fim a fim: turno 22:00-06:00, saída de madrugada do dia seguinte deve casar com a escala do dia anterior."""
+    """Bug 3 fim a fim: turno 22:00-06:00, saída de madrugada do dia seguinte deve casar com a escala do dia anterior."""  # noqa: E501
     shift_resp = await client.post(
         SHIFTS_URL,
-        json={"name": "Noite", "start_time": "22:00:00", "end_time": "06:00:00", "tolerance_minutes": 10},
+        json={"name": "Noite", "start_time": "22:00:00", "end_time": "06:00:00", "tolerance_minutes": 10},  # noqa: E501
         headers=HEADERS_A,
     )
     shift_id = shift_resp.json()["id"]
@@ -546,7 +546,7 @@ async def test_webhook_overnight_shift_exit_next_day(client):
         headers=HEADERS_A,
     )
 
-    device_resp = await client.post(DEVICES_URL, json={"name": "Portaria Noturna"}, headers=HEADERS_A)
+    device_resp = await client.post(DEVICES_URL, json={"name": "Portaria Noturna"}, headers=HEADERS_A)  # noqa: E501
     token = device_resp.json()["webhook_token"]
     await client.post(
         ENROLLMENTS_URL, json={"employee_id": 1, "external_id": "0077"}, headers=HEADERS_A

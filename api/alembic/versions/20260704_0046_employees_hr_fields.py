@@ -8,9 +8,9 @@ E10 (cargo/admissão/matrícula) e E11 (setor/departamento) do backlog do
 cadastro de funcionários.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "20260704_0046"
 down_revision = "20260704_0045"

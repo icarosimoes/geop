@@ -216,12 +216,12 @@ async def test_overtime_value_falls_back_to_cargo_salary(client):
     try:
         await client.post(
             PUNCHES_URL,
-            json={"employee_id": employee_id, "punched_at": "2026-09-07T08:00:00", "punch_type": "in"},
+            json={"employee_id": employee_id, "punched_at": "2026-09-07T08:00:00", "punch_type": "in"},  # noqa: E501
             headers=HEADERS_A,
         )
         await client.post(
             PUNCHES_URL,
-            json={"employee_id": employee_id, "punched_at": "2026-09-07T19:00:00", "punch_type": "out"},
+            json={"employee_id": employee_id, "punched_at": "2026-09-07T19:00:00", "punch_type": "out"},  # noqa: E501
             headers=HEADERS_A,
         )
 
