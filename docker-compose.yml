@@ -143,6 +143,7 @@ services:
       - "3001:3001"
     volumes:
       - ./admin/app:/app/app
+      - ./admin/components:/app/components
       - ./admin/lib:/app/lib
     depends_on:
       api:

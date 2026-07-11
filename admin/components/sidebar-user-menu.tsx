@@ -27,7 +27,7 @@ export function SidebarUserMenu({
       >
         <div
           className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-          style={{ background: "linear-gradient(135deg, #4a8fe7, #1D3461)" }}
+          style={{ background: "linear-gradient(135deg, #2BC4B4, #1D3461)" }}
         >
           {initials(name)}
         </div>

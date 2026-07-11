@@ -31,6 +31,8 @@
   --foreground: oklch(0.18 0.005 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.005 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.005 250);
   --muted: oklch(0.97 0.005 250);
   --muted-foreground: oklch(0.45 0.005 250);
   --accent: oklch(0.96 0.012 250);
@@ -44,6 +46,32 @@
   --warning-foreground: oklch(0.18 0.05 75);
   --danger: oklch(0.6 0.2 25);
   --danger-foreground: oklch(0.99 0.005 25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.16 0.005 250);
+    --foreground: oklch(0.96 0.005 250);
+    --card: oklch(0.2 0.006 250);
+    --card-foreground: oklch(0.96 0.005 250);
+
+    --popover: oklch(0.2 0.006 250);
+    --popover-foreground: oklch(0.96 0.005 250);
+
+    --muted: oklch(0.24 0.008 250);
+    --muted-foreground: oklch(0.7 0.008 250);
+
+    --accent: oklch(0.26 0.012 250);
+    --accent-foreground: oklch(0.96 0.005 250);
+
+    --border: oklch(0.28 0.008 250);
+    --input: oklch(0.28 0.008 250);
+    --ring: oklch(0.65 0.16 250);
+
+    --success: oklch(0.65 0.15 150);
+    --warning: oklch(0.75 0.16 75);
+    --danger: oklch(0.65 0.2 25);
+  }
 }
 
 body {
@@ -64,6 +92,18 @@ input::placeholder, textarea::placeholder {
   opacity: 1;
 }
 
+input::selection, textarea::selection {
+  background: #1D3461;
+  color: #ffffff;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #111827;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+}
+
 *:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -82,3 +122,4 @@ input::placeholder, textarea::placeholder {
 }
 
 .animate-in { animation: slide-up-fade 200ms ease-out; }
+.animate-fade-in { animation: fade-in 150ms ease-out; }

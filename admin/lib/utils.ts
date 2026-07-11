@@ -17,3 +17,17 @@ export function fmtDate(value: string | Date | null | undefined): string {
   const d = typeof value === "string" ? new Date(value) : value;
   return d.toLocaleDateString("pt-BR");
 }
+
+export function pluralize(n: number, singular: string, plural?: string): string {
+  return n === 1 ? singular : (plural ?? `${singular}s`);
+}
+
+export function initials(name: string | null | undefined): string {
+  if (!name) return "?";
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}

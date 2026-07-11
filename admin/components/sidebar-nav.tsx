@@ -47,7 +47,7 @@ export function SidebarNav({ collapsed }: { collapsed?: boolean }) {
               "flex items-center rounded-md py-2 text-sm transition-colors",
               collapsed ? "justify-center px-2" : "gap-3 px-3",
               active
-                ? "bg-white/20 text-white font-medium"
+                ? "bg-[#2BC4B4]/20 text-[#4DD9CB] font-medium"
                 : "text-white/70 hover:bg-white/10 hover:text-white",
             )}
           >

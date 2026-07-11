@@ -16,7 +16,7 @@ export function TopUserMenu({ name, email }: { name: string; email: string }) {
       <button
         onClick={() => setOpen((o) => !o)}
         className="h-9 w-9 rounded-full flex items-center justify-center text-white text-xs font-bold hover:opacity-90 transition-opacity"
-        style={{ background: "linear-gradient(135deg, #4a8fe7, #1D3461)" }}
+        style={{ background: "linear-gradient(135deg, #2BC4B4, #1D3461)" }}
         title={name}
       >
         {initials(name)}
