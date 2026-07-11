@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field  # noqa: F401
+from pydantic import BaseModel, Field, model_validator  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Supplier
@@ -234,6 +234,14 @@ class ContractCreate(BaseModel):
     budget_category: str | None = None
     approver_user_ids: list[int] = []
 
+    @model_validator(mode="after")
+    def validate_dates(self) -> "ContractCreate":
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date não pode ser posterior a end_date")
+        if self.signed_at and self.start_date and self.signed_at > self.start_date:
+            raise ValueError("signed_at não pode ser posterior a start_date")
+        return self
+
 
 class ContractUpdate(BaseModel):
     number: str | None = None
@@ -257,11 +265,28 @@ class ContractUpdate(BaseModel):
     payment_day: int | None = None
     cost_center: str | None = None
     budget_category: str | None = None
+    approver_user_ids: list[int] | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "ContractUpdate":
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date não pode ser posterior a end_date")
+        if self.signed_at and self.start_date and self.signed_at > self.start_date:
+            raise ValueError("signed_at não pode ser posterior a start_date")
+        return self
 
 
 class ContractStatusUpdate(BaseModel):
-    status: str
+    status: str = Field(
+        ...,
+        pattern="^(rascunho|aguardando_aprovacao|ativo|em_renovacao|suspenso|encerrado|cancelado)$",
+    )
     comment: str | None = None
+
+
+class ContractSubmit(BaseModel):
+    """Envia contrato para aprovação, opcionalmente redefinindo os aprovadores."""
+    approver_user_ids: list[int] | None = None
 
 
 class ContractAmendmentCreate(BaseModel):
@@ -281,3 +306,22 @@ class SupplierOption(BaseModel):
     id: int
     name: str
     document: str | None
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+class ContractHistoryItem(BaseModel):
+    id: int
+    event_type: str
+    diff: dict | None
+    user_id: int
+    user_name: str | None
+    created_at: datetime
+
+
+class ContractHistoryResponse(BaseModel):
+    items: list[ContractHistoryItem]
+    total: int

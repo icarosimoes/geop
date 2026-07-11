@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select as _select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_session
@@ -13,9 +12,12 @@ from app.domain.contracts.schemas import (
     ContractAmendmentOut,
     ContractApprovalStepOut,
     ContractCreate,
+    ContractHistoryItem,
+    ContractHistoryResponse,
     ContractListResponse,
     ContractOut,
     ContractStatusUpdate,
+    ContractSubmit,
     ContractSummary,
     ContractUpdate,
     SupplierContactCreate,
@@ -41,17 +43,96 @@ from app.domain.contracts.service import (
     delete_supplier_contact,
     get_contract,
     get_supplier,
+    list_contract_history,
     list_contracts,
     list_supplier_options,
     list_suppliers,
+    run_expiry_alerts,
+    submit_contract,
     update_contract,
     update_contract_status,
     update_supplier,
     update_supplier_contact,
 )
-from app.models import User
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_GetContractResult = tuple
+
+
+def _to_contract_out(result: _GetContractResult) -> ContractOut:
+    contract, supplier_name, responsible_name, amendments, steps = result
+    return ContractOut(
+        id=contract.id,
+        number=contract.number,
+        title=contract.title,
+        contract_type=contract.contract_type,
+        supplier_id=contract.supplier_id,
+        supplier_name=supplier_name,
+        responsible_user_id=contract.responsible_user_id,
+        responsible_name=responsible_name,
+        created_by_user_id=contract.created_by_user_id,
+        status=contract.status,
+        description=contract.description,
+        conditions=contract.conditions,
+        notes=contract.notes,
+        signed_at=contract.signed_at,
+        start_date=contract.start_date,
+        end_date=contract.end_date,
+        alert_days=contract.alert_days,
+        auto_renew=contract.auto_renew,
+        indexer=contract.indexer,
+        total_value=contract.total_value,
+        monthly_value=contract.monthly_value,
+        currency=contract.currency,
+        payment_frequency=contract.payment_frequency,
+        payment_day=contract.payment_day,
+        cost_center=contract.cost_center,
+        budget_category=contract.budget_category,
+        amendments=[
+            ContractAmendmentOut(
+                id=a.id,
+                contract_id=a.contract_id,
+                amendment_type=a.amendment_type,
+                description=a.description,
+                new_end_date=a.new_end_date,
+                new_value=a.new_value,
+                signed_at=a.signed_at,
+                created_by_user_id=a.created_by_user_id,
+                created_by_name=None,
+                created_at=a.created_at,
+            )
+            for a in amendments
+        ],
+        approval_steps=[
+            ContractApprovalStepOut(
+                id=s.id,
+                step_order=s.step_order,
+                approver_user_id=s.approver_user_id,
+                approver_name=uname,
+                status=s.status,
+                comment=s.comment,
+                decided_at=s.decided_at,
+            )
+            for s, uname in steps
+        ],
+        created_at=contract.created_at,
+        updated_at=contract.updated_at,
+    )
+
+
+async def _get_contract_or_404(
+    session: AsyncSession, company_id: int, contract_id: int
+) -> _GetContractResult:
+    result = await get_contract(session, company_id, contract_id)
+    if not result:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -189,11 +270,7 @@ async def update_supplier_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> SupplierOut:
     supplier = await update_supplier(
-        session,
-        user.company_id,
-        user.id,
-        supplier_id,
-        body.model_dump(exclude_none=True),
+        session, user.company_id, user.id, supplier_id, body.model_dump(exclude_none=True),
     )
     if not supplier:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
@@ -338,49 +415,7 @@ async def get_contract_endpoint(
     user: Annotated[AuthenticatedUser, require_permission("contract.view")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> ContractOut:
-    result = await get_contract(session, user.company_id, contract_id)
-    if not result:
-        raise HTTPException(status_code=404, detail={"code": "not_found"})
-    contract, supplier_name, responsible_name, amendments, steps = result
-
-    amendment_outs = []
-    for a in amendments:
-        uname = None
-        if a.created_by_user_id:
-            uname = await session.scalar(_select(User.name).where(User.id == a.created_by_user_id))
-        amendment_outs.append(ContractAmendmentOut(
-            id=a.id, contract_id=a.contract_id, amendment_type=a.amendment_type,
-            description=a.description, new_end_date=a.new_end_date,
-            new_value=a.new_value, signed_at=a.signed_at,
-            created_by_user_id=a.created_by_user_id, created_by_name=uname,
-            created_at=a.created_at,
-        ))
-
-    return ContractOut(
-        id=contract.id, number=contract.number, title=contract.title,
-        contract_type=contract.contract_type, supplier_id=contract.supplier_id,
-        supplier_name=supplier_name, responsible_user_id=contract.responsible_user_id,
-        responsible_name=responsible_name, created_by_user_id=contract.created_by_user_id,
-        status=contract.status, description=contract.description,
-        conditions=contract.conditions, notes=contract.notes,
-        signed_at=contract.signed_at, start_date=contract.start_date,
-        end_date=contract.end_date, alert_days=contract.alert_days,
-        auto_renew=contract.auto_renew, indexer=contract.indexer,
-        total_value=contract.total_value, monthly_value=contract.monthly_value,
-        currency=contract.currency, payment_frequency=contract.payment_frequency,
-        payment_day=contract.payment_day, cost_center=contract.cost_center,
-        budget_category=contract.budget_category,
-        amendments=amendment_outs,
-        approval_steps=[
-            ContractApprovalStepOut(
-                id=s.id, step_order=s.step_order, approver_user_id=s.approver_user_id,
-                approver_name=uname, status=s.status, comment=s.comment,
-                decided_at=s.decided_at,
-            )
-            for s, uname in steps
-        ],
-        created_at=contract.created_at, updated_at=contract.updated_at,
-    )
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
 
 
 @router.post("", response_model=ContractOut, status_code=201)
@@ -396,31 +431,7 @@ async def create_contract_endpoint(
     result = await get_contract(session, user.company_id, contract.id)
     if not result:
         raise HTTPException(status_code=500, detail={"code": "internal_error"})
-    contract, supplier_name, responsible_name, amendments, steps = result
-    return ContractOut(
-        id=contract.id, number=contract.number, title=contract.title,
-        contract_type=contract.contract_type, supplier_id=contract.supplier_id,
-        supplier_name=supplier_name, responsible_user_id=contract.responsible_user_id,
-        responsible_name=responsible_name, created_by_user_id=contract.created_by_user_id,
-        status=contract.status, description=contract.description,
-        conditions=contract.conditions, notes=contract.notes,
-        signed_at=contract.signed_at, start_date=contract.start_date,
-        end_date=contract.end_date, alert_days=contract.alert_days,
-        auto_renew=contract.auto_renew, indexer=contract.indexer,
-        total_value=contract.total_value, monthly_value=contract.monthly_value,
-        currency=contract.currency, payment_frequency=contract.payment_frequency,
-        payment_day=contract.payment_day, cost_center=contract.cost_center,
-        budget_category=contract.budget_category,
-        amendments=[], approval_steps=[
-            ContractApprovalStepOut(
-                id=s.id, step_order=s.step_order, approver_user_id=s.approver_user_id,
-                approver_name=uname, status=s.status, comment=s.comment,
-                decided_at=s.decided_at,
-            )
-            for s, uname in steps
-        ],
-        created_at=contract.created_at, updated_at=contract.updated_at,
-    )
+    return _to_contract_out(result)
 
 
 @router.patch("/{contract_id}", response_model=ContractOut)
@@ -430,50 +441,13 @@ async def update_contract_endpoint(
     user: Annotated[AuthenticatedUser, require_permission("contract.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> ContractOut:
+    data = body.model_dump(exclude={"approver_user_ids"}, exclude_none=True)
     updated = await update_contract(
-        session, user.company_id, user.id, contract_id,
-        body.model_dump(exclude_none=True),
+        session, user.company_id, user.id, contract_id, data, body.approver_user_ids,
     )
     if not updated:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
-    result = await get_contract(session, user.company_id, contract_id)
-    if not result:
-        raise HTTPException(status_code=404, detail={"code": "not_found"})
-    contract, supplier_name, responsible_name, amendments, steps = result
-    return ContractOut(
-        id=contract.id, number=contract.number, title=contract.title,
-        contract_type=contract.contract_type, supplier_id=contract.supplier_id,
-        supplier_name=supplier_name, responsible_user_id=contract.responsible_user_id,
-        responsible_name=responsible_name, created_by_user_id=contract.created_by_user_id,
-        status=contract.status, description=contract.description,
-        conditions=contract.conditions, notes=contract.notes,
-        signed_at=contract.signed_at, start_date=contract.start_date,
-        end_date=contract.end_date, alert_days=contract.alert_days,
-        auto_renew=contract.auto_renew, indexer=contract.indexer,
-        total_value=contract.total_value, monthly_value=contract.monthly_value,
-        currency=contract.currency, payment_frequency=contract.payment_frequency,
-        payment_day=contract.payment_day, cost_center=contract.cost_center,
-        budget_category=contract.budget_category,
-        amendments=[
-            ContractAmendmentOut(
-                id=a.id, contract_id=a.contract_id, amendment_type=a.amendment_type,
-                description=a.description, new_end_date=a.new_end_date,
-                new_value=a.new_value, signed_at=a.signed_at,
-                created_by_user_id=a.created_by_user_id, created_by_name=None,
-                created_at=a.created_at,
-            )
-            for a in amendments
-        ],
-        approval_steps=[
-            ContractApprovalStepOut(
-                id=s.id, step_order=s.step_order, approver_user_id=s.approver_user_id,
-                approver_name=uname, status=s.status, comment=s.comment,
-                decided_at=s.decided_at,
-            )
-            for s, uname in steps
-        ],
-        created_at=contract.created_at, updated_at=contract.updated_at,
-    )
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
 
 
 @router.patch("/{contract_id}/status", response_model=ContractOut)
@@ -488,44 +462,7 @@ async def update_status_endpoint(
     )
     if not updated:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
-    result = await get_contract(session, user.company_id, contract_id)
-    if not result:
-        raise HTTPException(status_code=404, detail={"code": "not_found"})
-    contract, supplier_name, responsible_name, amendments, steps = result
-    return ContractOut(
-        id=contract.id, number=contract.number, title=contract.title,
-        contract_type=contract.contract_type, supplier_id=contract.supplier_id,
-        supplier_name=supplier_name, responsible_user_id=contract.responsible_user_id,
-        responsible_name=responsible_name, created_by_user_id=contract.created_by_user_id,
-        status=contract.status, description=contract.description,
-        conditions=contract.conditions, notes=contract.notes,
-        signed_at=contract.signed_at, start_date=contract.start_date,
-        end_date=contract.end_date, alert_days=contract.alert_days,
-        auto_renew=contract.auto_renew, indexer=contract.indexer,
-        total_value=contract.total_value, monthly_value=contract.monthly_value,
-        currency=contract.currency, payment_frequency=contract.payment_frequency,
-        payment_day=contract.payment_day, cost_center=contract.cost_center,
-        budget_category=contract.budget_category,
-        amendments=[
-            ContractAmendmentOut(
-                id=a.id, contract_id=a.contract_id, amendment_type=a.amendment_type,
-                description=a.description, new_end_date=a.new_end_date,
-                new_value=a.new_value, signed_at=a.signed_at,
-                created_by_user_id=a.created_by_user_id, created_by_name=None,
-                created_at=a.created_at,
-            )
-            for a in amendments
-        ],
-        approval_steps=[
-            ContractApprovalStepOut(
-                id=s.id, step_order=s.step_order, approver_user_id=s.approver_user_id,
-                approver_name=uname, status=s.status, comment=s.comment,
-                decided_at=s.decided_at,
-            )
-            for s, uname in steps
-        ],
-        created_at=contract.created_at, updated_at=contract.updated_at,
-    )
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
 
 
 @router.delete("/{contract_id}", status_code=204)
@@ -537,6 +474,27 @@ async def delete_contract_endpoint(
     deleted = await delete_contract(session, user.company_id, user.id, contract_id)
     if not deleted:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+@router.post("/{contract_id}/submit", response_model=ContractOut)
+async def submit_contract_endpoint(
+    contract_id: int,
+    body: ContractSubmit,
+    user: Annotated[AuthenticatedUser, require_permission("contract.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ContractOut:
+    updated = await submit_contract(
+        session, user.company_id, user.id, contract_id, body.approver_user_ids
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "cannot_submit",
+                "message": "Contrato não está em rascunho ou não foi encontrado.",
+            },
+        )
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
 
 
 @router.post("/{contract_id}/amendments", response_model=ContractAmendmentOut, status_code=201)
@@ -578,41 +536,41 @@ async def approve_contract_endpoint(
                 "message": "Contrato não aguarda aprovação ou você não é aprovador.",
             },
         )
-    result = await get_contract(session, user.company_id, contract_id)
-    if not result:
+    return _to_contract_out(await _get_contract_or_404(session, user.company_id, contract_id))
+
+
+@router.get("/{contract_id}/history", response_model=ContractHistoryResponse)
+async def get_contract_history_endpoint(
+    contract_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("contract.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> ContractHistoryResponse:
+    rows = await list_contract_history(session, user.company_id, contract_id)
+    if rows is None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
-    contract, supplier_name, responsible_name, amendments, steps = result
-    return ContractOut(
-        id=contract.id, number=contract.number, title=contract.title,
-        contract_type=contract.contract_type, supplier_id=contract.supplier_id,
-        supplier_name=supplier_name, responsible_user_id=contract.responsible_user_id,
-        responsible_name=responsible_name, created_by_user_id=contract.created_by_user_id,
-        status=contract.status, description=contract.description,
-        conditions=contract.conditions, notes=contract.notes,
-        signed_at=contract.signed_at, start_date=contract.start_date,
-        end_date=contract.end_date, alert_days=contract.alert_days,
-        auto_renew=contract.auto_renew, indexer=contract.indexer,
-        total_value=contract.total_value, monthly_value=contract.monthly_value,
-        currency=contract.currency, payment_frequency=contract.payment_frequency,
-        payment_day=contract.payment_day, cost_center=contract.cost_center,
-        budget_category=contract.budget_category,
-        amendments=[
-            ContractAmendmentOut(
-                id=a.id, contract_id=a.contract_id, amendment_type=a.amendment_type,
-                description=a.description, new_end_date=a.new_end_date,
-                new_value=a.new_value, signed_at=a.signed_at,
-                created_by_user_id=a.created_by_user_id, created_by_name=None,
-                created_at=a.created_at,
-            )
-            for a in amendments
-        ],
-        approval_steps=[
-            ContractApprovalStepOut(
-                id=s.id, step_order=s.step_order, approver_user_id=s.approver_user_id,
-                approver_name=uname, status=s.status, comment=s.comment,
-                decided_at=s.decided_at,
-            )
-            for s, uname in steps
-        ],
-        created_at=contract.created_at, updated_at=contract.updated_at,
-    )
+    items = [
+        ContractHistoryItem(
+            id=r.event.id,
+            event_type=r.event.event_type,
+            diff=r.event.diff,
+            user_id=r.event.user_id,
+            user_name=r.user_name,
+            created_at=r.event.created_at,
+        )
+        for r in rows
+    ]
+    return ContractHistoryResponse(items=items, total=len(items))
+
+
+# ---------------------------------------------------------------------------
+# System jobs
+# ---------------------------------------------------------------------------
+
+
+@router.post("/jobs/expiry-alerts", status_code=200)
+async def run_expiry_alerts_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("platform.admin")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> dict:
+    count = await run_expiry_alerts(session)
+    return {"notified": count}
