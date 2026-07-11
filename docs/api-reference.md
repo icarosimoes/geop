@@ -1012,3 +1012,35 @@ GET /reports/fiscal-requests-sla (report.view) ?date_from&date_to → total, por
 ```
 
 Sem `date_from`/`date_to`, usa o mês corrente. Frontend: `/relatorios`. Sem exportação (não há endpoint de export nesta primeira entrega).
+
+### Plataforma — feature flags, usuários, suporte e uso (`/platform/*`) (2026-07-11)
+
+```
+GET    /platform/feature-flags              → lista flags ativas (não deletadas)
+POST   /platform/feature-flags               → { key, description?, enabled_default, targeting_rules }
+PATCH  /platform/feature-flags/{id}           → description?, enabled_default?, targeting_rules?
+DELETE /platform/feature-flags/{id}           → soft delete (deleted_at)
+
+GET    /platform/users                        → equipe interna da plataforma (PlatformUser)
+POST   /platform/users                        → { name, email, role, password }
+PATCH  /platform/users/{id}                   → name?, email?, role?, password?, active?
+DELETE /platform/users/{id}                   → soft delete + active=false
+
+GET    /platform/support-requests             → pedidos de suporte de todos os tenants, com company_name
+PATCH  /platform/support-requests/{id}        → { status: pending|contacted|resolved }
+
+GET    /platform/usage?limit=200              → registros de uso por tenant (metric, value, period_start/end)
+POST   /platform/usage/snapshot               → gera um snapshot do dia corrente (usuários ativos e ocorrências do mês) por tenant
+```
+
+Todas as rotas exigem `PlatformUser` autenticado (`current_platform_user`) e toda mutação é auditada em `PlatformAuditLog`. `FeatureFlag`, `SupportRequest` e `UsageRecord` não têm RLS (mesmo padrão de `subscriptions`/`invoices`: tabelas cross-tenant administradas apenas pela plataforma).
+
+Endpoint tenant-facing correspondente para abrir um pedido de suporte:
+
+```
+POST /support/request   (autenticado como usuário do tenant) → { contact_name, contact_whatsapp, message? }
+```
+
+Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`), visível em todas as páginas autenticadas do tenant. Não há endpoint de criação manual de `usage_records` além do snapshot — não há Celery no Registro, então a geração é sob demanda pelo botão "Gerar snapshot de hoje" no admin.
+
+Frontend admin: `/feature-flags`, `/users`, `/support-requests`, `/usage`.
