@@ -7,6 +7,9 @@
 !**/.env.example
 secrets/
 
+# Observabilidade local (GlitchTip) — apenas dev local, nunca sobe na VPS
+docker-compose.observability.yml
+
 # Python / FastAPI
 /api/.venv/
 /api/build/

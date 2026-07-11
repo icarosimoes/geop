@@ -87,6 +87,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-registro-dev-secret}
       S3_BUCKET: ${S3_BUCKET:-registro-attachments}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000}
+      # Rastreamento de erros (SDK compatível com Sentry) — opcional, ver docker-compose.observability.yml.example
+      SENTRY_DSN: ${SENTRY_DSN_API:-}
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
@@ -115,6 +117,12 @@ services:
       target: development
     environment:
       API_URL: http://api:8000/api/v1
+      # DSN "internal" usa host.docker.internal: roda dentro do container (Server Actions/Route Handlers).
+      # DSN "public" usa localhost: é embutido no bundle client-side, executado no browser do host.
+      SENTRY_DSN: ${SENTRY_DSN_WEB_INTERNAL:-}
+      NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN_WEB_PUBLIC:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
       - "3000:3000"
     volumes:

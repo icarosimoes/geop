@@ -9,7 +9,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: http://localhost:9000 https://*.registro.app",
       "font-src 'self'",
-      "connect-src 'self' http://localhost:8000 https://*.registro.app",
+      "connect-src 'self' http://localhost:8000 http://localhost:8080 https://*.registro.app",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
