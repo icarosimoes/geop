@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { logoutAction } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
+import { HelpButton } from "./help-button";
 import { NotificationPanel, NotificationBadge } from "./notification-panel";
 
 const navOperation = [
@@ -134,6 +135,7 @@ export function AppLayout({ user, children }: { user: TenantUser; children: Reac
       <div className="top-float">
         <button className="icon-button mobile-menu-btn" onClick={() => setMobileMenu(true)} aria-label="Abrir menu"><Menu size={21} /></button>
         <div className="top-float-actions">
+          <HelpButton />
           <button className="icon-button notification-button" onClick={() => togglePanel("notifications")} aria-label="Notificações"><Bell size={20} /><NotificationBadge /></button>
           <button className="avatar-button" onClick={() => togglePanel("profile")} aria-label="Menu do usuário">{initials}</button>
         </div>

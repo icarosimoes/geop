@@ -176,3 +176,101 @@ class LifecycleProcessed(BaseModel):
 
 class LifecycleResponse(BaseModel):
     processed: list[LifecycleProcessed]
+
+
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+
+
+class FeatureFlagCreate(BaseModel):
+    key: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(None, max_length=500)
+    enabled_default: bool = False
+    targeting_rules: dict[str, Any] = {}
+
+
+class FeatureFlagUpdate(BaseModel):
+    description: str | None = Field(None, max_length=500)
+    enabled_default: bool | None = None
+    targeting_rules: dict[str, Any] | None = None
+
+
+class FeatureFlagResponse(BaseModel):
+    id: int
+    key: str
+    description: str | None
+    enabled_default: bool
+    targeting_rules: dict[str, Any]
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Platform users (equipe interna)
+# ---------------------------------------------------------------------------
+
+
+class PlatformUserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    email: str = Field(min_length=3, max_length=255)
+    role: str = "read_only"
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class PlatformUserUpdate(BaseModel):
+    name: str | None = Field(None, max_length=160)
+    email: str | None = Field(None, max_length=255)
+    role: str | None = None
+    password: str | None = Field(None, min_length=8, max_length=72)
+    active: bool | None = None
+
+
+class PlatformUserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Support requests
+# ---------------------------------------------------------------------------
+
+
+class SupportRequestUpdate(BaseModel):
+    status: str = Field(min_length=1, max_length=20)
+
+
+class SupportRequestResponse(BaseModel):
+    id: int
+    company_id: int
+    company_name: str | None
+    contact_name: str
+    contact_whatsapp: str
+    message: str | None
+    status: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+
+
+class UsageRecordResponse(BaseModel):
+    id: int
+    company_id: int
+    company_name: str | None
+    metric: str
+    value: int
+    period_start: date
+    period_end: date
+    created_at: datetime

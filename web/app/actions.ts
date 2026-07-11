@@ -96,6 +96,29 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
   return response;
 }
 
+interface MutationResult {
+  ok: boolean;
+  error?: string;
+  data?: Record<string, unknown>;
+}
+
+// --- Suporte ---
+
+export interface SupportRequestPayload {
+  contact_name: string;
+  contact_whatsapp: string;
+  message?: string;
+}
+
+export async function createSupportRequestAction(body: SupportRequestPayload): Promise<MutationResult> {
+  const response = await authedFetch("/support/request", { method: "POST", body: JSON.stringify(body) });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao enviar pedido de suporte." };
+  }
+  return { ok: true, data: await response.json() };
+}
+
 export interface FiscalRequestPayload {
   request_type: string;
   title: string;
@@ -104,12 +127,6 @@ export interface FiscalRequestPayload {
   description?: string;
   status?: string;
   payload?: Record<string, unknown>;
-}
-
-interface MutationResult {
-  ok: boolean;
-  error?: string;
-  data?: Record<string, unknown>;
 }
 
 export async function createFiscalRequestAction(body: FiscalRequestPayload): Promise<MutationResult> {

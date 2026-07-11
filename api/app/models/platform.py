@@ -99,3 +99,37 @@ class PlatformAuditLog(Base):
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     ip_address: Mapped[str | None] = mapped_column(String(45))
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FeatureFlag(Base, TimestampMixin):
+    __tablename__ = "feature_flags"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(120), unique=True)
+    description: Mapped[str | None] = mapped_column(String(500))
+    enabled_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    targeting_rules: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class SupportRequest(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "support_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    contact_name: Mapped[str] = mapped_column(String(160))
+    contact_whatsapp: Mapped[str] = mapped_column(String(30))
+    message: Mapped[str | None] = mapped_column(String(2000))
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    company: Mapped[Company] = relationship(lazy="selectin")
+
+
+class UsageRecord(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "usage_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    metric: Mapped[str] = mapped_column(String(60), index=True)
+    value: Mapped[int] = mapped_column(Integer)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    company: Mapped[Company] = relationship(lazy="selectin")

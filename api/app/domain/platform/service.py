@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt
 import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.domain.timeclock.service import ensure_default_shifts
 from app.integrations.asaas import AsaasClient, AsaasError
-from app.models import Company, Invoice, Plan, PlatformAuditLog, Subscription, User
+from app.models import (
+    Company,
+    FeatureFlag,
+    Invoice,
+    Occurrence,
+    Plan,
+    PlatformAuditLog,
+    PlatformUser,
+    Subscription,
+    SupportRequest,
+    UsageRecord,
+    User,
+)
 
 
 async def _log_platform_audit(
@@ -611,3 +624,313 @@ async def reconcile_billing(
     if discrepancies:
         await session.commit()
     return discrepancies
+
+
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+
+
+async def list_feature_flags(session: AsyncSession) -> list[FeatureFlag]:
+    return list(
+        (
+            await session.execute(
+                select(FeatureFlag)
+                .where(FeatureFlag.deleted_at.is_(None))
+                .order_by(FeatureFlag.key)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def create_feature_flag(
+    session: AsyncSession,
+    *,
+    key: str,
+    description: str | None,
+    enabled_default: bool,
+    targeting_rules: dict[str, Any],
+    actor_id: int,
+) -> FeatureFlag:
+    flag = FeatureFlag(
+        key=key,
+        description=description,
+        enabled_default=enabled_default,
+        targeting_rules=targeting_rules,
+    )
+    session.add(flag)
+    await session.flush()
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="feature_flag.create",
+        target_type="feature_flag",
+        target_id=flag.id,
+        payload={"key": key},
+    )
+    await session.commit()
+    await session.refresh(flag)
+    return flag
+
+
+async def update_feature_flag(
+    session: AsyncSession,
+    flag_id: int,
+    *,
+    updates: dict[str, Any],
+    actor_id: int,
+) -> FeatureFlag | None:
+    flag = await session.scalar(
+        select(FeatureFlag).where(FeatureFlag.id == flag_id, FeatureFlag.deleted_at.is_(None))
+    )
+    if flag is None:
+        return None
+    changed: dict[str, Any] = {}
+    for field, value in updates.items():
+        old = getattr(flag, field, None)
+        if str(old) != str(value):
+            changed[field] = {"from": str(old), "to": str(value)}
+            setattr(flag, field, value)
+    if changed:
+        await _log_platform_audit(
+            session,
+            actor_id=actor_id,
+            action="feature_flag.update",
+            target_type="feature_flag",
+            target_id=flag_id,
+            payload=changed,
+        )
+    await session.commit()
+    await session.refresh(flag)
+    return flag
+
+
+async def soft_delete_feature_flag(
+    session: AsyncSession,
+    flag_id: int,
+    *,
+    actor_id: int,
+) -> bool:
+    flag = await session.scalar(
+        select(FeatureFlag).where(FeatureFlag.id == flag_id, FeatureFlag.deleted_at.is_(None))
+    )
+    if flag is None:
+        return False
+    flag.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="feature_flag.delete",
+        target_type="feature_flag",
+        target_id=flag_id,
+    )
+    await session.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Platform users (equipe interna)
+# ---------------------------------------------------------------------------
+
+
+async def list_platform_users(session: AsyncSession) -> list[PlatformUser]:
+    return list(
+        (
+            await session.execute(
+                select(PlatformUser)
+                .where(PlatformUser.deleted_at.is_(None))
+                .order_by(PlatformUser.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def create_platform_user(
+    session: AsyncSession,
+    *,
+    name: str,
+    email: str,
+    role: str,
+    password: str,
+    actor_id: int,
+) -> PlatformUser:
+    user = PlatformUser(
+        name=name,
+        email=email,
+        role=role,
+        password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+    )
+    session.add(user)
+    await session.flush()
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="platform_user.create",
+        target_type="platform_user",
+        target_id=user.id,
+        payload={"email": email, "role": role},
+    )
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def update_platform_user(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    updates: dict[str, Any],
+    actor_id: int,
+) -> PlatformUser | None:
+    user = await session.scalar(
+        select(PlatformUser).where(PlatformUser.id == user_id, PlatformUser.deleted_at.is_(None))
+    )
+    if user is None:
+        return None
+    password = updates.pop("password", None)
+    changed: dict[str, Any] = {}
+    for field, value in updates.items():
+        old = getattr(user, field, None)
+        if str(old) != str(value):
+            changed[field] = {"from": str(old), "to": str(value)}
+            setattr(user, field, value)
+    if password:
+        user.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        changed["password"] = "changed"
+    if changed:
+        await _log_platform_audit(
+            session,
+            actor_id=actor_id,
+            action="platform_user.update",
+            target_type="platform_user",
+            target_id=user_id,
+            payload=changed,
+        )
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def soft_delete_platform_user(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    actor_id: int,
+) -> bool:
+    user = await session.scalar(
+        select(PlatformUser).where(PlatformUser.id == user_id, PlatformUser.deleted_at.is_(None))
+    )
+    if user is None:
+        return False
+    user.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+    user.active = False
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="platform_user.delete",
+        target_type="platform_user",
+        target_id=user_id,
+    )
+    await session.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Support requests
+# ---------------------------------------------------------------------------
+
+
+async def list_support_requests(session: AsyncSession) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(SupportRequest, Company.name)
+            .join(Company, Company.id == SupportRequest.company_id)
+            .order_by(SupportRequest.created_at.desc())
+        )
+    ).all()
+    return [{"request": req, "company_name": name} for req, name in rows]
+
+
+async def update_support_request_status(
+    session: AsyncSession,
+    request_id: int,
+    *,
+    status: str,
+    actor_id: int,
+) -> SupportRequest | None:
+    req = await session.scalar(select(SupportRequest).where(SupportRequest.id == request_id))
+    if req is None:
+        return None
+    old_status = req.status
+    req.status = status
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="support_request.update_status",
+        target_type="support_request",
+        target_id=request_id,
+        payload={"from": old_status, "to": status},
+    )
+    await session.commit()
+    await session.refresh(req)
+    return req
+
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+
+
+async def list_usage_records(session: AsyncSession, limit: int = 200) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(UsageRecord, Company.name)
+            .join(Company, Company.id == UsageRecord.company_id)
+            .order_by(UsageRecord.period_start.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [{"record": rec, "company_name": name} for rec, name in rows]
+
+
+async def snapshot_usage(session: AsyncSession) -> int:
+    """Gera um registro de uso do dia corrente por tenant (usuários e ocorrências)."""
+    today = datetime.now(UTC).date()
+    month_start = datetime.combine(today.replace(day=1), datetime.min.time())
+    companies = list(
+        (await session.execute(select(Company.id).where(Company.deleted_at.is_(None))))
+        .scalars()
+        .all()
+    )
+    created = 0
+    for company_id in companies:
+        users_count = await session.scalar(
+            select(func.count(User.id)).where(
+                User.company_id == company_id,
+                User.deleted_at.is_(None),
+                User.active.is_(True),
+            )
+        )
+        occurrences_count = await session.scalar(
+            select(func.count(Occurrence.id)).where(
+                Occurrence.company_id == company_id,
+                Occurrence.created_at >= month_start,
+            )
+        )
+        for metric, value in (("users", users_count or 0), ("occurrences", occurrences_count or 0)):
+            session.add(
+                UsageRecord(
+                    company_id=company_id,
+                    metric=metric,
+                    value=value,
+                    period_start=today,
+                    period_end=today,
+                )
+            )
+            created += 1
+    await session.commit()
+    return created

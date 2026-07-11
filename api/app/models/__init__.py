@@ -66,11 +66,14 @@ from app.models.operations import (
 )
 from app.models.platform import (
     CompanySetting,
+    FeatureFlag,
     Invoice,
     Plan,
     PlatformAuditLog,
     PlatformUser,
     Subscription,
+    SupportRequest,
+    UsageRecord,
     WebhookEvent,
 )
 
@@ -101,6 +104,7 @@ __all__ = [
     "EmployeeCredential",
     "EmployeeExternalId",
     "EmployeePayslip",
+    "FeatureFlag",
     "Invoice",
     "FiscalRequest",
     "Function",
@@ -135,10 +139,12 @@ __all__ = [
     "StockItem",
     "StockMovement",
     "Subscription",
+    "SupportRequest",
     "Sector",
     "TimeClockDevice",
     "TimeClockEnrollment",
     "TimePunch",
+    "UsageRecord",
     "User",
     "WebhookEvent",
     "WorkDiary",

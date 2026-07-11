@@ -9,6 +9,10 @@ import {
   CreditCard,
   ShieldAlert,
   Settings,
+  Flag,
+  UserCog,
+  MessageSquare,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +27,10 @@ const items: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tenants", label: "Empresas", icon: Building },
   { href: "/plans", label: "Planos", icon: Tag },
+  { href: "/feature-flags", label: "Feature Flags", icon: Flag },
+  { href: "/support-requests", label: "Suporte", icon: MessageSquare },
+  { href: "/usage", label: "Uso", icon: Activity },
+  { href: "/users", label: "Usuários", icon: UserCog },
   { href: "/audit", label: "Auditoria", icon: ShieldAlert },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];

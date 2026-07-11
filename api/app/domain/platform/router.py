@@ -21,6 +21,9 @@ from app.core.security import (
 )
 from app.domain.platform import service
 from app.domain.platform.schemas import (
+    FeatureFlagCreate,
+    FeatureFlagResponse,
+    FeatureFlagUpdate,
     InvoiceSummary,
     LifecycleProcessed,
     LifecycleResponse,
@@ -30,12 +33,18 @@ from app.domain.platform.schemas import (
     PlatformLoginRequest,
     PlatformMetricsResponse,
     PlatformTokenResponse,
+    PlatformUserCreate,
+    PlatformUserResponse,
+    PlatformUserUpdate,
     SubscriptionDetail,
     SubscriptionUpdate,
+    SupportRequestResponse,
+    SupportRequestUpdate,
     TenantCreate,
     TenantDetail,
     TenantSummary,
     TenantUpdate,
+    UsageRecordResponse,
 )
 from app.models import Company, Plan, PlatformAuditLog, PlatformUser, Subscription, User
 
@@ -471,6 +480,209 @@ async def reactivate_subscription(
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     data = await service.get_subscription_with_invoices(session, subscription_id)
     return _build_subscription_detail(data["subscription"], data["invoices"])
+
+
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+
+
+@router.get("/feature-flags", response_model=list[FeatureFlagResponse])
+async def list_feature_flags(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[FeatureFlagResponse]:
+    flags = await service.list_feature_flags(session)
+    return [FeatureFlagResponse.model_validate(f, from_attributes=True) for f in flags]
+
+
+@router.post("/feature-flags", response_model=FeatureFlagResponse, status_code=201)
+async def create_feature_flag(
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: FeatureFlagCreate,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> FeatureFlagResponse:
+    flag = await service.create_feature_flag(
+        session,
+        key=payload.key,
+        description=payload.description,
+        enabled_default=payload.enabled_default,
+        targeting_rules=payload.targeting_rules,
+        actor_id=admin.id,
+    )
+    return FeatureFlagResponse.model_validate(flag, from_attributes=True)
+
+
+@router.patch("/feature-flags/{flag_id}", response_model=FeatureFlagResponse)
+async def update_feature_flag(
+    flag_id: int,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: FeatureFlagUpdate,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> FeatureFlagResponse:
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail={"code": "no_fields"})
+    flag = await service.update_feature_flag(session, flag_id, updates=updates, actor_id=admin.id)
+    if flag is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return FeatureFlagResponse.model_validate(flag, from_attributes=True)
+
+
+@router.delete("/feature-flags/{flag_id}", status_code=204)
+async def delete_feature_flag(
+    flag_id: int,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    deleted = await service.soft_delete_feature_flag(session, flag_id, actor_id=admin.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+# ---------------------------------------------------------------------------
+# Platform users (equipe interna)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/users", response_model=list[PlatformUserResponse])
+async def list_platform_users(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[PlatformUserResponse]:
+    users = await service.list_platform_users(session)
+    return [PlatformUserResponse.model_validate(u, from_attributes=True) for u in users]
+
+
+@router.post("/users", response_model=PlatformUserResponse, status_code=201)
+async def create_platform_user(
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: PlatformUserCreate,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PlatformUserResponse:
+    user = await service.create_platform_user(
+        session,
+        name=payload.name,
+        email=payload.email,
+        role=payload.role,
+        password=payload.password,
+        actor_id=admin.id,
+    )
+    return PlatformUserResponse.model_validate(user, from_attributes=True)
+
+
+@router.patch("/users/{user_id}", response_model=PlatformUserResponse)
+async def update_platform_user(
+    user_id: int,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: PlatformUserUpdate,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PlatformUserResponse:
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail={"code": "no_fields"})
+    user = await service.update_platform_user(session, user_id, updates=updates, actor_id=admin.id)
+    if user is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return PlatformUserResponse.model_validate(user, from_attributes=True)
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_platform_user(
+    user_id: int,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    deleted = await service.soft_delete_platform_user(session, user_id, actor_id=admin.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+# ---------------------------------------------------------------------------
+# Support requests
+# ---------------------------------------------------------------------------
+
+
+@router.get("/support-requests", response_model=list[SupportRequestResponse])
+async def list_support_requests(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[SupportRequestResponse]:
+    rows = await service.list_support_requests(session)
+    return [
+        SupportRequestResponse(
+            id=row["request"].id,
+            company_id=row["request"].company_id,
+            company_name=row["company_name"],
+            contact_name=row["request"].contact_name,
+            contact_whatsapp=row["request"].contact_whatsapp,
+            message=row["request"].message,
+            status=row["request"].status,
+            created_at=row["request"].created_at,
+        )
+        for row in rows
+    ]
+
+
+@router.patch("/support-requests/{request_id}", response_model=SupportRequestResponse)
+async def update_support_request(
+    request_id: int,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: SupportRequestUpdate,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> SupportRequestResponse:
+    req = await service.update_support_request_status(
+        session, request_id, status=payload.status, actor_id=admin.id
+    )
+    if req is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    company = await session.scalar(select(Company).where(Company.id == req.company_id))
+    return SupportRequestResponse(
+        id=req.id,
+        company_id=req.company_id,
+        company_name=company.name if company else None,
+        contact_name=req.contact_name,
+        contact_whatsapp=req.contact_whatsapp,
+        message=req.message,
+        status=req.status,
+        created_at=req.created_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+
+
+@router.get("/usage", response_model=list[UsageRecordResponse])
+async def list_usage(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    limit: int = QueryParam(200, le=1000),
+) -> list[UsageRecordResponse]:
+    rows = await service.list_usage_records(session, limit=limit)
+    return [
+        UsageRecordResponse(
+            id=row["record"].id,
+            company_id=row["record"].company_id,
+            company_name=row["company_name"],
+            metric=row["record"].metric,
+            value=row["record"].value,
+            period_start=row["record"].period_start,
+            period_end=row["record"].period_end,
+            created_at=row["record"].created_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/usage/snapshot")
+async def create_usage_snapshot(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> dict:
+    created = await service.snapshot_usage(session)
+    return {"created": created}
 
 
 # ---------------------------------------------------------------------------

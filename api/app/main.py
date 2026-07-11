@@ -44,6 +44,7 @@ from app.domain.roles.router import router as roles_router
 from app.domain.settings.router import router as settings_router
 from app.domain.shift_reports.router import router as shift_reports_router
 from app.domain.stock.router import router as stock_router
+from app.domain.support.router import router as support_router
 from app.domain.timeclock.mobile_router import router as timeclock_mobile_router
 from app.domain.timeclock.router import router as timeclock_router
 from app.domain.timeclock.webhook_router import router as timeclock_webhook_router
@@ -169,4 +170,5 @@ v1_router.include_router(timeclock_router)
 v1_router.include_router(timeclock_mobile_router)
 v1_router.include_router(timeclock_webhook_router)
 v1_router.include_router(asaas_webhook_router)
+v1_router.include_router(support_router)
 app.include_router(v1_router)
