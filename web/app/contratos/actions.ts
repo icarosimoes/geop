@@ -87,7 +87,8 @@ export type ContractDetail = {
   currency: string;
   payment_frequency: string | null;
   payment_day: number | null;
-  cost_center: string | null;
+  cost_center_id: number | null;
+  cost_center_name: string | null;
   budget_category: string | null;
   amendments: ContractAmendment[];
   approval_steps: ContractApprovalStep[];
@@ -96,6 +97,8 @@ export type ContractDetail = {
 };
 
 export type SupplierOption = { id: number; name: string; document: string | null };
+
+export type CostCenterOption = { id: number; name: string; code: string | null };
 
 // ---- Contracts ----
 
@@ -187,6 +190,14 @@ export async function approveContractAction(contractId: number, approved: boolea
 
 export async function listSupplierOptionsAction(): Promise<SupplierOption[]> {
   const res = await authFetch("/contracts/suppliers/options");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// ---- Cost Centers (opções para o formulário de contrato; CRUD fica em cadastros/centros-custo) ----
+
+export async function listCostCenterOptionsAction(): Promise<CostCenterOption[]> {
+  const res = await authFetch("/contracts/cost-centers/options");
   if (!res.ok) return [];
   return res.json();
 }

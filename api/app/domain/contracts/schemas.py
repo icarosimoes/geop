@@ -104,6 +104,56 @@ class SupplierUpdate(BaseModel):
     notes: str | None = None
 
 
+class CostCenterOut(BaseModel):
+    id: int
+    name: str
+    code: str | None
+    parent_id: int | None
+    parent_name: str | None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CostCenterSummary(BaseModel):
+    id: int
+    name: str
+    code: str | None
+    parent_name: str | None
+    active: bool
+    contract_count: int
+    updated_at: datetime
+
+
+class CostCenterListResponse(BaseModel):
+    items: list[CostCenterSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class CostCenterCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str | None = None
+    parent_id: int | None = None
+
+
+class CostCenterUpdate(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    parent_id: int | None = None
+    active: bool | None = None
+
+
+class CostCenterOption(BaseModel):
+    id: int
+    name: str
+    code: str | None
+
+
 class SupplierContactCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     role: str | None = None
@@ -177,7 +227,8 @@ class ContractOut(BaseModel):
     currency: str
     payment_frequency: str | None
     payment_day: int | None
-    cost_center: str | None
+    cost_center_id: int | None
+    cost_center_name: str | None
     budget_category: str | None
     amendments: list[ContractAmendmentOut] = []
     approval_steps: list[ContractApprovalStepOut] = []
@@ -230,7 +281,7 @@ class ContractCreate(BaseModel):
     currency: str = "BRL"
     payment_frequency: str | None = None
     payment_day: int | None = None
-    cost_center: str | None = None
+    cost_center_id: int | None = None
     budget_category: str | None = None
     approver_user_ids: list[int] = []
 
@@ -263,7 +314,7 @@ class ContractUpdate(BaseModel):
     currency: str | None = None
     payment_frequency: str | None = None
     payment_day: int | None = None
-    cost_center: str | None = None
+    cost_center_id: int | None = None
     budget_category: str | None = None
     approver_user_ids: list[int] | None = None
 

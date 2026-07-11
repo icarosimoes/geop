@@ -8,11 +8,12 @@ import {
   Ban, RefreshCw, Edit2, Trash2, ChevronLeft, ChevronRight, Paperclip, Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ContractDetail, ContractSummary, SupplierOption } from "./actions";
+import type { ContractDetail, ContractSummary, CostCenterOption, SupplierOption } from "./actions";
 import {
   approveContractAction, createAmendmentAction, createContractAction,
   deleteContractAction, getContractAction, listContractsAction,
-  listSupplierOptionsAction, updateContractAction, updateContractStatusAction,
+  listCostCenterOptionsAction, listSupplierOptionsAction, updateContractAction,
+  updateContractStatusAction,
 } from "./actions";
 
 function formatFileSize(bytes: number): string {
@@ -140,10 +141,11 @@ function ExpiryBadge({ days, alert }: { days: number | null; alert: boolean }) {
 // ---- Contract Form ----
 
 function ContractForm({
-  initial, suppliers, onSave, onCancel,
+  initial, suppliers, costCenters, onSave, onCancel,
 }: {
   initial?: ContractDetail | null;
   suppliers: SupplierOption[];
+  costCenters: CostCenterOption[];
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -160,6 +162,7 @@ function ContractForm({
       raw[k] = v;
     }
     if (raw.supplier_id) raw.supplier_id = Number(raw.supplier_id);
+    if (raw.cost_center_id) raw.cost_center_id = Number(raw.cost_center_id);
     if (raw.payment_day) raw.payment_day = Number(raw.payment_day);
     if (raw.alert_days) raw.alert_days = Number(raw.alert_days);
     raw.auto_renew = fd.get("auto_renew") === "on";
@@ -236,7 +239,12 @@ function ContractForm({
             </select>
           </label>
           <label>Dia de vencimento<input type="number" name="payment_day" defaultValue={initial?.payment_day ?? ""} min={1} max={31} placeholder="Ex: 10" /></label>
-          <label>Centro de custo<input name="cost_center" defaultValue={initial?.cost_center ?? ""} placeholder="Ex: ADM-01" /></label>
+          <label>Centro de custo
+            <select name="cost_center_id" defaultValue={initial?.cost_center_id ?? ""}>
+              <option value="">— Selecione —</option>
+              {costCenters.map((c) => <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ""}</option>)}
+            </select>
+          </label>
         </div>
         <label>Categoria orçamentária<input name="budget_category" defaultValue={initial?.budget_category ?? ""} placeholder="Ex: Despesas operacionais" /></label>
       </fieldset>
@@ -315,6 +323,7 @@ export function ContractsManager({
 
   const [selectedContract, setSelectedContract] = useState<ContractDetail | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
+  const [costCenterOptions, setCostCenterOptions] = useState<CostCenterOption[]>([]);
   const [modalMode, setModalMode] = useState<"none" | "form" | "detail">("none");
   const [detailTab, setDetailTab] = useState<"info" | "financial" | "amendments" | "approvals" | "attachments">("info");
   const [showAmendmentForm, setShowAmendmentForm] = useState(false);
@@ -322,6 +331,7 @@ export function ContractsManager({
 
   useEffect(() => {
     listSupplierOptionsAction().then(setSupplierOptions);
+    listCostCenterOptionsAction().then(setCostCenterOptions);
   }, []);
 
   async function refreshContracts(p = page, s = search, st = status, ct = contractType) {
@@ -349,6 +359,7 @@ export function ContractsManager({
     closeModal();
     await refreshContracts();
     await listSupplierOptionsAction().then(setSupplierOptions);
+    await listCostCenterOptionsAction().then(setCostCenterOptions);
   }
 
   async function handleUpdateContract(data: Record<string, unknown>) {
@@ -502,6 +513,7 @@ export function ContractsManager({
             <ContractForm
               initial={selectedContract}
               suppliers={supplierOptions}
+              costCenters={costCenterOptions}
               onSave={selectedContract ? handleUpdateContract : handleCreateContract}
               onCancel={closeModal}
             />
@@ -606,7 +618,7 @@ export function ContractsManager({
                   <label>Indexador<span>{selectedContract.indexer?.toUpperCase() ?? "—"}</span></label>
                   <label>Frequência de pagamento<span>{selectedContract.payment_frequency ?? "—"}</span></label>
                   <label>Dia de vencimento<span>{selectedContract.payment_day ?? "—"}</span></label>
-                  <label>Centro de custo<span>{selectedContract.cost_center ?? "—"}</span></label>
+                  <label>Centro de custo<span>{selectedContract.cost_center_name ?? "—"}</span></label>
                   <label style={{ gridColumn: "1 / -1" }}>Categoria orçamentária<span>{selectedContract.budget_category ?? "—"}</span></label>
                 </div>
               )}

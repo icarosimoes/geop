@@ -814,6 +814,20 @@ class SupplierContact(Base, TenantMixin, TimestampMixin):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class CostCenter(Base, TenantMixin, TimestampMixin):
+    __tablename__ = "cost_centers"
+    __table_args__ = (Index("ix_cost_centers_company_active", "company_id", "active"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255))
+    code: Mapped[str | None] = mapped_column(String(40))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cost_centers.id", ondelete="SET NULL")
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 CONTRACT_STATUSES = (
     "rascunho",
     "aguardando_aprovacao",
@@ -869,7 +883,9 @@ class Contract(Base, TenantMixin, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(3), default="BRL")
     payment_frequency: Mapped[str | None] = mapped_column(String(20))
     payment_day: Mapped[int | None] = mapped_column(Integer)
-    cost_center: Mapped[str | None] = mapped_column(String(120))
+    cost_center_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cost_centers.id", ondelete="SET NULL")
+    )
     budget_category: Mapped[str | None] = mapped_column(String(120))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 

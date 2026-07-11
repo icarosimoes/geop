@@ -20,6 +20,12 @@ from app.domain.contracts.schemas import (
     ContractSubmit,
     ContractSummary,
     ContractUpdate,
+    CostCenterCreate,
+    CostCenterListResponse,
+    CostCenterOption,
+    CostCenterOut,
+    CostCenterSummary,
+    CostCenterUpdate,
     SupplierContactCreate,
     SupplierContactOut,
     SupplierContactUpdate,
@@ -35,22 +41,28 @@ from app.domain.contracts.service import (
     _expiry_alert,
     create_amendment,
     create_contract,
+    create_cost_center,
     create_supplier,
     create_supplier_contact,
     decide_approval,
     delete_contract,
+    delete_cost_center,
     delete_supplier,
     delete_supplier_contact,
     get_contract,
+    get_cost_center,
     get_supplier,
     list_contract_history,
     list_contracts,
+    list_cost_center_options,
+    list_cost_centers,
     list_supplier_options,
     list_suppliers,
     run_expiry_alerts,
     submit_contract,
     update_contract,
     update_contract_status,
+    update_cost_center,
     update_supplier,
     update_supplier_contact,
 )
@@ -66,7 +78,7 @@ _GetContractResult = tuple
 
 
 def _to_contract_out(result: _GetContractResult) -> ContractOut:
-    contract, supplier_name, responsible_name, amendments, steps = result
+    contract, supplier_name, responsible_name, cost_center_name, amendments, steps = result
     return ContractOut(
         id=contract.id,
         number=contract.number,
@@ -92,7 +104,8 @@ def _to_contract_out(result: _GetContractResult) -> ContractOut:
         currency=contract.currency,
         payment_frequency=contract.payment_frequency,
         payment_day=contract.payment_day,
-        cost_center=contract.cost_center,
+        cost_center_id=contract.cost_center_id,
+        cost_center_name=cost_center_name,
         budget_category=contract.budget_category,
         amendments=[
             ContractAmendmentOut(
@@ -391,6 +404,137 @@ async def delete_contact_endpoint(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
     deleted = await delete_supplier_contact(session, user.company_id, user.id, contact_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+# ---------------------------------------------------------------------------
+# Cost Centers
+# ---------------------------------------------------------------------------
+
+
+@router.get("/cost-centers", response_model=CostCenterListResponse)
+async def list_cost_centers_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("contract.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    search: str | None = None,
+    active_only: bool = False,
+) -> CostCenterListResponse:
+    rows, total = await list_cost_centers(
+        session, user.company_id, page, page_size, search, active_only
+    )
+    return CostCenterListResponse(
+        items=[
+            CostCenterSummary(
+                id=r.cost_center.id,
+                name=r.cost_center.name,
+                code=r.cost_center.code,
+                parent_name=r.parent_name,
+                active=r.cost_center.active,
+                contract_count=r.contract_count,
+                updated_at=r.cost_center.updated_at,
+            )
+            for r in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/cost-centers/options", response_model=list[CostCenterOption])
+async def list_cost_center_options_endpoint(
+    user: Annotated[AuthenticatedUser, require_permission("contract.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[CostCenterOption]:
+    items = await list_cost_center_options(session, user.company_id)
+    return [CostCenterOption(id=c.id, name=c.name, code=c.code) for c in items]
+
+
+@router.get("/cost-centers/{cost_center_id}", response_model=CostCenterOut)
+async def get_cost_center_endpoint(
+    cost_center_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("contract.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> CostCenterOut:
+    result = await get_cost_center(session, user.company_id, cost_center_id)
+    if not result:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    cost_center, parent_name = result
+    return CostCenterOut(
+        id=cost_center.id,
+        name=cost_center.name,
+        code=cost_center.code,
+        parent_id=cost_center.parent_id,
+        parent_name=parent_name,
+        active=cost_center.active,
+        created_at=cost_center.created_at,
+        updated_at=cost_center.updated_at,
+    )
+
+
+@router.post("/cost-centers", response_model=CostCenterOut, status_code=201)
+async def create_cost_center_endpoint(
+    body: CostCenterCreate,
+    user: Annotated[AuthenticatedUser, require_permission("contract.create")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> CostCenterOut:
+    cost_center = await create_cost_center(
+        session, user.company_id, user.id, body.model_dump(exclude_none=True)
+    )
+    result = await get_cost_center(session, user.company_id, cost_center.id)
+    if not result:
+        raise HTTPException(status_code=500, detail={"code": "internal_error"})
+    c, parent_name = result
+    return CostCenterOut(
+        id=c.id,
+        name=c.name,
+        code=c.code,
+        parent_id=c.parent_id,
+        parent_name=parent_name,
+        active=c.active,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+    )
+
+
+@router.patch("/cost-centers/{cost_center_id}", response_model=CostCenterOut)
+async def update_cost_center_endpoint(
+    cost_center_id: int,
+    body: CostCenterUpdate,
+    user: Annotated[AuthenticatedUser, require_permission("contract.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> CostCenterOut:
+    updated = await update_cost_center(
+        session, user.company_id, user.id, cost_center_id, body.model_dump(exclude_none=True)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    result = await get_cost_center(session, user.company_id, cost_center_id)
+    if not result:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    c, parent_name = result
+    return CostCenterOut(
+        id=c.id,
+        name=c.name,
+        code=c.code,
+        parent_id=c.parent_id,
+        parent_name=parent_name,
+        active=c.active,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+    )
+
+
+@router.delete("/cost-centers/{cost_center_id}", status_code=204)
+async def delete_cost_center_endpoint(
+    cost_center_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("contract.delete")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    deleted = await delete_cost_center(session, user.company_id, user.id, cost_center_id)
     if not deleted:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 

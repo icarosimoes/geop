@@ -4,7 +4,7 @@ import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
   FileText, Home, Link2, MapPin, Menu, Package, PanelLeftClose, PanelLeftOpen,
-  Receipt, Settings, ShieldCheck, Timer, Truck, UserCog, Users, X,
+  Receipt, Settings, ShieldCheck, Timer, Truck, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -33,6 +33,7 @@ const cadastrosSub = [
   { slug: "cadastros-locais", label: "Locais", icon: MapPin, href: "/cadastros/locais" },
   { slug: "cadastros-funcoes", label: "Funções", icon: UserCog, href: "/cadastros/funcoes" },
   { slug: "cadastros-fornecedores", label: "Fornecedores", icon: Truck, href: "/cadastros/fornecedores" },
+  { slug: "cadastros-centros-custo", label: "Centros de custo", icon: Wallet, href: "/cadastros/centros-custo" },
   { slug: "cadastros-procedimentos", label: "Procedimentos", icon: BookOpen, href: "/cadastros/procedimentos" },
   { slug: "cadastros-categorias-os", label: "Categorias de OS", icon: ClipboardList, href: "/cadastros/categorias-os" },
   { slug: "cadastros-turnos", label: "Turnos de trabalho", icon: Clock, href: "/cadastros/turnos" },
