@@ -179,33 +179,6 @@ class LifecycleResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Feature flags
-# ---------------------------------------------------------------------------
-
-
-class FeatureFlagCreate(BaseModel):
-    key: str = Field(min_length=1, max_length=120)
-    description: str | None = Field(None, max_length=500)
-    enabled_default: bool = False
-    targeting_rules: dict[str, Any] = {}
-
-
-class FeatureFlagUpdate(BaseModel):
-    description: str | None = Field(None, max_length=500)
-    enabled_default: bool | None = None
-    targeting_rules: dict[str, Any] | None = None
-
-
-class FeatureFlagResponse(BaseModel):
-    id: int
-    key: str
-    description: str | None
-    enabled_default: bool
-    targeting_rules: dict[str, Any]
-    created_at: datetime
-
-
-# ---------------------------------------------------------------------------
 # Platform users (equipe interna)
 # ---------------------------------------------------------------------------
 

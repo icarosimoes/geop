@@ -21,9 +21,6 @@ from app.core.security import (
 )
 from app.domain.platform import service
 from app.domain.platform.schemas import (
-    FeatureFlagCreate,
-    FeatureFlagResponse,
-    FeatureFlagUpdate,
     InvoiceSummary,
     LifecycleProcessed,
     LifecycleResponse,
@@ -480,64 +477,6 @@ async def reactivate_subscription(
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     data = await service.get_subscription_with_invoices(session, subscription_id)
     return _build_subscription_detail(data["subscription"], data["invoices"])
-
-
-# ---------------------------------------------------------------------------
-# Feature flags
-# ---------------------------------------------------------------------------
-
-
-@router.get("/feature-flags", response_model=list[FeatureFlagResponse])
-async def list_feature_flags(
-    _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
-) -> list[FeatureFlagResponse]:
-    flags = await service.list_feature_flags(session)
-    return [FeatureFlagResponse.model_validate(f, from_attributes=True) for f in flags]
-
-
-@router.post("/feature-flags", response_model=FeatureFlagResponse, status_code=201)
-async def create_feature_flag(
-    admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    payload: FeatureFlagCreate,
-    session: Annotated[AsyncSession, Depends(require_session)],
-) -> FeatureFlagResponse:
-    flag = await service.create_feature_flag(
-        session,
-        key=payload.key,
-        description=payload.description,
-        enabled_default=payload.enabled_default,
-        targeting_rules=payload.targeting_rules,
-        actor_id=admin.id,
-    )
-    return FeatureFlagResponse.model_validate(flag, from_attributes=True)
-
-
-@router.patch("/feature-flags/{flag_id}", response_model=FeatureFlagResponse)
-async def update_feature_flag(
-    flag_id: int,
-    admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    payload: FeatureFlagUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
-) -> FeatureFlagResponse:
-    updates = payload.model_dump(exclude_unset=True)
-    if not updates:
-        raise HTTPException(status_code=422, detail={"code": "no_fields"})
-    flag = await service.update_feature_flag(session, flag_id, updates=updates, actor_id=admin.id)
-    if flag is None:
-        raise HTTPException(status_code=404, detail={"code": "not_found"})
-    return FeatureFlagResponse.model_validate(flag, from_attributes=True)
-
-
-@router.delete("/feature-flags/{flag_id}", status_code=204)
-async def delete_feature_flag(
-    flag_id: int,
-    admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
-) -> None:
-    deleted = await service.soft_delete_feature_flag(session, flag_id, actor_id=admin.id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail={"code": "not_found"})
 
 
 # ---------------------------------------------------------------------------

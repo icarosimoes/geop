@@ -36,7 +36,6 @@ O painel admin foi reescrito no padrão Jarvis/Aloji com Tailwind CSS 4, Lucide 
 - **Dashboard**: 4 stat cards (empresas, trial, inadimplentes, MRR) com dados reais da API `/platform/metrics`.
 - **Empresas**: tabela com busca, badges de status (trial/ativo/inadimplente/suspenso/cancelado), menu de ações por assinatura (suspender/reativar/cancelar), modal de criação de tenant, delete com confirmação.
 - **Planos**: cards com preço formatado em BRL, limites e status ativo/inativo.
-- **Feature Flags**: CRUD de flags globais (`key`, `enabled_default`, `targeting_rules` em JSON), soft delete.
 - **Usuários**: CRUD da equipe interna da plataforma (`PlatformUser`), com papéis `super_admin`/`support`/`billing`/`read_only`.
 - **Suporte**: fila de pedidos abertos pelo botão de Ajuda do tenant (`web/`), com filtro por status (pendente/contatado/resolvido).
 - **Uso**: consumo por tenant (usuários ativos, ocorrências do mês), agregado por métrica; snapshot gerado sob demanda (sem Celery no Registro).

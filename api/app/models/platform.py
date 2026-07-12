@@ -101,17 +101,6 @@ class PlatformAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
-class FeatureFlag(Base, TimestampMixin):
-    __tablename__ = "feature_flags"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    key: Mapped[str] = mapped_column(String(120), unique=True)
-    description: Mapped[str | None] = mapped_column(String(500))
-    enabled_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    targeting_rules: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
-
-
 class SupportRequest(Base, TenantMixin, TimestampMixin):
     __tablename__ = "support_requests"
 

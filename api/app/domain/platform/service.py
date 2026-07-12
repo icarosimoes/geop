@@ -11,7 +11,6 @@ from app.domain.timeclock.service import ensure_default_shifts
 from app.integrations.asaas import AsaasClient, AsaasError
 from app.models import (
     Company,
-    FeatureFlag,
     Invoice,
     Occurrence,
     Plan,
@@ -624,110 +623,6 @@ async def reconcile_billing(
     if discrepancies:
         await session.commit()
     return discrepancies
-
-
-# ---------------------------------------------------------------------------
-# Feature flags
-# ---------------------------------------------------------------------------
-
-
-async def list_feature_flags(session: AsyncSession) -> list[FeatureFlag]:
-    return list(
-        (
-            await session.execute(
-                select(FeatureFlag)
-                .where(FeatureFlag.deleted_at.is_(None))
-                .order_by(FeatureFlag.key)
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-
-async def create_feature_flag(
-    session: AsyncSession,
-    *,
-    key: str,
-    description: str | None,
-    enabled_default: bool,
-    targeting_rules: dict[str, Any],
-    actor_id: int,
-) -> FeatureFlag:
-    flag = FeatureFlag(
-        key=key,
-        description=description,
-        enabled_default=enabled_default,
-        targeting_rules=targeting_rules,
-    )
-    session.add(flag)
-    await session.flush()
-    await _log_platform_audit(
-        session,
-        actor_id=actor_id,
-        action="feature_flag.create",
-        target_type="feature_flag",
-        target_id=flag.id,
-        payload={"key": key},
-    )
-    await session.commit()
-    await session.refresh(flag)
-    return flag
-
-
-async def update_feature_flag(
-    session: AsyncSession,
-    flag_id: int,
-    *,
-    updates: dict[str, Any],
-    actor_id: int,
-) -> FeatureFlag | None:
-    flag = await session.scalar(
-        select(FeatureFlag).where(FeatureFlag.id == flag_id, FeatureFlag.deleted_at.is_(None))
-    )
-    if flag is None:
-        return None
-    changed: dict[str, Any] = {}
-    for field, value in updates.items():
-        old = getattr(flag, field, None)
-        if str(old) != str(value):
-            changed[field] = {"from": str(old), "to": str(value)}
-            setattr(flag, field, value)
-    if changed:
-        await _log_platform_audit(
-            session,
-            actor_id=actor_id,
-            action="feature_flag.update",
-            target_type="feature_flag",
-            target_id=flag_id,
-            payload=changed,
-        )
-    await session.commit()
-    await session.refresh(flag)
-    return flag
-
-
-async def soft_delete_feature_flag(
-    session: AsyncSession,
-    flag_id: int,
-    *,
-    actor_id: int,
-) -> bool:
-    flag = await session.scalar(
-        select(FeatureFlag).where(FeatureFlag.id == flag_id, FeatureFlag.deleted_at.is_(None))
-    )
-    if flag is None:
-        return False
-    flag.deleted_at = datetime.now(UTC).replace(tzinfo=None)
-    await _log_platform_audit(
-        session,
-        actor_id=actor_id,
-        action="feature_flag.delete",
-        target_type="feature_flag",
-        target_id=flag_id,
-    )
-    await session.commit()
-    return True
 
 
 # ---------------------------------------------------------------------------

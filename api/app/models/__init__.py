@@ -66,7 +66,6 @@ from app.models.operations import (
 )
 from app.models.platform import (
     CompanySetting,
-    FeatureFlag,
     Invoice,
     Plan,
     PlatformAuditLog,
@@ -104,7 +103,6 @@ __all__ = [
     "EmployeeCredential",
     "EmployeeExternalId",
     "EmployeePayslip",
-    "FeatureFlag",
     "Invoice",
     "FiscalRequest",
     "Function",
