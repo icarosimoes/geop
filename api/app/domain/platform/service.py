@@ -15,6 +15,7 @@ from app.models import (
     Occurrence,
     Plan,
     PlatformAuditLog,
+    PlatformSetting,
     PlatformUser,
     Subscription,
     SupportRequest,
@@ -829,3 +830,54 @@ async def snapshot_usage(session: AsyncSession) -> int:
             created += 1
     await session.commit()
     return created
+
+
+# ---------------------------------------------------------------------------
+# Configurações — e-mail transacional (Brevo)
+# ---------------------------------------------------------------------------
+
+
+async def get_platform_email_config(session: AsyncSession) -> dict[str, Any]:
+    row = await session.scalar(select(PlatformSetting).where(PlatformSetting.key == "email"))
+    return dict(row.value) if row else {}
+
+
+async def get_effective_email_config(
+    session: AsyncSession,
+    settings: Settings,
+) -> tuple[str, str, str]:
+    """Retorna (api_key, from_address, from_name), priorizando o que foi
+    configurado em /platform/settings/email sobre as variáveis de ambiente."""
+    value = await get_platform_email_config(session)
+    api_key = value.get("brevo_api_key") or settings.brevo_api_key
+    from_address = value.get("email_from_address") or settings.mail_from_address
+    from_name = value.get("email_from_name") or settings.mail_from_name
+    return api_key, from_address, from_name
+
+
+async def save_platform_email_config(
+    session: AsyncSession,
+    *,
+    updates: dict[str, Any],
+    actor_id: int,
+) -> dict[str, Any]:
+    row = await session.scalar(select(PlatformSetting).where(PlatformSetting.key == "email"))
+    current = dict(row.value) if row else {}
+    new_value = {**current, **{k: v for k, v in updates.items() if v is not None}}
+    if row:
+        row.value = new_value
+    else:
+        row = PlatformSetting(key="email", value=new_value)
+        session.add(row)
+    await _log_platform_audit(
+        session,
+        actor_id=actor_id,
+        action="settings.email_update",
+        target_type="platform_setting",
+        target_id="email",
+        payload={
+            k: ("***" if k == "brevo_api_key" else v) for k, v in updates.items() if v is not None
+        },
+    )
+    await session.commit()
+    return new_value

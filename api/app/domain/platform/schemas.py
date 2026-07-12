@@ -247,3 +247,20 @@ class UsageRecordResponse(BaseModel):
     period_start: date
     period_end: date
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Configurações — e-mail transacional (Brevo)
+# ---------------------------------------------------------------------------
+
+
+class PlatformEmailConfig(BaseModel):
+    brevo_api_key: str | None = Field(None, max_length=255)
+    email_from_address: str | None = Field(None, max_length=255)
+    email_from_name: str | None = Field(None, max_length=160)
+
+
+class PlatformEmailRead(BaseModel):
+    brevo_configured: bool
+    email_from_address: str | None
+    email_from_name: str | None

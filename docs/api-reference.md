@@ -1041,3 +1041,18 @@ Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`),
 Frontend admin: `/users`, `/support-requests`, `/usage`.
 
 > Feature flags (`feature_flags`) foram implementadas em 2026-07-11 e removidas no mesmo dia (decisão: não seguir com a funcionalidade). Migration `20260711_0057_drop_feature_flags` desfaz a tabela.
+
+### Plataforma — e-mail transacional (`/platform/settings/email`) (2026-07-11)
+
+```
+GET  /platform/settings/email  → { brevo_configured, email_from_address, email_from_name }
+POST /platform/settings/email  → { brevo_api_key?, email_from_address?, email_from_name? }
+```
+
+Configuração global (tabela `platform_settings`, chave `email`), no mesmo padrão do Aloji. Sobrepõe `BREVO_API_KEY`/`MAIL_FROM_ADDRESS`/`MAIL_FROM_NAME` do `.env` da API para os e-mails transacionais do sistema (hoje: convite de usuário em `POST /users/invite`). Campos em branco no POST mantêm o valor salvo anteriormente — a API key nunca é retornada pelo GET, só a flag `brevo_configured`.
+
+`app.domain.platform.service.get_effective_email_config(session, settings)` é o ponto único de resolução: DB (`platform_settings.email`) tem prioridade, cai para as env vars quando não configurado. Novos fluxos de e-mail transacional (reset de senha, etc.) devem chamar essa função em vez de ler `settings.brevo_api_key` direto.
+
+Distinto do Brevo por tenant (`/settings/brevo`, tabela `company_settings`), que cada empresa configura em `/configuracoes` no `web/` para os próprios avisos de módulo — esse continua inalterado.
+
+Frontend admin: `/settings` (`admin/app/(app)/settings/email-settings-form.tsx`).

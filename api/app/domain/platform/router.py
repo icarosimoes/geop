@@ -27,6 +27,8 @@ from app.domain.platform.schemas import (
     PlanCreate,
     PlanResponse,
     PlanUpdate,
+    PlatformEmailConfig,
+    PlatformEmailRead,
     PlatformLoginRequest,
     PlatformMetricsResponse,
     PlatformTokenResponse,
@@ -622,6 +624,42 @@ async def create_usage_snapshot(
 ) -> dict:
     created = await service.snapshot_usage(session)
     return {"created": created}
+
+
+# ---------------------------------------------------------------------------
+# Configurações — e-mail transacional (Brevo)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings/email", response_model=PlatformEmailRead)
+async def get_platform_email(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PlatformEmailRead:
+    value = await service.get_platform_email_config(session)
+    return PlatformEmailRead(
+        brevo_configured=bool(value.get("brevo_api_key")),
+        email_from_address=value.get("email_from_address"),
+        email_from_name=value.get("email_from_name"),
+    )
+
+
+@router.post("/settings/email", response_model=PlatformEmailRead)
+async def save_platform_email(
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    payload: PlatformEmailConfig,
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> PlatformEmailRead:
+    value = await service.save_platform_email_config(
+        session,
+        updates=payload.model_dump(),
+        actor_id=admin.id,
+    )
+    return PlatformEmailRead(
+        brevo_configured=bool(value.get("brevo_api_key")),
+        email_from_address=value.get("email_from_address"),
+        email_from_name=value.get("email_from_name"),
+    )
 
 
 # ---------------------------------------------------------------------------

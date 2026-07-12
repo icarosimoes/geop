@@ -76,6 +76,18 @@ class CompanySetting(Base, TenantMixin, TimestampMixin):
     value: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class PlatformSetting(Base, TimestampMixin):
+    """Configurações globais da plataforma (cross-tenant, sem RLS).
+
+    Chave primária é o nome da configuração (ex.: "email").
+    """
+
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
 class WebhookEvent(Base, TimestampMixin):
     __tablename__ = "webhook_events"
     __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_webhook_provider_ext"),)

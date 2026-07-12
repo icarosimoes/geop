@@ -286,12 +286,14 @@ async def invite_user(
     )
     invite_url = f"{settings.registro_web_url}/definir-senha?token={token}"
 
+    from app.domain.platform.service import get_effective_email_config
     from app.integrations.brevo import send_email
 
+    api_key, from_address, from_name = await get_effective_email_config(session, settings)
     await send_email(
-        api_key=settings.brevo_api_key,
-        from_address=settings.mail_from_address,
-        from_name=settings.mail_from_name,
+        api_key=api_key,
+        from_address=from_address,
+        from_name=from_name,
         to_email=record.email,
         to_name=record.name,
         subject="Bem-vindo ao Registro — Defina sua senha",
