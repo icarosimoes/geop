@@ -204,9 +204,11 @@ async def prepare_notifications(
         from app.core.config import get_settings
         from app.domain.platform.service import get_effective_email_config
 
-        platform_api_key, platform_from_address, platform_from_name = (
-            await get_effective_email_config(session, get_settings())
-        )
+        (
+            platform_api_key,
+            platform_from_address,
+            platform_from_name,
+        ) = await get_effective_email_config(session, get_settings())
         api_key = platform_api_key
         from_address = from_address or platform_from_address
         from_name = from_name or platform_from_name
