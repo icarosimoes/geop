@@ -635,6 +635,16 @@ export async function saveBrevoSettings(body: { api_key: string; from_address: s
   return { ok: true, data: await response.json() };
 }
 
+export async function testBrevoSettings(to: string): Promise<MutationResult> {
+  const response = await authedFetch("/settings/brevo/test", { method: "POST", body: JSON.stringify({ to }) });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    if (response.status === 422) return { ok: false, error: "Salve a configuração antes de testar." };
+    return { ok: false, error: "Falha ao enviar o e-mail de teste — confira a API key e o remetente." };
+  }
+  return { ok: true, data: await response.json() };
+}
+
 // --- Dados do Estabelecimento ---
 
 export interface CompanyInfo {

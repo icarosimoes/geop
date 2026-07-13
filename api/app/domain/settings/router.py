@@ -186,6 +186,40 @@ async def save_brevo(
     return BrevoRead(has_credentials=True, from_address=body.from_address, from_name=body.from_name)
 
 
+class BrevoTestSend(BaseModel):
+    to: str
+
+
+@router.post("/brevo/test")
+async def brevo_test_send(
+    body: BrevoTestSend,
+    user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> dict:
+    row = await _get_setting(session, user.company_id, "brevo")
+    value = row.value if row else {}
+    if not value.get("api_key"):
+        raise HTTPException(status_code=422, detail={"code": "not_configured"})
+    from app.integrations.brevo import send_email
+
+    result = await send_email(
+        api_key=value["api_key"],
+        from_address=value["from_address"],
+        from_name=value["from_name"],
+        to_email=body.to,
+        subject="Teste de envio — Registro",
+        html="<p>Este é um e-mail de teste enviado a partir das configurações de e-mail "
+        "transacional do Registro. Se você recebeu esta mensagem, a integração com o "
+        "Brevo está funcionando corretamente.</p>",
+    )
+    if result.get("error"):
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "send_failed", "status": result.get("status")},
+        )
+    return {"status": "sent", "message_id": result.get("messageId")}
+
+
 # ── Destinatários de notificação por módulo ──
 
 VALID_MODULES = [

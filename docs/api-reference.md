@@ -79,6 +79,7 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/settings/evolution/test` | `settings.edit` | envia mensagem de teste via Evolution |
 | `GET` | `/settings/brevo` | `settings.view` | configuração do Brevo (e-mail) |
 | `POST` | `/settings/brevo` | `settings.edit` | salva configuração do Brevo |
+| `POST` | `/settings/brevo/test` | `settings.edit` | envia e-mail de teste via Brevo com a config salva |
 | `GET` | `/settings/notification-recipients` | `settings.view` | destinatários por módulo |
 | `PUT` | `/settings/notification-recipients/{module}` | `settings.edit` | define destinatários de um módulo |
 | `GET` | `/settings/timeclock` | `settings.view` | HE paga em dinheiro + salário por cargo |
@@ -1056,3 +1057,13 @@ Configuração global (tabela `platform_settings`, chave `email`), no mesmo padr
 Distinto do Brevo por tenant (`/settings/brevo`, tabela `company_settings`), que cada empresa configura em `/configuracoes` no `web/` para os próprios avisos de módulo — esse continua inalterado.
 
 Frontend admin: `/settings` (`admin/app/(app)/settings/email-settings-form.tsx`).
+
+#### Testar envio (Brevo por tenant, 2026-07-13)
+
+```
+POST /settings/brevo/test  { to: string }  → { status: "sent", message_id }
+```
+
+Dispara um e-mail real via `app.integrations.brevo.send_email()` usando a config já salva em `company_settings.brevo` (não aceita credenciais no body — sempre usa o que está persistido). `422 not_configured` se a empresa ainda não salvou nenhuma config; `502 send_failed` (com `status` = código HTTP retornado pela Brevo) se a API rejeitar a chave/remetente — cenário mais comum quando o domínio do remetente não está autenticado (SPF/DKIM) na conta Brevo, algo que a API do Registro não verifica nem pode automatizar.
+
+Frontend `web/`: seção "Testar envio" em `/configuracoes?tab=integracoes`, só aparece depois que `has_credentials` é `true` (`BrevoSettingsSection` em `web/components/settings-sections.tsx`).

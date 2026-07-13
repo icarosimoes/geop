@@ -446,6 +446,14 @@ feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy man
 - [ ] CRUD de Planos pelo painel (hoje é só leitura, inconsistente com Empresas/Usuários que têm CRUD completo).
 - [ ] Dashboard raso — só 4 stat cards, sem atalhos para o que precisa de atenção (ex.: pedidos de suporte pendentes, tenants inadimplentes).
 - [ ] `admin/__tests__/login.test.tsx` tem uma asserção pré-existente (`/painel da plataforma/i`) que não corresponde ao texto real da tela (`"Painel SaaS"`) — falha não introduzida por esta rodada, não corrigida por incerteza sobre qual lado (copy ou teste) está desatualizado.
+- [x] Corrigir sessão expirada nas mutações do painel admin — proxy client-side não renovava o access token via refresh token (commit `503e8308`).
+
+## P13 — Brevo por tenant: botão de teste (2026-07-13)
+
+- [x] `POST /settings/brevo/test` — envia e-mail de teste com a config já salva do tenant.
+- [x] Seção "Testar envio" na aba Integrações de `/configuracoes` (`web/`), só visível com `has_credentials: true`.
+- [ ] `save_brevo`/`save_evolution` (`api/app/domain/settings/router.py`) retornam `has_credentials: true` incondicionalmente no `POST`, mesmo com campos vazios — só o `GET` seguinte corrige. Inconsistência pequena, não corrigida por estar fora do escopo desta rodada.
+- [ ] Sem verificação de que o remetente/domínio está autenticado (SPF/DKIM) na conta Brevo antes do teste — a API do Registro não tem visibilidade disso; documentado como limitação conhecida em `api-reference.md`.
 
 ## Definition of Done por módulo
 

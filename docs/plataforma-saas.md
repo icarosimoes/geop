@@ -58,6 +58,10 @@ Revisão de UI/UX ponta a ponta do painel (código + inspeção visual de todas 
 
 Pendências dessa revisão (componentização de filtros, paginação de Auditoria, CRUD de Planos, dashboard mais rico) estão registradas em `backlog.md` (P12).
 
+### Brevo por tenant: teste de envio (2026-07-13)
+
+A configuração de Brevo por tenant (`/configuracoes` → Integrações no `web/`) já existia; ganhou um botão "Testar envio" (`POST /settings/brevo/test`) que dispara um e-mail real com a config salva, no mesmo padrão que a Evolution API já tinha para WhatsApp. Ver `docs/api-reference.md` (seção "Testar envio (Brevo por tenant)") e `backlog.md` (P13) para o contrato e as pendências.
+
 ## Comercial e cobrança (implementado)
 
 - CRUD auditado de tenants, planos e assinaturas — endpoints platform com POST/GET/PATCH/DELETE, todos auditados via `PlatformAuditLog`.

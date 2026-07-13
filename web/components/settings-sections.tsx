@@ -6,7 +6,7 @@ import type { TenantUser } from "@/lib/api";
 import type { EvolutionSettings, BrevoSettings, CompanyInfo, RegistryOption, TimeclockSettings } from "@/app/actions";
 import {
   getEvolutionSettings, saveEvolutionSettings,
-  getBrevoSettings, saveBrevoSettings,
+  getBrevoSettings, saveBrevoSettings, testBrevoSettings,
   getTimeclockSettings, saveTimeclockSettings,
   fetchRegistryOptions,
 } from "@/app/actions";
@@ -102,42 +102,67 @@ export function BrevoSettingsSection() {
   const [config, setConfig] = useState<BrevoSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     getBrevoSettings().then(setConfig).catch(() => setConfig({ has_credentials: false }));
   }, []);
 
-  return <form className="settings-evolution" onSubmit={async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setFeedback(null);
-    const fd = new FormData(e.currentTarget);
-    const result = await saveBrevoSettings({
-      api_key: String(fd.get("brevo_api_key")),
-      from_address: String(fd.get("brevo_from_address")),
-      from_name: String(fd.get("brevo_from_name")),
-    });
-    setSaving(false);
-    if (result.ok) {
-      setConfig({ has_credentials: true, from_address: String(fd.get("brevo_from_address")), from_name: String(fd.get("brevo_from_name")) });
-      setFeedback("Configuração salva com sucesso.");
-    } else {
-      setFeedback(result.error ?? "Erro ao salvar.");
-    }
-  }}>
-    <section>
-      <h2>E-mail (Brevo)</h2>
-      <p>Configure o envio de e-mails transacionais para notificações de chamados e atualizações.</p>
-      {config?.has_credentials && !feedback && <p className="settings-connected">Conectado{config.from_address ? ` — ${config.from_address}` : ""}</p>}
-      {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
-      <div className="form-grid">
-        <label>E-mail remetente<input name="brevo_from_address" type="email" required placeholder="noreply@suaempresa.com" defaultValue={config?.from_address ?? ""}/></label>
-        <label>Nome remetente<input name="brevo_from_name" type="text" required placeholder="Registro" defaultValue={config?.from_name ?? ""}/></label>
-      </div>
-      <label>API Key<input name="brevo_api_key" type="password" required placeholder={config?.has_credentials ? "Configurada — preencha para trocar" : "xkeysib-..."}/><small className="field-hint">Brevo → SMTP & API → API Keys</small></label>
-    </section>
-    <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar e-mail"}</button>
-  </form>;
+  async function sendTest() {
+    setTesting(true);
+    setTestFeedback(null);
+    const result = await testBrevoSettings(testTo);
+    setTesting(false);
+    setTestFeedback(result.ok ? `E-mail de teste enviado para ${testTo}.` : (result.error ?? "Erro ao enviar teste."));
+  }
+
+  return <div className="settings-evolution">
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      setSaving(true);
+      setFeedback(null);
+      const fd = new FormData(e.currentTarget);
+      const result = await saveBrevoSettings({
+        api_key: String(fd.get("brevo_api_key")),
+        from_address: String(fd.get("brevo_from_address")),
+        from_name: String(fd.get("brevo_from_name")),
+      });
+      setSaving(false);
+      if (result.ok) {
+        setConfig({ has_credentials: true, from_address: String(fd.get("brevo_from_address")), from_name: String(fd.get("brevo_from_name")) });
+        setFeedback("Configuração salva com sucesso.");
+      } else {
+        setFeedback(result.error ?? "Erro ao salvar.");
+      }
+    }}>
+      <section>
+        <h2>E-mail (Brevo)</h2>
+        <p>Configure o envio de e-mails transacionais para notificações de chamados e atualizações.</p>
+        {config?.has_credentials && !feedback && <p className="settings-connected">Conectado{config.from_address ? ` — ${config.from_address}` : ""}</p>}
+        {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
+        <div className="form-grid">
+          <label>E-mail remetente<input name="brevo_from_address" type="email" required placeholder="noreply@suaempresa.com" defaultValue={config?.from_address ?? ""}/></label>
+          <label>Nome remetente<input name="brevo_from_name" type="text" required placeholder="Registro" defaultValue={config?.from_name ?? ""}/></label>
+        </div>
+        <label>API Key<input name="brevo_api_key" type="password" required placeholder={config?.has_credentials ? "Configurada — preencha para trocar" : "xkeysib-..."}/><small className="field-hint">Brevo → SMTP & API → API Keys</small></label>
+      </section>
+      <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar e-mail"}</button>
+    </form>
+
+    {config?.has_credentials && (
+      <section>
+        <h2>Testar envio</h2>
+        <p>Envia um e-mail de teste com a configuração salva, para confirmar que a API key e o remetente estão válidos na Brevo.</p>
+        {testFeedback && <p className={testFeedback.startsWith("E-mail de teste enviado") ? "settings-connected" : "settings-error"}>{testFeedback}</p>}
+        <label>Enviar para<input type="email" required placeholder="voce@suaempresa.com" value={testTo} onChange={(e) => setTestTo(e.target.value)}/></label>
+        <button type="button" className="secondary-button" disabled={testing || !testTo} onClick={sendTest}>
+          {testing ? "Enviando..." : "Enviar teste"}
+        </button>
+      </section>
+    )}
+  </div>;
 }
 
 export function EvolutionSettingsSection() {

@@ -715,3 +715,25 @@ Registradas em `backlog.md` (P12): componentizar o padrão de "pílulas de filtr
 ### Deploy
 
 Não implantado em produção nesta rodada — apenas `git push origin main` (commits `6016d1c5` e `b4149faf`); `admin/` segue rodando localmente via Docker Compose. Próximo deploy de produção que tocar `admin/` deve incluir essas mudanças.
+
+## 2026-07-12 (continuação) — Sessão expirada quebrava mutações do painel admin
+
+O usuário reportou `Internal Server Error` ao salvar Configurações; investigado nos logs do `registro-api-1` e identificado como um `NameError: name 'PlatformEmailRead' is not defined` transitório durante uma janela de hot-reload do Uvicorn (o `WatchFiles` recarregou `router.py` num instante em que `schemas.py` ainda não tinha o símbolo aplicado) — não reproduzível, confirmado com `POST /platform/settings/email` retornando `200` direto na API.
+
+Na tentativa seguinte, o usuário recebeu `{"detail":"unauthorized"}` cru na tela. Esse era um bug real: o access token da plataforma vive 30min, e o proxy client-side `admin/app/api/proxy/[...path]/route.ts` (usado por toda mutação client-side do painel) não tentava renovar via refresh token como o `platformFetch` (usado no SSR, em `lib/api.ts`) já fazia — qualquer sessão aberta por mais de 30min quebrava todas as mutações com esse JSON cru na tela.
+
+- **Corrigido**: `tryRefreshToken()` de `lib/api.ts` exportado e reaproveitado no proxy — na primeira resposta `401`, tenta renovar e repete a chamada original antes de desistir.
+- **Duplicação eliminada**: as 4 cópias quase idênticas de `apiFetch()` (`tenants-client.tsx`, `users-client.tsx`, `usage-client.tsx`, `email-settings-form.tsx`) e o fetch cru em `support-client.tsx` foram substituídas por uma única `apiFetch()` em `admin/lib/client-fetch.ts`, que agora redireciona para `/login` quando a sessão realmente expirou (refresh token também vencido/inválido), em vez de deixar o JSON de erro na tela.
+- Validado com `tsc --noEmit` + `next build` limpos; commit `503e8308`.
+
+## 2026-07-13 — Botão de teste de envio para o Brevo por tenant
+
+Pedido do usuário: "configura o brevo nos tenant tb, olha a documentação oficial". Investigação mostrou que a configuração de Brevo por tenant **já existia completa** (backend `/settings/brevo` em `api/app/domain/settings/router.py`, tabela `company_settings`, já consumida por `notifications.py`; frontend na aba Integrações de `/configuracoes` no `web/`) e que a implementação (`api/app/integrations/brevo.py`) já batia com a documentação oficial (`developers.brevo.com`): header `api-key`, `POST https://api.brevo.com/v3/smtp/email`, payload `sender`/`to`/`subject`/`htmlContent`.
+
+O que faltava — confirmado com o usuário via pergunta direta, dado que "configurar o Brevo" é ambíguo (feature vs. credenciais reais vs. validação de domínio) — era um botão de teste de envio, no mesmo padrão que a Evolution API já tinha (`/settings/evolution/test`), mas que nunca tinha sido implementado para Brevo nem exposto no frontend de nenhum dos dois.
+
+- **Backend**: `POST /settings/brevo/test` (`api/app/domain/settings/router.py`) — usa a config já salva (não aceita credenciais no body), `422 not_configured` se a empresa não configurou ainda, `502 send_failed` com o status HTTP da Brevo se o envio for rejeitado.
+- **Frontend**: nova action `testBrevoSettings` em `web/app/actions.ts`; `BrevoSettingsSection` (`web/components/settings-sections.tsx`) ganhou uma seção "Testar envio" com campo de e-mail de destino, que só aparece quando `has_credentials` é `true`.
+- **Validação end-to-end real**: `docker compose up -d web` (o container não estava rodando), depois skill `run-web` (Playwright headless) — login, salvar config Brevo fake, seção "Testar envio" aparece, clicar "Enviar teste" mostra `Falha ao enviar o e-mail de teste — confira a API key e o remetente.` sem quebrar a tela (chave inválida rejeitada pela Brevo real, como esperado). Testado também direto via `curl` contra a API: `422` sem config, `502` com chave fake (`status: 401` vindo da Brevo). Dados de teste limpos do tenant demo ao final (`api_key`/`from_address`/`from_name` vazios).
+- **Achado não corrigido**: `save_brevo`/`save_evolution` retornam `has_credentials: true` incondicionalmente na resposta do `POST`, mesmo quando os campos salvos são vazios — só o `GET` seguinte reporta corretamente `has_credentials: false` (checa truthiness do valor salvo). Descoberto ao limpar os dados de teste; não corrigido por estar fora do escopo pedido, registrado para retomada futura.
+- Documentação: `docs/api-reference.md` (novo endpoint) e `docs/plataforma-saas.md`.
