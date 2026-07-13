@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TenantUser } from "@/lib/api";
 import type { EvolutionSettings, BrevoSettings, CompanyInfo, RegistryOption, TimeclockSettings } from "@/app/actions";
@@ -10,6 +10,8 @@ import {
   getTimeclockSettings, saveTimeclockSettings,
   fetchRegistryOptions,
 } from "@/app/actions";
+import { useCepLookup, useCnpjLookup } from "@/lib/use-document-lookup";
+import { formatCEP, onlyDigits } from "@/lib/validators";
 
 function formatPhone(v: string): string {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -28,17 +30,71 @@ function formatDocument(v: string): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
+const COMPANY_ADDRESS_FIELDS = [
+  "address_street", "address_number", "address_complement",
+  "address_neighborhood", "address_city", "address_state", "address_zip",
+] as const;
+
 export function CompanySettingsSection() {
   const [info, setInfo] = useState<CompanyInfo | null>(null);
+  const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     import("@/app/actions").then(({ getCompanyInfo }) =>
-      getCompanyInfo().then((data) => { setInfo(data); setLoading(false); })
+      getCompanyInfo().then((data) => {
+        setInfo(data);
+        if (data) {
+          setForm({
+            name: data.name,
+            email: data.email ?? "",
+            document: data.document ?? "",
+            trade_name: data.trade_name ?? "",
+            address_street: data.address_street ?? "",
+            address_number: data.address_number ?? "",
+            address_complement: data.address_complement ?? "",
+            address_neighborhood: data.address_neighborhood ?? "",
+            address_city: data.address_city ?? "",
+            address_state: data.address_state ?? "",
+            address_zip: data.address_zip ?? "",
+            timezone: data.timezone,
+          });
+        }
+        setLoading(false);
+      })
     ).catch(() => setLoading(false));
   }, []);
+
+  function setField(key: string, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const cep = useCepLookup((fields) => {
+    setForm((prev) => ({
+      ...prev,
+      address_street: fields.address_street ?? prev.address_street,
+      address_neighborhood: fields.address_neighborhood ?? prev.address_neighborhood,
+      address_city: fields.address_city ?? prev.address_city,
+      address_state: fields.address_state ?? prev.address_state,
+    }));
+  });
+
+  const cnpj = useCnpjLookup((fields) => {
+    setForm((prev) => ({
+      ...prev,
+      name: fields.name || prev.name,
+      trade_name: fields.trade_name || prev.trade_name,
+      address_street: fields.address_street ?? prev.address_street,
+      address_number: fields.address_number ?? prev.address_number,
+      address_complement: fields.address_complement ?? prev.address_complement,
+      address_neighborhood: fields.address_neighborhood ?? prev.address_neighborhood,
+      address_city: fields.address_city ?? prev.address_city,
+      address_state: fields.address_state ?? prev.address_state,
+      address_zip: fields.address_zip ?? prev.address_zip,
+    }));
+  });
 
   if (loading) return <div className="settings-form"><section><h2>Estabelecimento</h2><p>Carregando...</p></section></div>;
   if (!info) return null;
@@ -47,22 +103,24 @@ export function CompanySettingsSection() {
     e.preventDefault();
     setSaving(true);
     setFeedback(null);
-    const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
-    const name = String(fd.get("company_name") ?? "").trim();
-    const email = String(fd.get("company_email") ?? "").trim();
-    const document = String(fd.get("company_document") ?? "").trim();
-    const timezone = String(fd.get("company_timezone") ?? "");
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const document = form.document.trim();
     if (name && name !== info.name) body.name = name;
     if (email !== (info.email ?? "")) body.email = email;
     if (document !== (info.document ?? "")) body.document = document;
-    if (timezone && timezone !== info.timezone) body.timezone = timezone;
+    if (form.trade_name !== (info.trade_name ?? "")) body.trade_name = form.trade_name;
+    for (const field of COMPANY_ADDRESS_FIELDS) {
+      if (form[field] !== (info[field] ?? "")) body[field] = form[field];
+    }
+    if (form.timezone && form.timezone !== info.timezone) body.timezone = form.timezone;
     if (!Object.keys(body).length) { setFeedback("Nenhum campo alterado."); setSaving(false); return; }
     const { updateCompanyInfo } = await import("@/app/actions");
     const result = await updateCompanyInfo(body);
     setSaving(false);
     if (result.ok) {
-      setInfo({ ...info, ...body });
+      setInfo({ ...info, ...body } as CompanyInfo);
       setFeedback("Dados atualizados com sucesso.");
     } else {
       setFeedback(result.error ?? "Erro ao salvar.");
@@ -73,12 +131,56 @@ export function CompanySettingsSection() {
       <p>Dados cadastrais do seu hotel ou empresa.</p>
       {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
       <div className="form-grid">
-        <label>Nome do estabelecimento<input name="company_name" type="text" required defaultValue={info.name}/></label>
-        <label>E-mail corporativo<input name="company_email" type="email" placeholder="contato@hotel.com" defaultValue={info.email ?? ""}/></label>
+        <label>CNPJ / CPF
+          <span className="field-with-status">
+            <input
+              type="text"
+              placeholder="00.000.000/0000-00"
+              value={form.document ?? ""}
+              onChange={(e) => setField("document", formatDocument(e.target.value))}
+              onBlur={(e) => { if (onlyDigits(e.target.value).length === 14) cnpj.handleBlur(e.target.value); }}
+            />
+            {cnpj.loading && <Loader2 size={16} className="field-spinner" />}
+          </span>
+          {cnpj.notFound && <small className="field-error-hint">CNPJ não encontrado.</small>}
+          {cnpj.rateLimited && <small className="field-hint">Consulta de CNPJ temporariamente indisponível (limite de uso) — preencha manualmente.</small>}
+        </label>
+        <label>Nome fantasia<input type="text" value={form.trade_name ?? ""} onChange={(e) => setField("trade_name", e.target.value)}/></label>
       </div>
       <div className="form-grid">
-        <label>CNPJ / CPF<input name="company_document" type="text" placeholder="00.000.000/0000-00" defaultValue={info.document ?? ""} onChange={(e) => { e.target.value = formatDocument(e.target.value); }}/></label>
-        <label>Fuso horário<select name="company_timezone" defaultValue={info.timezone}>
+        <label>Nome / Razão social<input type="text" required value={form.name ?? ""} onChange={(e) => setField("name", e.target.value)}/></label>
+        <label>E-mail corporativo<input type="email" placeholder="contato@hotel.com" value={form.email ?? ""} onChange={(e) => setField("email", e.target.value)}/></label>
+      </div>
+      <fieldset className="form-section">
+        <legend>Endereço</legend>
+        <div className="form-grid">
+          <label>CEP
+            <span className="field-with-status">
+              <input
+                type="text"
+                placeholder="00000-000"
+                value={form.address_zip ?? ""}
+                onChange={(e) => setField("address_zip", formatCEP(e.target.value))}
+                onBlur={(e) => cep.handleBlur(e.target.value)}
+              />
+              {cep.loading && <Loader2 size={16} className="field-spinner" />}
+            </span>
+            {cep.notFound && <small className="field-error-hint">CEP não encontrado.</small>}
+          </label>
+          <label>Logradouro<input type="text" value={form.address_street ?? ""} onChange={(e) => setField("address_street", e.target.value)}/></label>
+        </div>
+        <div className="form-grid">
+          <label>Número<input type="text" value={form.address_number ?? ""} onChange={(e) => setField("address_number", e.target.value)}/></label>
+          <label>Complemento<input type="text" value={form.address_complement ?? ""} onChange={(e) => setField("address_complement", e.target.value)}/></label>
+        </div>
+        <div className="form-grid">
+          <label>Bairro<input type="text" value={form.address_neighborhood ?? ""} onChange={(e) => setField("address_neighborhood", e.target.value)}/></label>
+          <label>Cidade<input type="text" value={form.address_city ?? ""} onChange={(e) => setField("address_city", e.target.value)}/></label>
+        </div>
+        <label style={{ maxWidth: 120 }}>UF<input type="text" maxLength={2} value={form.address_state ?? ""} onChange={(e) => setField("address_state", e.target.value.toUpperCase())}/></label>
+      </fieldset>
+      <div className="form-grid">
+        <label>Fuso horário<select value={form.timezone ?? "America/Sao_Paulo"} onChange={(e) => setField("timezone", e.target.value)}>
           <option value="America/Sao_Paulo">Brasília (GMT-3)</option>
           <option value="America/Manaus">Manaus (GMT-4)</option>
           <option value="America/Belem">Belém (GMT-3)</option>
@@ -91,8 +193,8 @@ export function CompanySettingsSection() {
           <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
           <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
         </select></label>
+        <label>Identificador (slug)<input type="text" value={info.slug} readOnly/><small className="field-hint">O slug é gerado automaticamente e não pode ser alterado.</small></label>
       </div>
-      <label>Identificador (slug)<input type="text" value={info.slug} readOnly/><small className="field-hint">O slug é gerado automaticamente e não pode ser alterado.</small></label>
     </section>
     <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar dados"}</button>
   </form></div>;

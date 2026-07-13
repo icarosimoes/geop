@@ -8,6 +8,14 @@ export type Tenant = {
   slug: string;
   email: string;
   document: string | null;
+  trade_name: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
   timezone: string;
   status: string;
   users_count: number;

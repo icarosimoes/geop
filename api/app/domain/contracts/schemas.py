@@ -36,6 +36,7 @@ class SupplierOut(BaseModel):
     address_street: str | None
     address_number: str | None
     address_complement: str | None
+    address_neighborhood: str | None
     address_city: str | None
     address_state: str | None
     address_zip: str | None
@@ -80,6 +81,7 @@ class SupplierCreate(BaseModel):
     address_street: str | None = None
     address_number: str | None = None
     address_complement: str | None = None
+    address_neighborhood: str | None = None
     address_city: str | None = None
     address_state: str | None = None
     address_zip: str | None = None
@@ -97,6 +99,7 @@ class SupplierUpdate(BaseModel):
     address_street: str | None = None
     address_number: str | None = None
     address_complement: str | None = None
+    address_neighborhood: str | None = None
     address_city: str | None = None
     address_state: str | None = None
     address_zip: str | None = None

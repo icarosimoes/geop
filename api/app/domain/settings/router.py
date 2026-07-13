@@ -408,6 +408,14 @@ class CompanyRead(BaseModel):
     slug: str
     email: str | None = None
     document: str | None = None
+    trade_name: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_zip: str | None = None
     timezone: str
     status: str
 
@@ -416,6 +424,14 @@ class CompanyUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
     document: str | None = None
+    trade_name: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_zip: str | None = None
     timezone: str | None = None
 
 
@@ -427,15 +443,7 @@ async def get_company(
     company = await session.get(Company, user.company_id)
     if company is None:
         raise HTTPException(status_code=404, detail={"code": "company_not_found"})
-    return CompanyRead(
-        id=company.id,
-        name=company.name,
-        slug=company.slug,
-        email=company.email,
-        document=company.document,
-        timezone=company.timezone,
-        status=company.status,
-    )
+    return _company_read(company)
 
 
 @router.patch("/company", response_model=CompanyRead)
@@ -449,18 +457,10 @@ async def update_company(
         raise HTTPException(status_code=404, detail={"code": "company_not_found"})
 
     diff = {}
-    if body.name is not None and body.name != company.name:
-        diff["name"] = {"from": company.name, "to": body.name}
-        company.name = body.name
-    if body.email is not None and body.email != company.email:
-        diff["email"] = {"from": company.email, "to": body.email}
-        company.email = body.email
-    if body.document is not None and body.document != company.document:
-        diff["document"] = {"from": company.document, "to": body.document}
-        company.document = body.document
-    if body.timezone is not None and body.timezone != company.timezone:
-        diff["timezone"] = {"from": company.timezone, "to": body.timezone}
-        company.timezone = body.timezone
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if value != getattr(company, field):
+            diff[field] = {"from": getattr(company, field), "to": value}
+            setattr(company, field, value)
 
     if diff:
         await record_event(
@@ -475,12 +475,24 @@ async def update_company(
 
     await session.commit()
     await session.refresh(company)
+    return _company_read(company)
+
+
+def _company_read(company: Company) -> CompanyRead:
     return CompanyRead(
         id=company.id,
         name=company.name,
         slug=company.slug,
         email=company.email,
         document=company.document,
+        trade_name=company.trade_name,
+        address_street=company.address_street,
+        address_number=company.address_number,
+        address_complement=company.address_complement,
+        address_neighborhood=company.address_neighborhood,
+        address_city=company.address_city,
+        address_state=company.address_state,
+        address_zip=company.address_zip,
         timezone=company.timezone,
         status=company.status,
     )

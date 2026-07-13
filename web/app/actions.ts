@@ -653,6 +653,14 @@ export interface CompanyInfo {
   slug: string;
   email: string | null;
   document: string | null;
+  trade_name: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
   timezone: string;
   status: string;
 }
@@ -667,7 +675,20 @@ export async function getCompanyInfo(): Promise<CompanyInfo | null> {
 }
 
 export async function updateCompanyInfo(
-  body: { name?: string; email?: string; document?: string; timezone?: string },
+  body: {
+    name?: string;
+    email?: string;
+    document?: string;
+    trade_name?: string;
+    address_street?: string;
+    address_number?: string;
+    address_complement?: string;
+    address_neighborhood?: string;
+    address_city?: string;
+    address_state?: string;
+    address_zip?: string;
+    timezone?: string;
+  },
 ): Promise<MutationResult> {
   const response = await authedFetch("/settings/company", {
     method: "PATCH",
@@ -782,6 +803,52 @@ export async function lookupCepAction(cep: string): Promise<CepLookupResult> {
       address_neighborhood: data.bairro || undefined,
       address_city: data.localidade || undefined,
       address_state: data.uf || undefined,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export interface CnpjLookupResult {
+  ok: boolean;
+  rateLimited?: boolean;
+  name?: string;
+  trade_name?: string;
+  email?: string;
+  phone?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_neighborhood?: string;
+  address_city?: string;
+  address_state?: string;
+  address_zip?: string;
+}
+
+export async function lookupCnpjAction(cnpj: string): Promise<CnpjLookupResult> {
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return { ok: false };
+
+  try {
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, {
+      cache: "no-store",
+    });
+    if (response.status === 429) return { ok: false, rateLimited: true };
+    if (!response.ok) return { ok: false };
+    const data = await response.json();
+    return {
+      ok: true,
+      name: data.razao_social || undefined,
+      trade_name: data.nome_fantasia || undefined,
+      email: data.email || undefined,
+      phone: data.ddd_telefone_1 || undefined,
+      address_street: data.logradouro || undefined,
+      address_number: data.numero || undefined,
+      address_complement: data.complemento || undefined,
+      address_neighborhood: data.bairro || undefined,
+      address_city: data.municipio || undefined,
+      address_state: data.uf || undefined,
+      address_zip: data.cep || undefined,
     };
   } catch {
     return { ok: false };

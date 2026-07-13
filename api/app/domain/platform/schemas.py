@@ -37,6 +37,14 @@ class TenantSummary(BaseModel):
     slug: str
     email: str | None = None
     document: str | None = None
+    trade_name: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_zip: str | None = None
     timezone: str = "America/Sao_Paulo"
     status: str
     users_count: int
@@ -68,6 +76,14 @@ class TenantCreate(BaseModel):
     slug: str = Field(min_length=1, max_length=100)
     email: str | None = Field(None, max_length=255)
     document: str | None = Field(None, max_length=20)
+    trade_name: str | None = Field(None, max_length=160)
+    address_street: str | None = Field(None, max_length=255)
+    address_number: str | None = Field(None, max_length=20)
+    address_complement: str | None = Field(None, max_length=120)
+    address_neighborhood: str | None = Field(None, max_length=120)
+    address_city: str | None = Field(None, max_length=120)
+    address_state: str | None = Field(None, max_length=2)
+    address_zip: str | None = Field(None, max_length=10)
     timezone: str = "America/Sao_Paulo"
     plan_id: int
     trial_days: int = 14
@@ -82,6 +98,14 @@ class TenantUpdate(BaseModel):
     name: str | None = Field(None, max_length=160)
     email: str | None = Field(None, max_length=255)
     document: str | None = Field(None, max_length=20)
+    trade_name: str | None = Field(None, max_length=160)
+    address_street: str | None = Field(None, max_length=255)
+    address_number: str | None = Field(None, max_length=20)
+    address_complement: str | None = Field(None, max_length=120)
+    address_neighborhood: str | None = Field(None, max_length=120)
+    address_city: str | None = Field(None, max_length=120)
+    address_state: str | None = Field(None, max_length=2)
+    address_zip: str | None = Field(None, max_length=10)
     status: str | None = Field(None, max_length=20)
     timezone: str | None = Field(None, max_length=60)
 
@@ -115,6 +139,14 @@ class TenantDetail(BaseModel):
     slug: str
     email: str | None
     document: str | None
+    trade_name: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_zip: str | None = None
     status: str
     timezone: str
     users_count: int

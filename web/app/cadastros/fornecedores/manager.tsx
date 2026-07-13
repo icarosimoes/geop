@@ -2,7 +2,7 @@
 
 import {
   ChevronLeft, ChevronRight, Phone, Mail,
-  Plus, Search, Trash2, X, Edit2, Star, Users,
+  Plus, Search, Trash2, X, Edit2, Star, Users, Loader2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { SupplierContact, SupplierDetail, SupplierSummary } from "./actions";
@@ -10,6 +10,8 @@ import {
   createContactAction, createSupplierAction, deleteContactAction, deleteSupplierAction,
   getSupplierAction, listSuppliersAction, updateContactAction, updateSupplierAction,
 } from "./actions";
+import { useCepLookup, useCnpjLookup } from "@/lib/use-document-lookup";
+import { formatCEP, formatCNPJ, formatCPF, onlyDigits } from "@/lib/validators";
 
 // ---- Supplier Form ----
 
@@ -23,6 +25,64 @@ function SupplierForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+
+  const [form, setForm] = useState(() => ({
+    name: initial?.name ?? "",
+    document_type: initial?.document_type ?? "",
+    document: initial?.document ?? "",
+    email: initial?.email ?? "",
+    phone: initial?.phone ?? "",
+    address_zip: initial?.address_zip ?? "",
+    address_street: initial?.address_street ?? "",
+    address_number: initial?.address_number ?? "",
+    address_complement: initial?.address_complement ?? "",
+    address_neighborhood: initial?.address_neighborhood ?? "",
+    address_city: initial?.address_city ?? "",
+    address_state: initial?.address_state ?? "",
+  }));
+
+  function setField<K extends keyof typeof form>(key: K, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const cep = useCepLookup((fields) => {
+    setForm((prev) => ({
+      ...prev,
+      address_street: fields.address_street ?? prev.address_street,
+      address_neighborhood: fields.address_neighborhood ?? prev.address_neighborhood,
+      address_city: fields.address_city ?? prev.address_city,
+      address_state: fields.address_state ?? prev.address_state,
+    }));
+  });
+
+  const cnpj = useCnpjLookup((fields) => {
+    setForm((prev) => ({
+      ...prev,
+      name: fields.name || prev.name,
+      email: prev.email || fields.email || prev.email,
+      phone: prev.phone || fields.phone || prev.phone,
+      document_type: "cnpj",
+      address_street: fields.address_street ?? prev.address_street,
+      address_number: fields.address_number ?? prev.address_number,
+      address_complement: fields.address_complement ?? prev.address_complement,
+      address_neighborhood: fields.address_neighborhood ?? prev.address_neighborhood,
+      address_city: fields.address_city ?? prev.address_city,
+      address_state: fields.address_state ?? prev.address_state,
+      address_zip: fields.address_zip ?? prev.address_zip,
+    }));
+  });
+
+  function handleDocumentChange(value: string) {
+    const digits = onlyDigits(value);
+    const formatted = digits.length > 11 ? formatCNPJ(value) : formatCPF(value);
+    setField("document", formatted);
+  }
+
+  function handleDocumentBlur(value: string) {
+    const digits = onlyDigits(value);
+    if (digits.length === 14) { setField("document_type", "cnpj"); cnpj.handleBlur(value); }
+    else if (digits.length === 11) { setField("document_type", "cpf"); }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,38 +100,71 @@ function SupplierForm({
     <form ref={formRef} onSubmit={handleSubmit}>
       {error && <div className="kanban-form-error">{error}</div>}
 
-      <label>Nome / Razão social *<input name="name" required defaultValue={initial?.name} /></label>
-
-      <div className="form-grid">
+      <div className="form-grid supplier-doc-row">
         <label>Tipo de documento
-          <select name="document_type" defaultValue={initial?.document_type ?? ""}>
+          <select name="document_type" value={form.document_type} onChange={(e) => setField("document_type", e.target.value)}>
             <option value="">— Selecione —</option>
             <option value="cnpj">CNPJ</option>
             <option value="cpf">CPF</option>
           </select>
         </label>
-        <label>CPF/CNPJ<input name="document" defaultValue={initial?.document ?? ""} placeholder="00.000.000/0000-00" /></label>
+        <label>CPF/CNPJ
+          <span className="field-with-status">
+            <input
+              name="document"
+              value={form.document}
+              onChange={(e) => handleDocumentChange(e.target.value)}
+              onBlur={(e) => handleDocumentBlur(e.target.value)}
+              placeholder="00.000.000/0000-00"
+            />
+            {cnpj.loading && <Loader2 size={16} className="field-spinner" />}
+          </span>
+          {cnpj.notFound && <small className="field-error-hint">CNPJ não encontrado.</small>}
+          {cnpj.rateLimited && <small className="field-hint">Consulta de CNPJ temporariamente indisponível (limite de uso) — preencha manualmente.</small>}
+        </label>
       </div>
 
-      <label>Categoria<input name="category" defaultValue={initial?.category ?? ""} placeholder="Ex: Tecnologia, Limpeza, Segurança..." /></label>
+      <label>Nome / Razão social *
+        <input name="name" required value={form.name} onChange={(e) => setField("name", e.target.value)} />
+      </label>
 
       <div className="form-grid">
-        <label>E-mail<input type="email" name="email" defaultValue={initial?.email ?? ""} /></label>
-        <label>Telefone<input name="phone" defaultValue={initial?.phone ?? ""} /></label>
+        <label>Categoria<input name="category" defaultValue={initial?.category ?? ""} placeholder="Ex: Tecnologia, Limpeza, Segurança..." /></label>
+        <label>Website<input name="website" defaultValue={initial?.website ?? ""} placeholder="https://" /></label>
       </div>
 
-      <label>Website<input name="website" defaultValue={initial?.website ?? ""} placeholder="https://" /></label>
+      <div className="form-grid">
+        <label>E-mail<input type="email" name="email" value={form.email} onChange={(e) => setField("email", e.target.value)} /></label>
+        <label>Telefone<input name="phone" value={form.phone} onChange={(e) => setField("phone", e.target.value)} /></label>
+      </div>
 
       <fieldset className="form-section">
         <legend>Endereço</legend>
-        <label>Logradouro<input name="address_street" defaultValue={initial?.address_street ?? ""} /></label>
-        <div className="form-grid">
-          <label>Número<input name="address_number" defaultValue={initial?.address_number ?? ""} /></label>
-          <label>Complemento<input name="address_complement" defaultValue={initial?.address_complement ?? ""} /></label>
-          <label>Cidade<input name="address_city" defaultValue={initial?.address_city ?? ""} /></label>
-          <label>UF<input name="address_state" maxLength={2} defaultValue={initial?.address_state ?? ""} placeholder="SP" /></label>
+        <div className="form-grid supplier-cep-row">
+          <label>CEP
+            <span className="field-with-status">
+              <input
+                name="address_zip"
+                value={form.address_zip}
+                onChange={(e) => setField("address_zip", formatCEP(e.target.value))}
+                onBlur={(e) => cep.handleBlur(e.target.value)}
+                placeholder="00000-000"
+              />
+              {cep.loading && <Loader2 size={16} className="field-spinner" />}
+            </span>
+            {cep.notFound && <small className="field-error-hint">CEP não encontrado.</small>}
+          </label>
+          <label>Logradouro<input name="address_street" value={form.address_street} onChange={(e) => setField("address_street", e.target.value)} /></label>
         </div>
-        <label>CEP<input name="address_zip" defaultValue={initial?.address_zip ?? ""} placeholder="00000-000" /></label>
+        <div className="form-grid supplier-address-row">
+          <label>Número<input name="address_number" value={form.address_number} onChange={(e) => setField("address_number", e.target.value)} /></label>
+          <label>Complemento<input name="address_complement" value={form.address_complement} onChange={(e) => setField("address_complement", e.target.value)} /></label>
+          <label>Bairro<input name="address_neighborhood" value={form.address_neighborhood} onChange={(e) => setField("address_neighborhood", e.target.value)} /></label>
+        </div>
+        <div className="form-grid supplier-city-row">
+          <label>Cidade<input name="address_city" value={form.address_city} onChange={(e) => setField("address_city", e.target.value)} /></label>
+          <label>UF<input name="address_state" maxLength={2} value={form.address_state} onChange={(e) => setField("address_state", e.target.value.toUpperCase())} placeholder="SP" /></label>
+        </div>
       </fieldset>
 
       <label>Observações<textarea name="notes" rows={2} defaultValue={initial?.notes ?? ""} /></label>
@@ -265,7 +358,7 @@ export function SupplierManager() {
       {/* Create / edit modal */}
       {modalMode === "form" && (
         <div className="modal-layer" role="presentation" onClick={closeModal}>
-          <section className="record-modal" role="dialog" aria-modal="true" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+          <section className="record-modal supplier-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <header>
               <div>
                 <span>Cadastros</span>
@@ -273,11 +366,13 @@ export function SupplierManager() {
               </div>
               <button className="icon-button" onClick={closeModal}><X /></button>
             </header>
-            <SupplierForm
-              initial={selectedSupplier}
-              onSave={selectedSupplier ? handleUpdateSupplier : handleCreateSupplier}
-              onCancel={closeModal}
-            />
+            <div className="supplier-modal-scroll">
+              <SupplierForm
+                initial={selectedSupplier}
+                onSave={selectedSupplier ? handleUpdateSupplier : handleCreateSupplier}
+                onCancel={closeModal}
+              />
+            </div>
           </section>
         </div>
       )}
@@ -317,7 +412,7 @@ export function SupplierManager() {
                   <label style={{ gridColumn: "1 / -1" }}>Website<span><a href={selectedSupplier.website} target="_blank" rel="noopener noreferrer">{selectedSupplier.website}</a></span></label>
                 )}
                 {selectedSupplier.address_street && (
-                  <label style={{ gridColumn: "1 / -1" }}>Endereço<span>{[selectedSupplier.address_street, selectedSupplier.address_number, selectedSupplier.address_complement, selectedSupplier.address_city, selectedSupplier.address_state, selectedSupplier.address_zip].filter(Boolean).join(", ")}</span></label>
+                  <label style={{ gridColumn: "1 / -1" }}>Endereço<span>{[selectedSupplier.address_street, selectedSupplier.address_number, selectedSupplier.address_complement, selectedSupplier.address_neighborhood, selectedSupplier.address_city, selectedSupplier.address_state, selectedSupplier.address_zip].filter(Boolean).join(", ")}</span></label>
                 )}
                 {selectedSupplier.notes && (
                   <label style={{ gridColumn: "1 / -1" }}>Observações<span style={{ whiteSpace: "pre-wrap", fontWeight: 400 }}>{selectedSupplier.notes}</span></label>
@@ -383,6 +478,24 @@ export function SupplierManager() {
         .checkbox-row { display: flex !important; flex-direction: row !important; align-items: center; gap: var(--sp-2); }
         .checkbox-row input { width: auto !important; min-height: 0 !important; }
         .record-modal.has-timeline label > span { font-size: var(--font-base); font-weight: 400; color: var(--ink); }
+
+        .record-modal.supplier-form-modal {
+          width: min(880px, 96vw);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .supplier-modal-scroll {
+          overflow-y: auto;
+          border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+        }
+        .supplier-doc-row { grid-template-columns: 180px 1fr; }
+        .supplier-cep-row { grid-template-columns: 200px 1fr; }
+        .supplier-address-row { grid-template-columns: 1fr 1fr 1fr; }
+        .supplier-city-row { grid-template-columns: 2fr 100px; }
+        @media (max-width: 680px) {
+          .supplier-doc-row, .supplier-cep-row, .supplier-address-row, .supplier-city-row { grid-template-columns: 1fr; }
+        }
       `}</style>
     </>
   );

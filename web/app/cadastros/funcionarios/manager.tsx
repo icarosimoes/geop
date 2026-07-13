@@ -10,7 +10,6 @@ import {
   fetchRegistryOptions,
   fetchTimeline,
   importEmployeesAction,
-  lookupCepAction,
   resetEmployeePinAction,
   updateEmployeeAction,
   uploadEmployeeAvatarAction,
@@ -22,6 +21,7 @@ import {
 } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 import { formatCEP, formatCPF, isValidBirthDate, isValidCEP, isValidCPF, onlyDigits } from "@/lib/validators";
+import { useCepLookup } from "@/lib/use-document-lookup";
 
 function hasPermission(user: TenantUser, code: string) {
   return user.permissions.includes("*") || user.permissions.includes(code);
@@ -77,7 +77,15 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
-  const [cepLoading, setCepLoading] = useState(false);
+  const cep = useCepLookup((fields) => {
+    setFormData((prev) => ({
+      ...prev,
+      address_street: fields.address_street ?? prev.address_street,
+      address_neighborhood: fields.address_neighborhood ?? prev.address_neighborhood,
+      address_city: fields.address_city ?? prev.address_city,
+      address_state: fields.address_state ?? prev.address_state,
+    }));
+  });
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [pinResetting, setPinResetting] = useState(false);
   const [resetPin, setResetPin] = useState<string | null>(null);
@@ -218,24 +226,6 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
       });
       setAvatarUrl(detail.avatar_url);
     }
-  }
-
-  async function handleCepBlur() {
-    if (!formData.address_zip || !isValidCEP(formData.address_zip)) return;
-    setCepLoading(true);
-    const result = await lookupCepAction(formData.address_zip);
-    setCepLoading(false);
-    if (!result.ok) {
-      setErrors((prev) => ({ ...prev, address_zip: "CEP não encontrado." }));
-      return;
-    }
-    setFormData((prev) => ({
-      ...prev,
-      address_street: result.address_street ?? prev.address_street,
-      address_neighborhood: result.address_neighborhood ?? prev.address_neighborhood,
-      address_city: result.address_city ?? prev.address_city,
-      address_state: result.address_state ?? prev.address_state,
-    }));
   }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -626,16 +616,17 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
             {errors.termination_date && <small style={{ color: "var(--danger, #c0392b)" }}>{errors.termination_date}</small>}
           </div>
           <div>
-            <label>CEP {cepLoading && "(buscando...)"}</label>
+            <label>CEP {cep.loading && "(buscando...)"}</label>
             <input
               type="text"
               value={formatCEP(formData.address_zip ?? "")}
               onChange={(e) => setField("address_zip", onlyDigits(e.target.value))}
-              onBlur={handleCepBlur}
+              onBlur={(e) => cep.handleBlur(e.target.value)}
               placeholder="00000-000"
               maxLength={9}
             />
             {errors.address_zip && <small style={{ color: "var(--danger, #c0392b)" }}>{errors.address_zip}</small>}
+            {!errors.address_zip && cep.notFound && <small style={{ color: "var(--danger, #c0392b)" }}>CEP não encontrado.</small>}
           </div>
           <div>
             <label>Logradouro</label>

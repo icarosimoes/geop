@@ -790,6 +790,7 @@ class Supplier(Base, TenantMixin, TimestampMixin):
     address_street: Mapped[str | None] = mapped_column(String(255))
     address_number: Mapped[str | None] = mapped_column(String(20))
     address_complement: Mapped[str | None] = mapped_column(String(120))
+    address_neighborhood: Mapped[str | None] = mapped_column(String(120))
     address_city: Mapped[str | None] = mapped_column(String(120))
     address_state: Mapped[str | None] = mapped_column(String(2))
     address_zip: Mapped[str | None] = mapped_column(String(10))

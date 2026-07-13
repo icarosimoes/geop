@@ -1,4 +1,4 @@
-// Validações de campo espelhando app/core/validators.py e app/domain/employees/schemas.py no backend,
+// Validações de campo espelhando app/core/validators.py no backend,
 // para dar feedback imediato no formulário sem esperar o round-trip da API.
 
 export function onlyDigits(value: string): string {
@@ -67,14 +67,4 @@ export function isValidCEP(value: string): boolean {
 export function formatCEP(value: string): string {
   const digits = onlyDigits(value).slice(0, 8);
   return digits.replace(/(\d{5})(\d)/, "$1-$2");
-}
-
-export function isValidBirthDate(value: string): boolean {
-  if (!value) return true;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date <= today;
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { Paperclip, Upload, X } from "lucide-react";
+import { Loader2, Paperclip, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModuleRecord } from "@/lib/module-definitions";
 import type { AttachmentItem } from "@/app/actions";
+import { useCepLookup } from "@/lib/use-document-lookup";
+import { formatCEP } from "@/lib/validators";
 
 const requestTypes = [
   "Dados do tomador incorretos",
@@ -49,8 +51,21 @@ export function FiscalRequestForm({
   const [checkoutDate, setCheckoutDate] = useState(existing?.checkoutDate ?? "");
   const [taxpayerDoc, setTaxpayerDoc] = useState(existing?.taxpayerDoc ?? "");
   const [taxpayerName, setTaxpayerName] = useState(existing?.taxpayerName ?? "");
-  const [taxpayerAddress, setTaxpayerAddress] = useState(existing?.taxpayerAddress ?? "");
+  const [taxpayerZip, setTaxpayerZip] = useState("");
+  const [taxpayerStreet, setTaxpayerStreet] = useState(existing?.taxpayerAddress ?? "");
+  const [taxpayerNumber, setTaxpayerNumber] = useState("");
+  const [taxpayerComplement, setTaxpayerComplement] = useState("");
+  const [taxpayerNeighborhood, setTaxpayerNeighborhood] = useState("");
+  const [taxpayerCity, setTaxpayerCity] = useState("");
+  const [taxpayerState, setTaxpayerState] = useState("");
   const [taxpayerEmail, setTaxpayerEmail] = useState(existing?.taxpayerEmail ?? "");
+
+  const taxpayerCep = useCepLookup((fields) => {
+    setTaxpayerStreet(fields.address_street ?? taxpayerStreet);
+    setTaxpayerNeighborhood(fields.address_neighborhood ?? taxpayerNeighborhood);
+    setTaxpayerCity(fields.address_city ?? taxpayerCity);
+    setTaxpayerState(fields.address_state ?? taxpayerState);
+  });
   const [cancellationReason, setCancellationReason] = useState(existing?.cancellationReason ?? "");
   const [correction, setCorrection] = useState(existing?.correction ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
@@ -173,7 +188,10 @@ export function FiscalRequestForm({
       checkoutDate,
       taxpayerDoc,
       taxpayerName,
-      taxpayerAddress,
+      taxpayerAddress: [
+        taxpayerStreet, taxpayerNumber, taxpayerComplement,
+        taxpayerNeighborhood, taxpayerCity, taxpayerState, taxpayerZip,
+      ].filter(Boolean).join(", "),
       taxpayerEmail,
       cancellationReason,
       correction,
@@ -260,8 +278,41 @@ export function FiscalRequestForm({
                 <input value={taxpayerName} onChange={(e) => setTaxpayerName(e.target.value)} />
               </label>
               <label>
-                Endereço do tomador
-                <input value={taxpayerAddress} onChange={(e) => setTaxpayerAddress(e.target.value)} />
+                CEP do tomador
+                <span className="field-with-status">
+                  <input
+                    value={taxpayerZip}
+                    onChange={(e) => setTaxpayerZip(formatCEP(e.target.value))}
+                    onBlur={(e) => taxpayerCep.handleBlur(e.target.value)}
+                    placeholder="00000-000"
+                  />
+                  {taxpayerCep.loading && <Loader2 size={16} className="field-spinner" />}
+                </span>
+                {taxpayerCep.notFound && <small className="field-error-hint">CEP não encontrado.</small>}
+              </label>
+              <label>
+                Logradouro do tomador
+                <input value={taxpayerStreet} onChange={(e) => setTaxpayerStreet(e.target.value)} />
+              </label>
+              <label>
+                Número
+                <input value={taxpayerNumber} onChange={(e) => setTaxpayerNumber(e.target.value)} />
+              </label>
+              <label>
+                Complemento
+                <input value={taxpayerComplement} onChange={(e) => setTaxpayerComplement(e.target.value)} />
+              </label>
+              <label>
+                Bairro
+                <input value={taxpayerNeighborhood} onChange={(e) => setTaxpayerNeighborhood(e.target.value)} />
+              </label>
+              <label>
+                Cidade
+                <input value={taxpayerCity} onChange={(e) => setTaxpayerCity(e.target.value)} />
+              </label>
+              <label>
+                UF
+                <input maxLength={2} value={taxpayerState} onChange={(e) => setTaxpayerState(e.target.value.toUpperCase())} placeholder="SP" />
               </label>
             </>
           )}
