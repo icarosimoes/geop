@@ -746,3 +746,17 @@ Pedido do usuário: "quando o tenant não tiver o Brevo configurado, usar o do p
 - **Teste novo**: `test_prepare_notifications_falls_back_to_platform_brevo` em `tests/test_background_notifications.py` — seeda um `PlatformSetting(key="email")` e um destinatário sem Brevo no tenant, confirma que o `_EmailTask` gerado usa a `api_key`/`from_address`/`from_name` do painel.
 - Suíte completa: 583 passando (era 582 antes desta mudança), `ruff check` limpo, `mypy` sem novos erros (só os avisos pré-existentes de stubs do `boto3`).
 - Não implantado em produção — só local via Docker Compose (`registro-api-1` recarregou via hot-reload).
+
+## 2026-07-13 (continuação) — Deploy em produção não roda migrations; `platform_settings` faltando
+
+O usuário reportou `Internal Server Error` ao salvar "E-mail (Brevo)" no painel admin **em produção** (a mudança do dia anterior tinha ficado só local). Investigação (via SSH na VPS, `docker service logs registro_api`) mostrou o traceback real: `asyncpg.exceptions.UndefinedTableError: relation "platform_settings" does not exist`.
+
+Causa raiz: `.github/workflows/publish.yml` (job `deploy`) só troca a imagem dos serviços no Swarm (`docker service update --image ...`) — nunca roda `alembic upgrade head`. Isso já era um comportamento conhecido e documentado em `docs/infra/runbook-producao.md` ("Alembic não roda automaticamente nas réplicas do Swarm. Cada migration de produção é uma tarefa única e controlada no manager..."), mas o passo manual não tinha sido executado neste deploy. O banco de produção ficou 3 migrations atrás do head (`20260710_0055` vs. `20260711_0058`), faltando `feature_flags`/`support_requests`/`usage_records` (criadas e a primeira removida em seguida) e `platform_settings`.
+
+- **Corrigido**: `alembic upgrade head` executado manualmente no container `registro_api` em produção (`docker exec ... alembic upgrade head`), conteúdo das 3 migrations pendentes revisado antes (todas aditivas/reversíveis, sem risco a dados de tenant). Banco confirmado em `20260711_0058` após o upgrade.
+- **Validação end-to-end em produção**:
+  - Config de e-mail salva com sucesso no painel admin (`noreply@solidsd.com.br` / Solid).
+  - Envio de teste real via Brevo para `icarosimoes@gmail.com` usando `get_effective_email_config()` — `messageId` retornado pela Brevo confirmando entrega.
+  - `GET /api/v1/health` respondendo `200 {"status":"ok"}`.
+  - Simulação do fallback por tenant: os 3 tenants ativos (`Aero Hotel`, `Hotel Exemplo`, `Palacete TCH`) não têm linha em `company_settings` com `key='brevo'` — nenhum tem config própria. Rodado o mesmo caminho de código de `notifications.py` para o tenant `Aero Hotel` (id=3) com destino de teste para `icarosimoes@gmail.com`: confirmado que cai no fallback do painel admin e envia com sucesso.
+- **Pendência**: o passo de migration em produção continua manual (por decisão registrada no runbook, para manter controle sobre schema em produção) — mas vale reforçar no checklist de deploy sempre que uma PR incluir migration nova, para não repetir esse incidente.
