@@ -197,11 +197,24 @@ async def prepare_notifications(
     brevo = await get_company_setting(session, company_id, "brevo")
     evolution = await get_company_setting(session, company_id, "evolution")
 
-    email_tasks: list[_EmailTask] = []
     api_key = brevo.get("api_key")
+    from_address = brevo.get("from_address")
+    from_name = brevo.get("from_name")
+    if not api_key:
+        from app.core.config import get_settings
+        from app.domain.platform.service import get_effective_email_config
+
+        platform_api_key, platform_from_address, platform_from_name = (
+            await get_effective_email_config(session, get_settings())
+        )
+        api_key = platform_api_key
+        from_address = from_address or platform_from_address
+        from_name = from_name or platform_from_name
+
+    email_tasks: list[_EmailTask] = []
     if api_key:
-        from_address = brevo.get("from_address", "noreply@registro.app")
-        from_name = brevo.get("from_name", "Registro")
+        from_address = from_address or "noreply@registro.app"
+        from_name = from_name or "Registro"
         html = _build_html(action_label, title, module, actor_name, detail)
         subject = f"[Registro] {action_label}: {title}"
 

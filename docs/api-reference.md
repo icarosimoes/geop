@@ -1054,7 +1054,9 @@ Configuração global (tabela `platform_settings`, chave `email`), no mesmo padr
 
 `app.domain.platform.service.get_effective_email_config(session, settings)` é o ponto único de resolução: DB (`platform_settings.email`) tem prioridade, cai para as env vars quando não configurado. Novos fluxos de e-mail transacional (reset de senha, etc.) devem chamar essa função em vez de ler `settings.brevo_api_key` direto.
 
-Distinto do Brevo por tenant (`/settings/brevo`, tabela `company_settings`), que cada empresa configura em `/configuracoes` no `web/` para os próprios avisos de módulo — esse continua inalterado.
+Distinto do Brevo por tenant (`/settings/brevo`, tabela `company_settings`), que cada empresa configura em `/configuracoes` no `web/` para os próprios avisos de módulo.
+
+Desde 2026-07-13, `app.integrations.notifications.prepare_notifications()` usa essa config como **fallback** quando o tenant não tem `api_key` própria em `company_settings.brevo`: prioridade tenant → painel admin (`platform_settings.email`) → env vars, campo a campo (se o tenant só configurou o remetente mas não a API key, o remetente do tenant é mantido). Antes, um tenant sem Brevo próprio não enviava nenhum e-mail de notificação de módulo. Teste: `tests/test_background_notifications.py::test_prepare_notifications_falls_back_to_platform_brevo`.
 
 Frontend admin: `/settings` (`admin/app/(app)/settings/email-settings-form.tsx`).
 

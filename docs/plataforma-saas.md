@@ -62,6 +62,10 @@ Pendências dessa revisão (componentização de filtros, paginação de Auditor
 
 A configuração de Brevo por tenant (`/configuracoes` → Integrações no `web/`) já existia; ganhou um botão "Testar envio" (`POST /settings/brevo/test`) que dispara um e-mail real com a config salva, no mesmo padrão que a Evolution API já tinha para WhatsApp. Ver `docs/api-reference.md` (seção "Testar envio (Brevo por tenant)") e `backlog.md` (P13) para o contrato e as pendências.
 
+### Brevo por tenant: fallback para a config da plataforma (2026-07-13)
+
+Quando o tenant **não** configurou Brevo próprio (`company_settings.brevo` sem `api_key`), o envio de notificações por e-mail (`app.integrations.notifications.prepare_notifications`) agora cai para a config global do painel admin (`platform_settings.email`, a mesma resolvida por `get_effective_email_config` — que por sua vez cai para as env vars `BREVO_API_KEY`/`MAIL_FROM_ADDRESS`/`MAIL_FROM_NAME` se nem o painel tiver sido configurado). Prioridade: **tenant > painel admin > env vars**. `from_address`/`from_name` seguem a mesma cascata campo a campo (se o tenant configurou só o remetente mas não a API key, o remetente do tenant é preservado e só a API key vem do nível acima). Antes desta mudança, um tenant sem Brevo próprio simplesmente não recebia nenhum e-mail de notificação de módulo (ocorrências, solicitações fiscais etc.) — só o convite de usuário (`POST /users/invite`) já usava esse fallback.
+
 ## Comercial e cobrança (implementado)
 
 - CRUD auditado de tenants, planos e assinaturas — endpoints platform com POST/GET/PATCH/DELETE, todos auditados via `PlatformAuditLog`.

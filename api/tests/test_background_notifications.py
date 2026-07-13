@@ -112,6 +112,53 @@ async def test_deliver_notifications_handles_email_failure():
 
 
 @pytest.mark.asyncio
+async def test_prepare_notifications_falls_back_to_platform_brevo(session):
+    """Sem Brevo configurado no tenant, usa a config global da plataforma."""
+    from app.models import PlatformSetting, User
+
+    session.add(
+        User(
+            id=101,
+            company_id=TENANT_A,
+            name="Recipient",
+            email="recipient@test.com",
+            password="x",
+            role_id=1,
+            active=True,
+        )
+    )
+    session.add(
+        PlatformSetting(
+            key="email",
+            value={
+                "brevo_api_key": "platform-level-key",
+                "email_from_address": "plataforma@registro.app",
+                "email_from_name": "Plataforma Registro",
+            },
+        )
+    )
+    await session.commit()
+
+    result = await prepare_notifications(
+        session,
+        company_id=TENANT_A,
+        actor_name="User A",
+        actor_email="a@test.com",
+        event="create",
+        title="Teste",
+        module="Testes",
+        owner_user_id=101,
+    )
+
+    assert result is not None
+    assert len(result.emails) == 1
+    params = result.emails[0].params
+    assert params["api_key"] == "platform-level-key"
+    assert params["from_address"] == "plataforma@registro.app"
+    assert params["from_name"] == "Plataforma Registro"
+
+
+@pytest.mark.asyncio
 async def test_notify_record_event_fires_background_task(client):
     """POST que cria registro retorna imediatamente; entrega é async."""
     with patch(
