@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { loginAction } from "@/lib/actions";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -27,32 +30,30 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
           <form action={loginAction} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">E-mail</label>
-              <input
+              <Label htmlFor="email" className="text-gray-700">E-mail</Label>
+              <Input
+                id="email"
                 name="email"
                 type="email"
                 required
                 placeholder="admin@registro.local"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2BC4B4]/40 focus:border-[#2BC4B4] transition-colors"
+                className="h-auto rounded-xl border-gray-200 px-4 py-3"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">Senha</label>
-              <input
+              <Label htmlFor="password" className="text-gray-700">Senha</Label>
+              <Input
+                id="password"
                 name="password"
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2BC4B4]/40 focus:border-[#2BC4B4] transition-colors"
+                className="h-auto rounded-xl border-gray-200 px-4 py-3"
               />
             </div>
-            <button
-              type="submit"
-              className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ background: "linear-gradient(135deg, #1D3461, #142548)" }}
-            >
+            <Button type="submit" size="lg" className="w-full rounded-xl py-3 h-auto">
               Entrar
-            </button>
+            </Button>
           </form>
         </div>
 

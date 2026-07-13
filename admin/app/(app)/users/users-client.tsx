@@ -1,10 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Search, Trash2, UserCog, X } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, UserCog } from "lucide-react";
+import { toast } from "sonner";
 import type { PlatformUser, PlatformUserRole } from "./page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog, type ConfirmDialogState } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -54,10 +64,12 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function UserModal({
   user,
+  open,
   onClose,
   onSaved,
 }: {
   user: PlatformUser | null;
+  open: boolean;
   onClose: () => void;
   onSaved: (user: PlatformUser) => void;
 }) {
@@ -94,89 +106,73 @@ function UserModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in">
-        <div
-          className="px-6 py-4 flex items-center justify-between"
-          style={{ background: "linear-gradient(135deg, #1D3461, #142548)" }}
-        >
-          <div>
-            <h2 className="text-lg font-bold text-white">
-              {user ? "Editar usuário" : "Novo usuário"}
-            </h2>
-            <p className="text-xs text-white/60 mt-0.5">
-              {user ? user.email : "Equipe interna da plataforma"}
-            </p>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{user ? "Editar usuário" : "Novo usuário"}</DialogTitle>
+          <DialogDescription>{user ? user.email : "Equipe interna da plataforma"}</DialogDescription>
+        </DialogHeader>
+
+        {error && (
+          <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">{error}</p>
+        )}
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Nome</Label>
+            <Input
+              required
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            />
           </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="p-6">
-          {error && (
-            <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">
-              {error}
-            </p>
-          )}
-          <form onSubmit={submit} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Nome</Label>
-              <Input
-                required
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>E-mail</Label>
+            <Input
+              required
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            />
+          </div>
 
-            <div className="space-y-1.5">
-              <Label>E-mail</Label>
-              <Input
-                required
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label>Papel</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlatformUserRole }))}
+            >
+              {Object.entries(ROLE_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="space-y-1.5">
-              <Label>Papel</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlatformUserRole }))}
-              >
-                {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-1.5">
+            <Label>{user ? "Nova senha (opcional)" : "Senha inicial"}</Label>
+            <Input
+              required={!user}
+              type="password"
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+            />
+          </div>
 
-            <div className="space-y-1.5">
-              <Label>{user ? "Nova senha (opcional)" : "Senha inicial"}</Label>
-              <Input
-                required={!user}
-                type="password"
-                minLength={8}
-                value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" loading={loading}>
-                Salvar
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" loading={loading}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -184,7 +180,7 @@ export function UsersClient({ initialUsers }: { initialUsers: PlatformUser[] }) 
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<"new" | PlatformUser | null>(null);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmDialogState | null>(null);
 
   const query = search.trim().toLowerCase();
   const filtered = users.filter(
@@ -203,15 +199,21 @@ export function UsersClient({ initialUsers }: { initialUsers: PlatformUser[] }) 
     });
   }
 
-  async function deleteUser(user: PlatformUser) {
-    if (!confirm(`Remover ${user.name} do painel?`)) return;
-    setDeleting(user.id);
-    try {
-      await apiFetch(`/users/${user.id}`, { method: "DELETE" });
-      setUsers((prev) => prev.filter((item) => item.id !== user.id));
-    } finally {
-      setDeleting(null);
-    }
+  function deleteUser(user: PlatformUser) {
+    setConfirmState({
+      title: "Remover usuário",
+      description: `Remover ${user.name} do painel? Essa ação não pode ser desfeita.`,
+      confirmLabel: "Remover",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/users/${user.id}`, { method: "DELETE" });
+          setUsers((prev) => prev.filter((item) => item.id !== user.id));
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Erro ao remover usuário");
+        }
+      },
+    });
   }
 
   return (
@@ -283,7 +285,6 @@ export function UsersClient({ initialUsers }: { initialUsers: PlatformUser[] }) 
                     variant="ghost"
                     size="icon"
                     onClick={() => deleteUser(user)}
-                    disabled={deleting === user.id}
                     title="Remover usuário"
                     className="hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
                   >
@@ -296,13 +297,14 @@ export function UsersClient({ initialUsers }: { initialUsers: PlatformUser[] }) 
         </TableBody>
       </Table>
 
-      {modal !== null && (
-        <UserModal
-          user={modal === "new" ? null : modal}
-          onClose={() => setModal(null)}
-          onSaved={onSaved}
-        />
-      )}
+      <UserModal
+        user={modal === "new" ? null : modal}
+        open={modal !== null}
+        onClose={() => setModal(null)}
+        onSaved={onSaved}
+      />
+
+      <ConfirmDialog state={confirmState} onOpenChange={(o) => !o && setConfirmState(null)} />
     </div>
   );
 }

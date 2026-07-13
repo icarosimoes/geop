@@ -1,12 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
-  Ban, CheckCircle, MoreVertical, Pencil, Plus, Search, ShieldOff, Trash2, X,
+  Ban, CheckCircle, MoreVertical, Pencil, Plus, Search, ShieldOff, Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import type { Tenant, Plan } from "./page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog, type ConfirmDialogState } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
@@ -53,28 +70,21 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-function SubscriptionMenu({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t: Tenant) => void }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+function SubscriptionMenu({
+  tenant,
+  onUpdated,
+  requestConfirm,
+}: {
+  tenant: Tenant;
+  onUpdated: (t: Tenant) => void;
+  requestConfirm: (state: ConfirmDialogState) => void;
+}) {
   const status = tenant.subscription_status ?? "";
   const actions = SUB_ACTIONS[status] ?? [];
 
-  useEffect(() => {
-    if (!open) return;
-    function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-
   if (actions.length === 0) return null;
 
-  async function apply(nextStatus: string, label: string) {
-    if (!confirm(`${label} a assinatura de ${tenant.name}?`)) return;
-    setLoading(true);
-    setOpen(false);
+  async function apply(nextStatus: string) {
     try {
       await apiFetch(`/tenants/${tenant.id}/subscription`, {
         method: "PATCH",
@@ -82,42 +92,52 @@ function SubscriptionMenu({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t
       });
       onUpdated({ ...tenant, subscription_status: nextStatus });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao atualizar");
-    } finally {
-      setLoading(false);
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar assinatura");
     }
   }
 
   return (
-    <div ref={ref} className="relative">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setOpen((v) => !v)}
-        disabled={loading}
-        title="Gerenciar assinatura"
-      >
-        <MoreVertical className="h-4 w-4" />
-      </Button>
-      {open && (
-        <div className="absolute right-0 top-9 z-50 w-48 rounded-xl border border-[var(--border)] bg-[var(--popover)] shadow-xl py-1 animate-in">
-          <p className="px-3 py-1.5 text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Assinatura</p>
-          {actions.map((a) => (
-            <button
-              key={a.nextStatus}
-              onClick={() => apply(a.nextStatus, a.label)}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--accent)] ${a.danger ? "text-[var(--danger)]" : "text-[var(--success)]"}`}
-            >
-              {a.icon} {a.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" title="Gerenciar assinatura">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Assinatura</DropdownMenuLabel>
+        {actions.map((a) => (
+          <DropdownMenuItem
+            key={a.nextStatus}
+            className={a.danger ? "text-[var(--danger)]" : "text-[var(--success)]"}
+            onSelect={() =>
+              requestConfirm({
+                title: `${a.label} assinatura`,
+                description: `${a.label} a assinatura de ${tenant.name}?`,
+                confirmLabel: a.label,
+                variant: a.danger ? "destructive" : "success",
+                onConfirm: () => apply(a.nextStatus),
+              })
+            }
+          >
+            {a.icon} {a.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function NewTenantModal({ plans, onClose, onCreated }: { plans: Plan[]; onClose: () => void; onCreated: (t: Tenant) => void }) {
+function NewTenantModal({
+  plans,
+  open,
+  onClose,
+  onCreated,
+}: {
+  plans: Plan[];
+  open: boolean;
+  onClose: () => void;
+  onCreated: (t: Tenant) => void;
+}) {
   const [form, setForm] = useState({ name: "", slug: "", email: "", plan_id: plans[0]?.id ?? 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -142,66 +162,70 @@ function NewTenantModal({ plans, onClose, onCreated }: { plans: Plan[]; onClose:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in">
-        <div className="px-6 py-4 flex items-center justify-between" style={{ background: "linear-gradient(135deg, #1D3461, #142548)" }}>
-          <div>
-            <h2 className="text-lg font-bold text-white">Nova empresa</h2>
-            <p className="text-xs text-white/60 mt-0.5">Cria tenant + assinatura trial</p>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova empresa</DialogTitle>
+          <DialogDescription>Cria tenant + assinatura trial</DialogDescription>
+        </DialogHeader>
+        {error && <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">{error}</p>}
+        <form onSubmit={submit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Nome da empresa</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: slugify(e.target.value) }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Slug</Label>
+              <Input value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} required />
+            </div>
           </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="p-6">
-          {error && <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">{error}</p>}
-          <form onSubmit={submit} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Nome da empresa</Label>
-                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: slugify(e.target.value) }))} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Slug</Label>
-                <Input value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} required />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>E-mail do tenant</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Plano</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
-                value={form.plan_id}
-                onChange={(e) => setForm((f) => ({ ...f, plan_id: parseInt(e.target.value) }))}
-              >
-                <option value="0">Sem plano</option>
-                {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" loading={loading}>Criar empresa</Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+          <div className="space-y-1.5">
+            <Label>E-mail do tenant</Label>
+            <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Plano</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={form.plan_id}
+              onChange={(e) => setForm((f) => ({ ...f, plan_id: parseInt(e.target.value) }))}
+            >
+              <option value="0">Sem plano</option>
+              {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" loading={loading}>Criar empresa</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function EditTenantModal({ tenant, onClose, onUpdated }: { tenant: Tenant; onClose: () => void; onUpdated: (t: Tenant) => void }) {
+function EditTenantModal({
+  tenant,
+  onClose,
+  onUpdated,
+}: {
+  tenant: Tenant | null;
+  onClose: () => void;
+  onUpdated: (t: Tenant) => void;
+}) {
   const [form, setForm] = useState({
-    name: tenant.name,
-    email: tenant.email ?? "",
-    document: tenant.document ?? "",
-    timezone: tenant.timezone ?? "America/Sao_Paulo",
+    name: tenant?.name ?? "",
+    email: tenant?.email ?? "",
+    document: tenant?.document ?? "",
+    timezone: tenant?.timezone ?? "America/Sao_Paulo",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!tenant) return;
     setLoading(true);
     setError("");
     try {
@@ -222,60 +246,64 @@ function EditTenantModal({ tenant, onClose, onUpdated }: { tenant: Tenant; onClo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in">
-        <div className="px-6 py-4 flex items-center justify-between" style={{ background: "linear-gradient(135deg, #1D3461, #142548)" }}>
-          <div>
-            <h2 className="text-lg font-bold text-white">Editar empresa</h2>
-            <p className="text-xs text-white/60 mt-0.5">{tenant.slug}</p>
-          </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="p-6">
-          {error && <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">{error}</p>}
-          <form onSubmit={submit} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Nome da empresa</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>E-mail</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="contato@hotel.com" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+    <Dialog
+      open={!!tenant}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
+      <DialogContent>
+        {tenant && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Editar empresa</DialogTitle>
+              <DialogDescription>{tenant.slug}</DialogDescription>
+            </DialogHeader>
+            {error && <p className="text-sm text-[var(--danger)] mb-3 p-3 bg-[var(--danger)]/10 rounded-lg">{error}</p>}
+            <form onSubmit={submit} className="space-y-3">
               <div className="space-y-1.5">
-                <Label>CNPJ / CPF</Label>
-                <Input value={form.document} onChange={(e) => setForm((f) => ({ ...f, document: e.target.value }))} placeholder="00.000.000/0000-00" />
+                <Label>Nome da empresa</Label>
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
               </div>
               <div className="space-y-1.5">
-                <Label>Fuso horário</Label>
-                <select
-                  className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
-                  value={form.timezone}
-                  onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
-                >
-                  <option value="America/Sao_Paulo">Brasília (GMT-3)</option>
-                  <option value="America/Manaus">Manaus (GMT-4)</option>
-                  <option value="America/Belem">Belém (GMT-3)</option>
-                  <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
-                  <option value="America/Recife">Recife (GMT-3)</option>
-                  <option value="America/Bahia">Salvador (GMT-3)</option>
-                  <option value="America/Cuiaba">Cuiabá (GMT-4)</option>
-                  <option value="America/Campo_Grande">Campo Grande (GMT-4)</option>
-                  <option value="America/Porto_Velho">Porto Velho (GMT-4)</option>
-                  <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
-                  <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
-                </select>
+                <Label>E-mail</Label>
+                <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="contato@hotel.com" />
               </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" loading={loading}>Salvar</Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>CNPJ / CPF</Label>
+                  <Input value={form.document} onChange={(e) => setForm((f) => ({ ...f, document: e.target.value }))} placeholder="00.000.000/0000-00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fuso horário</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-1 text-sm shadow-sm"
+                    value={form.timezone}
+                    onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+                  >
+                    <option value="America/Sao_Paulo">Brasília (GMT-3)</option>
+                    <option value="America/Manaus">Manaus (GMT-4)</option>
+                    <option value="America/Belem">Belém (GMT-3)</option>
+                    <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
+                    <option value="America/Recife">Recife (GMT-3)</option>
+                    <option value="America/Bahia">Salvador (GMT-3)</option>
+                    <option value="America/Cuiaba">Cuiabá (GMT-4)</option>
+                    <option value="America/Campo_Grande">Campo Grande (GMT-4)</option>
+                    <option value="America/Porto_Velho">Porto Velho (GMT-4)</option>
+                    <option value="America/Rio_Branco">Rio Branco (GMT-5)</option>
+                    <option value="America/Noronha">Fernando de Noronha (GMT-2)</option>
+                  </select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button type="submit" loading={loading}>Salvar</Button>
+              </DialogFooter>
+            </form>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -284,25 +312,31 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
-  const [deleting, setDeleting] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const [confirmState, setConfirmState] = useState<ConfirmDialogState | null>(null);
 
   const filtered = tenants.filter(
     (t) => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.toLowerCase().includes(search.toLowerCase()),
   );
 
-  async function deleteTenant(tenant: Tenant) {
-    if (!confirm(`Apagar a empresa ${tenant.name} (${tenant.slug})?`)) return;
-    setDeleting(tenant.id);
-    setError("");
-    try {
-      await apiFetch(`/tenants/${tenant.id}`, { method: "DELETE" });
-      setTenants((prev) => prev.filter((item) => item.id !== tenant.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao apagar");
-    } finally {
-      setDeleting(null);
-    }
+  function requestConfirm(state: ConfirmDialogState) {
+    setConfirmState(state);
+  }
+
+  function deleteTenant(tenant: Tenant) {
+    requestConfirm({
+      title: "Apagar empresa",
+      description: `Apagar a empresa ${tenant.name} (${tenant.slug})? Essa ação não pode ser desfeita.`,
+      confirmLabel: "Apagar",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/tenants/${tenant.id}`, { method: "DELETE" });
+          setTenants((prev) => prev.filter((item) => item.id !== tenant.id));
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Erro ao apagar empresa");
+        }
+      },
+    });
   }
 
   return (
@@ -326,8 +360,6 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
-
-      {error && <p className="rounded-xl border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">{error}</p>}
 
       <Table>
         <TableHeader>
@@ -374,12 +406,12 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
                   <SubscriptionMenu
                     tenant={t}
                     onUpdated={(updated) => setTenants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))}
+                    requestConfirm={requestConfirm}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => deleteTenant(t)}
-                    disabled={deleting === t.id}
                     title="Apagar empresa"
                     className="hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
                   >
@@ -392,24 +424,23 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
         </TableBody>
       </Table>
 
-      {showModal && (
-        <NewTenantModal
-          plans={plans}
-          onClose={() => setShowModal(false)}
-          onCreated={(t) => setTenants((prev) => [t, ...prev])}
-        />
-      )}
+      <NewTenantModal
+        plans={plans}
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        onCreated={(t) => setTenants((prev) => [t, ...prev])}
+      />
 
-      {editing && (
-        <EditTenantModal
-          tenant={editing}
-          onClose={() => setEditing(null)}
-          onUpdated={(updated) => {
-            setTenants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-            setEditing(null);
-          }}
-        />
-      )}
+      <EditTenantModal
+        tenant={editing}
+        onClose={() => setEditing(null)}
+        onUpdated={(updated) => {
+          setTenants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+          setEditing(null);
+        }}
+      />
+
+      <ConfirmDialog state={confirmState} onOpenChange={(o) => !o && setConfirmState(null)} />
     </div>
   );
 }
