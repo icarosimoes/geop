@@ -8,15 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
-
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api/proxy${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
+import { apiFetch } from "@/lib/client-fetch";
 
 export function EmailSettingsForm({ initialConfig }: { initialConfig: EmailConfig }) {
   const [config, setConfig] = useState(initialConfig);

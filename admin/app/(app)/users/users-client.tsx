@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiFetch } from "@/lib/client-fetch";
 import { fmtDate, pluralize } from "@/lib/utils";
 
 const ROLE_LABEL: Record<PlatformUserRole, string> = {
@@ -51,16 +52,6 @@ type UserForm = {
 };
 
 const EMPTY_FORM: UserForm = { name: "", email: "", role: "read_only", password: "" };
-
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api/proxy${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
 
 function UserModal({
   user,

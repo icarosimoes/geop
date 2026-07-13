@@ -7,7 +7,7 @@ export async function getPlatformToken(): Promise<string | null> {
   return store.get("platform_token")?.value ?? null;
 }
 
-async function tryRefreshToken(): Promise<string | null> {
+export async function tryRefreshToken(): Promise<string | null> {
   const jar = await cookies();
   const refreshToken = jar.get("platform_refresh_token")?.value;
   if (!refreshToken) return null;

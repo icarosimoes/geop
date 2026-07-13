@@ -17,22 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiFetch } from "@/lib/client-fetch";
 import { fmtDate } from "@/lib/utils";
 
 const METRIC_LABEL: Record<string, string> = {
   users: "Usuários",
   occurrences: "Ocorrências",
 };
-
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api/proxy${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
 
 export function UsageClient({ initialRecords }: { initialRecords: UsageRecord[] }) {
   const router = useRouter();

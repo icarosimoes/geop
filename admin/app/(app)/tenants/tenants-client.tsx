@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiFetch } from "@/lib/client-fetch";
 import { fmtDate, pluralize } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -59,16 +60,6 @@ const SUB_ACTIONS: Record<string, { label: string; nextStatus: string; icon: Rea
               { label: "Cancelar",  nextStatus: "canceled",  icon: <Ban className="h-3.5 w-3.5" />, danger: true }],
   canceled:  [{ label: "Reativar (trial)", nextStatus: "trial", icon: <CheckCircle className="h-3.5 w-3.5" /> }],
 };
-
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api/proxy${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(await res.text());
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
 
 function SubscriptionMenu({
   tenant,

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { apiFetch } from "@/lib/client-fetch";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pendente",
@@ -30,14 +31,11 @@ function fmtDateTime(s: string) {
   return new Date(s).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-async function updateStatus(id: number, status: string) {
-  const res = await fetch(`/api/proxy/support-requests/${id}`, {
+function updateStatus(id: number, status: string) {
+  return apiFetch<SupportRequest>(`/support-requests/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<SupportRequest>;
 }
 
 export function SupportClient({ initialRequests }: { initialRequests: SupportRequest[] }) {
