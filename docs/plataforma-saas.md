@@ -46,6 +46,18 @@ O painel admin foi reescrito no padrão Jarvis/Aloji com Tailwind CSS 4, Lucide 
 
 Ver `docs/api-reference.md` (seções "Plataforma — usuários, suporte e uso" e "Plataforma — e-mail transacional") para o contrato completo dos endpoints.
 
+### Design system (revisão 2026-07-12)
+
+Revisão de UI/UX ponta a ponta do painel (código + inspeção visual de todas as telas), com correções aplicadas:
+
+- **Sempre tema claro**: removido o `@media (prefers-color-scheme: dark)` de `globals.css` — o painel não deve escurecer automaticamente conforme a preferência do SO/navegador (decisão do usuário, não é bug de contraste isolado).
+- **Marca unificada**: `--color-brand`/`--ring` agora usam o navy/teal reais da marca (`#1D3461`/`#2BC4B4`), os mesmos da sidebar e do login, em vez do azul genérico que vinha do template.
+- **Um único menu de usuário**: o avatar duplicado no cabeçalho (`TopUserMenu`) foi removido; só existe o menu no rodapé da sidebar.
+- **Confirmações e erros consistentes**: `confirm()`/`alert()` nativos do browser foram substituídos por `ConfirmDialog` (`components/ui/confirm-dialog.tsx`, sobre o `Dialog` Radix) e por toasts (`sonner`) nas ações de Empresas e Usuários.
+- **Modais e dropdowns no Radix**: os modais de Empresas/Usuários e os menus (usuário da sidebar, ações de assinatura) passaram a usar os componentes `Dialog`/`DropdownMenu` já existentes em `components/ui/`, em vez de implementações manuais sem focus trap nem fechamento por Esc.
+
+Pendências dessa revisão (componentização de filtros, paginação de Auditoria, CRUD de Planos, dashboard mais rico) estão registradas em `backlog.md` (P12).
+
 ## Comercial e cobrança (implementado)
 
 - CRUD auditado de tenants, planos e assinaturas — endpoints platform com POST/GET/PATCH/DELETE, todos auditados via `PlatformAuditLog`.

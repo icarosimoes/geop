@@ -687,3 +687,31 @@ Implementação dos três itens pendentes de P11 (feriados, hora noturna reduzid
 - **Filtro por Setor**: `GET /timeclock/mirror/by-sector` (`build_sector_mirrors()`) itera os funcionários ativos do setor e reaproveita `build_employee_mirror()` por funcionário — sem otimização de N+1 entre funcionários. Frontend ganhou um seletor "Filtrar por: Funcionário/Setor"; no modo Setor renderiza um card de espelho por funcionário. Exportação Excel/PDF continua só por funcionário individual (não há export em lote por setor).
 - **Testes**: `api/tests/test_holidays.py` (5 testes novos) cobre CRUD de feriados (incluindo conflito de data duplicada), HE 100% com feriado, a taxa combinada do adicional noturno, e o espelho por setor. Suíte completa: 544 passando (era 539 antes desta rodada).
 - **Correção incidental**: o horário do turno (não só o nome) passou a aparecer nas células do calendário de `/ponto/escalas`, e o formulário de criar/editar funcionário em `/cadastros/funcionarios` deixou de ser inline e virou modal sobreposto (`.record-modal`), a pedido do usuário na mesma sessão.
+
+## 2026-07-12 — Revisão UI/UX ponta a ponta do painel admin
+
+Revisão solicitada pelo usuário a partir de um print da tela de Configurações mostrando avatar duplicado no cabeçalho e no rodapé da sidebar. Feita por leitura completa do código (`admin/app/`, `admin/components/`) — layout, sidebar, as 8 telas e todos os componentes de `components/ui/` — sem servidor de browser disponível na sessão para screenshot automatizado; validação final por build + typecheck + `vitest run`.
+
+### Achados e correções aplicadas
+
+- **Menu de usuário duplicado**: `TopUserMenu` (avatar no cabeçalho) e `SidebarUserMenu` (avatar no rodapé) eram dois componentes quase idênticos, cada um com seu próprio dropdown e "Sair". `TopUserMenu` removido; o cabeçalho ficou só com o breadcrumb "Plataforma · Super Admin".
+- **Dark mode**: dois problemas encontrados em sequência.
+  1. Primeiro, contraste quebrado: `input, select, textarea { color: #111827 }` fixo em `globals.css`, incompatível com o `--card` escuro que o tema dark já declarava — texto quase preto sobre fundo quase preto em todos os modais. Trocado para `var(--foreground)`/`var(--background)` (reagem ao tema).
+  2. Depois, a pedido explícito do usuário ao ver o resultado (print da Dashboard toda escura): o painel **não deve ter dark mode automático**. Removido o bloco inteiro `@media (prefers-color-scheme: dark)` de `globals.css` — o tema é sempre claro, independente da preferência do SO/navegador. `Toaster` (sonner) trocado de `theme="system"` para `theme="light"` pelo mesmo motivo.
+- **Duas paletas de marca coexistindo**: `--color-brand`/`--ring` (usados por `Button`/`Badge`/foco) eram um azul genérico do template (`oklch(0.55 0.18 250)`), enquanto sidebar, login e cabeçalhos de modal usavam o navy/teal reais da marca (`#1D3461`/`#2BC4B4`) via `style={{...}}` hardcoded. Unificado: `--color-brand: #1D3461`, `--ring: var(--color-brand-accent)` (`#2BC4B4`).
+- **Ações destrutivas com `confirm()`/`alert()` nativos**: apagar empresa, remover usuário e mudar status de assinatura usavam diálogos do browser (sem estilo, quebram a identidade visual no momento mais crítico). Criado `components/ui/confirm-dialog.tsx` (`ConfirmDialog`, sobre o `Dialog` Radix já existente) e usado nos três fluxos; erros passaram de `alert()` para toast (`sonner`, já estava configurado no projeto mas sem uso).
+- **Três dropdowns reimplementados na mão apesar de já existir `DropdownMenu` (Radix)** em `components/ui/dropdown-menu.tsx`: `SidebarUserMenu`, `TopUserMenu` (removido) e o menu de ações de assinatura em Empresas usavam `useState` + listener de `mousedown` manual (sem fechar com Esc, sem ARIA). Os dois que sobraram foram migrados para `DropdownMenu`.
+- **Modais reimplementados na mão apesar de já existir `Dialog` (Radix)** em `components/ui/dialog.tsx`: os modais de Nova/Editar empresa e Novo/Editar usuário eram `<div className="fixed inset-0 z-50">` sem focus trap nem Esc para fechar. Migrados para `Dialog`.
+- **Login fora do design system**: `<input>`/`<label>`/`<button>` cru em vez de `Input`/`Label`/`Button`. Migrado — e a migração revelou um bug real de acessibilidade: os `<label>` não tinham `htmlFor`, então `getByLabelText` (e leitores de tela) não associavam rótulo e campo. `admin/__tests__/login.test.tsx` tinha esse teste falhando silenciosamente (2 falhas antes da correção, 1 depois).
+
+### Validação
+
+`tsc --noEmit` limpo; `next build` compila; `vitest run` foi de 2 testes falhando para 1 (a falha restante, `/painel da plataforma/i` não encontrado, é pré-existente — o texto real é "Painel SaaS" — e não relacionada a este trabalho; não corrigida por incerteza sobre qual lado está desatualizado, registrada no backlog).
+
+### Pendências identificadas mas não corrigidas nesta rodada
+
+Registradas em `backlog.md` (P12): componentizar o padrão de "pílulas de filtro" duplicado em `support-client.tsx`/`usage-client.tsx`; paginação/filtro na tela de Auditoria; CRUD de Planos (hoje só leitura); Dashboard com apenas 4 stat cards, sem atalhos para pendências (suporte, inadimplência).
+
+### Deploy
+
+Não implantado em produção nesta rodada — apenas `git push origin main` (commits `6016d1c5` e `b4149faf`); `admin/` segue rodando localmente via Docker Compose. Próximo deploy de produção que tocar `admin/` deve incluir essas mudanças.

@@ -169,3 +169,45 @@ O campo "Categoria" no formulário de ocorrências foi substituído por um `<sel
 - **`location_id` no payload de inspeções**: referencia IDs da tabela `locations` (cadastro de Locais). Se os IDs mudarem na migração, o `location_id` dentro do payload JSON precisará ser remapeado — diferente de FKs normais, o JSON não é atualizado por CASCADE.
 - **Categorias de OS**: as categorias existentes (Acabamento, Elétrica, HVAC, Hidráulica) vêm do campo `work_orders.category`. Ao migrar, elas aparecem automaticamente. Categorias adicionais podem ser pré-cadastradas via `company_settings` com key `work_order_categories`.
 - **Nomes dos itens de checklist**: hardcoded em `CHECKLIST_LABELS` no frontend (`web/components/inspection-viewer.tsx`). São os mesmos 30 itens do template Blade V1. Se o Chess Hotel usar itens diferentes por tipo de suíte, será necessário tornar essa lista dinâmica (ex: vindo de um `checklist_template`).
+
+## 2026-07-12 — Painel admin: sempre tema claro, sem dark mode automático
+
+Decisão: o `admin/` teve o bloco `@media (prefers-color-scheme: dark)` removido de
+`globals.css` (junto com `Toaster theme="system"` → `theme="light"`). O painel deve
+renderizar sempre no tema claro, independentemente da preferência de SO/navegador do
+operador.
+
+Motivos:
+
+- Ninguém havia pedido dark mode; ele existia só porque o boilerplate/template original do
+  Tailwind trazia a media query pronta, e ninguém tinha notado até um operador com o SO em
+  modo escuro ver o painel inteiro escurecido sem ter escolhido isso.
+- Um dark mode "de fábrica" sem revisão visual dedicada tende a acumular bugs de contraste
+  silenciosos (o de inputs ilegíveis, corrigido na mesma sessão antes da decisão de remover
+  o dark mode por completo, é um exemplo).
+
+Como aplicar: se dark mode for pedido no futuro, ele precisa ser uma decisão de produto
+explícita (com toggle manual, não `prefers-color-scheme`) e revisão visual tela a tela —
+não reintroduzir a media query como atalho. `web/` e `colaborador/` não foram tocados por
+esta decisão; verificar se têm o mesmo padrão antes de assumir que estão livres do problema.
+
+## 2026-07-12 — Painel admin: preferir os componentes de `components/ui/` a reimplementações manuais
+
+Decisão: modais, dropdowns e confirmações no `admin/` devem usar os componentes já
+existentes em `components/ui/` (`Dialog`, `DropdownMenu`, e o novo `ConfirmDialog` sobre o
+`Dialog`) em vez de `<div className="fixed inset-0">` e `useState`/listener de
+`mousedown` feitos à mão.
+
+Motivos:
+
+- Os componentes Radix (`Dialog`/`DropdownMenu`) já existiam no repositório, prontos e
+  testados, mas três componentes diferentes (`SidebarUserMenu`, `TopUserMenu`, o menu de
+  assinatura de Empresas) reimplementaram um dropdown na mão, e três modais
+  (Nova/Editar empresa, Novo/Editar usuário) reimplementaram um `Dialog` na mão — todos sem
+  focus trap nem fechar com Esc.
+- `confirm()`/`alert()` nativos do browser quebram a identidade visual bem no momento mais
+  crítico (ações destrutivas) e não tinha padrão nenhum antes desta revisão.
+
+Como aplicar: antes de escrever um modal/dropdown/confirmação novo no `admin/`, checar
+`components/ui/` primeiro. Ver revisão completa em
+[registro-trabalho.md](registro-trabalho.md#2026-07-12--revisão-uiux-ponta-a-ponta-do-painel-admin).

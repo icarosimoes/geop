@@ -431,6 +431,22 @@ feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy man
    `Failed to find Server Action "..."` nos logs — ruído esperado de rolling deploy (sessão de
    cliente com Server Action ID da build anterior), não relacionado às mudanças.
 
+## P12 — revisão UI/UX do painel admin (2026-07-12)
+
+- [x] Corrigir contraste dos inputs em dark mode (cor de texto fixa `#111827` sobre fundo escuro tornava o texto ilegível).
+- [x] Remover o tema dark automático (`@media (prefers-color-scheme: dark)`) — painel deve permanecer sempre no tema claro, independentemente da preferência do SO/navegador.
+- [x] Unificar `--color-brand`/`--ring` com o navy/teal (`#1D3461`/`#2BC4B4`) já usados na sidebar e no login, eliminando o azul genérico do tema que não combinava com o resto da marca.
+- [x] Remover o menu de usuário duplicado (avatar no cabeçalho + avatar no rodapé da sidebar) — mantido apenas o da sidebar.
+- [x] Substituir `confirm()`/`alert()` nativos por `ConfirmDialog` (novo, baseado no `Dialog` Radix já existente) e por toasts (`sonner`) nas ações de Empresas e Usuários.
+- [x] Migrar `SidebarUserMenu` e o menu de assinatura de Empresas do padrão hand-rolled (`useState`/listener de `mousedown`) para o `DropdownMenu` (Radix) já existente em `components/ui/dropdown-menu.tsx`.
+- [x] Migrar os modais de Nova/Editar empresa e Novo/Editar usuário do padrão `<div className="fixed inset-0">` para o componente `Dialog` (Radix) já existente.
+- [x] Alinhar os inputs da tela de login aos componentes `Input`/`Label` do design system — corrigiu de brinde um bug real de acessibilidade (`<label>` sem `htmlFor`, então leitores de tela e `getByLabelText` não associavam rótulo e campo).
+- [ ] Componentizar o padrão de "pílulas de filtro" (`bg-[#1D3461] text-white` vs `bg-[var(--card)] border`), hoje duplicado quase idêntico em `support-client.tsx` e `usage-client.tsx`, num componente reutilizável (`SegmentedControl`/`FilterPills`).
+- [ ] Paginação e filtro (operador/ação/data) na tela de Auditoria — hoje busca a lista inteira sem limite.
+- [ ] CRUD de Planos pelo painel (hoje é só leitura, inconsistente com Empresas/Usuários que têm CRUD completo).
+- [ ] Dashboard raso — só 4 stat cards, sem atalhos para o que precisa de atenção (ex.: pedidos de suporte pendentes, tenants inadimplentes).
+- [ ] `admin/__tests__/login.test.tsx` tem uma asserção pré-existente (`/painel da plataforma/i`) que não corresponde ao texto real da tela (`"Painel SaaS"`) — falha não introduzida por esta rodada, não corrigida por incerteza sobre qual lado (copy ou teste) está desatualizado.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
