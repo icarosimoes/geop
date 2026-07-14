@@ -31,15 +31,11 @@ def upgrade() -> None:
     op.add_column("work_orders", sa.Column("deadline", sa.Date(), nullable=True))
 
     # 2. Remove occurrence_id de work_orders
-    op.drop_constraint(
-        "work_orders_occurrence_id_fkey", "work_orders", type_="foreignkey"
-    )
+    op.drop_constraint("work_orders_occurrence_id_fkey", "work_orders", type_="foreignkey")
     op.drop_column("work_orders", "occurrence_id")
 
     # 3. Remove occurrence_id de stock_movements
-    op.drop_constraint(
-        "stock_movements_occurrence_id_fkey", "stock_movements", type_="foreignkey"
-    )
+    op.drop_constraint("stock_movements_occurrence_id_fkey", "stock_movements", type_="foreignkey")
     op.drop_column("stock_movements", "occurrence_id")
 
     # 4. work_order_participants (substitui occurrence_participants)

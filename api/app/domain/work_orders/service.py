@@ -68,9 +68,7 @@ async def _sync_participants(
     session: AsyncSession, work_order_id: int, participant_ids: list[int]
 ) -> None:
     await session.execute(
-        sa_delete(WorkOrderParticipant).where(
-            WorkOrderParticipant.work_order_id == work_order_id
-        )
+        sa_delete(WorkOrderParticipant).where(WorkOrderParticipant.work_order_id == work_order_id)
     )
     for uid in participant_ids:
         session.add(WorkOrderParticipant(work_order_id=work_order_id, user_id=uid))

@@ -70,7 +70,6 @@ module = [
   "app.domain.maintenance.service",
   "app.domain.meetings.service",
   "app.domain.modules.service",
-  "app.domain.occurrences.service",
   "app.domain.platform.router",
   "app.domain.platform.service",
   "app.domain.preventive_plans.service",
@@ -93,10 +92,9 @@ ignore_errors = true
 
 [tool.coverage.run]
 omit = [
-  "app/import_v1.py",
   "app/seed.py",
   "app/domain/meetings/pdf.py",
-  "app/domain/occurrences/pdf.py",
+  "app/domain/work_orders/pdf.py",
 ]
 
 [tool.ruff]

@@ -44,7 +44,6 @@ from app.domain.inspection_suites.service import create_inspection_suite
 from app.domain.maintenance.service import create_record as create_maintenance_record
 from app.domain.meetings.service import create_meeting
 from app.domain.notifications.service import create_notification
-from app.domain.occurrences.service import create_occurrence
 from app.domain.platform.service import create_tenant
 from app.domain.preventive_plans.service import create_plan as create_preventive_plan
 from app.domain.procedures.service import create_procedure
@@ -285,15 +284,15 @@ async def main() -> None:
         )
         print("ponto: dispositivo, escala e batidas geradas; feriados cadastrados")
 
-        # 5. Ocorrências
-        for title, status in [
-            ("Vazamento no banheiro do quarto 204", 1),
-            ("Ar-condicionado com ruído no quarto 310", 1),
-            ("Reclamação de barulho no 5º andar", 3),
-            ("Troca de lâmpada queimada no corredor", 2),
-            ("Wi-Fi instável na área da piscina", 1),
+        # 5. Ordens de serviço (origem "ocorrência" — status inicial, sem prioridade/SLA)
+        for title in [
+            "Vazamento no banheiro do quarto 204",
+            "Ar-condicionado com ruído no quarto 310",
+            "Reclamação de barulho no 5º andar",
+            "Troca de lâmpada queimada no corredor",
+            "Wi-Fi instável na área da piscina",
         ]:
-            await create_occurrence(
+            await create_work_order(
                 session,
                 company_id,
                 actor_id,
@@ -301,15 +300,19 @@ async def main() -> None:
                 actor_email,
                 title=title,
                 description=f"Ocorrência de demonstração: {title}.",
+                comments=None,
                 unit=None,
                 deadline=today + timedelta(days=3),
-                status=status,
-                sector_id=setores["Manutenção"],
+                priority=None,
+                category=None,
                 location_id=None,
-                owner_user_id=actor_id,
+                sector_id=setores["Manutenção"],
+                maintenance_id=None,
+                assigned_user_id=actor_id,
                 notify_user_ids=None,
+                sla_hours=None,
             )
-        print("ocorrências criadas")
+        print("ordens de serviço (origem ocorrência) criadas")
 
         # 6. Solicitações fiscais
         for req_type, title, status in [
@@ -332,7 +335,7 @@ async def main() -> None:
             )
         print("solicitações fiscais criadas")
 
-        # 7. Ordens de serviço
+        # 7. Ordens de serviço (manutenção corretiva, com prioridade/SLA)
         for title, priority, category in [
             ("Reparo de vazamento - quarto 204", "alta", "Hidráulica"),
             ("Manutenção do ar-condicionado - quarto 310", "media", "Refrigeração"),
@@ -350,7 +353,6 @@ async def main() -> None:
                 priority=priority,
                 category=category,
                 location_id=None,
-                occurrence_id=None,
                 maintenance_id=None,
                 assigned_user_id=actor_id,
                 notify_user_ids=None,
@@ -530,7 +532,6 @@ async def main() -> None:
             quantity=5,
             reason="Reposição dos apartamentos",
             work_order_id=None,
-            occurrence_id=None,
         )
         print("estoque criado")
 
