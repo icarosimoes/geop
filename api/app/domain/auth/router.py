@@ -16,6 +16,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_access_token,
+    decode_impersonation_token,
     decode_invite_token,
     decode_refresh_token,
 )
@@ -106,6 +107,57 @@ async def refresh(
         raise HTTPException(
             status_code=401,
             detail={"code": "invalid_refresh_token", "message": "Refresh token inválido"},
+        ) from exc
+    user = await find_active_user_by_id(session, user_id, company_id)
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "inactive_user", "message": "Usuário indisponível"},
+        )
+    access = create_access_token(
+        subject=user.id,
+        company_id=user.company_id,
+        role_id=user.role_id,
+        permissions=user.permissions,
+        secret=settings.jwt_secret,
+        minutes=settings.access_token_minutes,
+    )
+    refresh_tok = create_refresh_token(
+        subject=user.id,
+        company_id=user.company_id,
+        secret=settings.jwt_secret,
+        days=settings.refresh_token_days,
+    )
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh_tok,
+        expires_in=settings.access_token_minutes * 60,
+        user=to_response(user),
+    )
+
+
+class ImpersonateRequest(BaseModel):
+    ticket: str
+
+
+@router.post("/impersonate")
+@limiter.limit("10/minute")
+async def impersonate(
+    request: Request,
+    body: ImpersonateRequest,
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TokenResponse:
+    try:
+        claims = decode_impersonation_token(body.ticket, settings.jwt_secret)
+        user_id, company_id = int(claims["sub"]), int(claims["company_id"])
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "invalid_impersonation_token",
+                "message": "Ticket inválido ou expirado",
+            },
         ) from exc
     user = await find_active_user_by_id(session, user_id, company_id)
     if user is None:

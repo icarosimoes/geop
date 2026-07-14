@@ -152,6 +152,34 @@ def decode_invite_token(token: str, secret: str) -> dict[str, Any]:
     return payload
 
 
+def create_impersonation_token(
+    *,
+    subject: int,
+    company_id: int,
+    secret: str,
+    minutes: int = 2,
+) -> str:
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(subject),
+            "company_id": company_id,
+            "type": "impersonation",
+            "iat": now,
+            "exp": now + timedelta(minutes=minutes),
+        },
+        secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_impersonation_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "impersonation":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload
+
+
 def create_employee_session_token(
     *,
     employee_id: int,

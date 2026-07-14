@@ -66,6 +66,18 @@ A configuração de Brevo por tenant (`/configuracoes` → Integrações no `web
 
 Quando o tenant **não** configurou Brevo próprio (`company_settings.brevo` sem `api_key`), o envio de notificações por e-mail (`app.integrations.notifications.prepare_notifications`) agora cai para a config global do painel admin (`platform_settings.email`, a mesma resolvida por `get_effective_email_config` — que por sua vez cai para as env vars `BREVO_API_KEY`/`MAIL_FROM_ADDRESS`/`MAIL_FROM_NAME` se nem o painel tiver sido configurado). Prioridade: **tenant > painel admin > env vars**. `from_address`/`from_name` seguem a mesma cascata campo a campo (se o tenant configurou só o remetente mas não a API key, o remetente do tenant é preservado e só a API key vem do nível acima). Antes desta mudança, um tenant sem Brevo próprio simplesmente não recebia nenhum e-mail de notificação de módulo (ocorrências, solicitações fiscais etc.) — só o convite de usuário (`POST /users/invite`) já usava esse fallback.
 
+### Impersonar tenant a partir do admin (2026-07-14)
+
+Botão "Entrar como" na tela Empresas (`admin/app/(app)/tenants/tenants-client.tsx`, ícone `LogIn`) permite ao operador de plataforma acessar o app do tenant (`web/`) sem senha, para suporte — mesmo padrão do Aloji.
+
+Como `admin` (porta 3001) e `web` (porta 3000) são origins diferentes, sem cookie compartilhado, o fluxo usa um ticket de curta duração:
+
+1. `POST /platform/tenants/{id}/impersonate` (autenticado como `PlatformUser`) escolhe o primeiro usuário ativo do tenant (`User.active=True, deleted_at IS NULL, ORDER BY id`), gera um JWT `type=impersonation` de 2 minutos e devolve `{web_url: "{REGISTRO_WEB_URL}/impersonate?ticket=..."}`. Registra `PlatformAuditLog` (`action="tenant.impersonate"`, `target_type="company"`, payload com `user_id`/`user_email`). 404 (`tenant_has_no_users`) se o tenant não tiver usuário ativo.
+2. O admin abre `web_url` em nova aba.
+3. `web/app/impersonate/route.ts` (route handler público, excluído do `matcher` de `middleware.ts` — não vai para `PUBLIC_PATHS` para não colidir com a regra de "já autenticado → dashboard") troca o ticket por uma sessão real via `POST /auth/impersonate`, seta os cookies `tenant_token`/`tenant_refresh_token` (`setTokenCookies`) e redireciona para `/dashboard`. Ticket inválido/expirado → `/login?error=impersonation`.
+
+Não existe hoje um flag "owner"/"admin garantido" no model `User`; "primeiro usuário ativo" é um proxy razoável mas pode não ser sempre o dono da conta. `web/middleware.ts` não é bind-mounted no Compose (só `web/app`, `web/components`, `web/lib`) — mudanças nele exigem `docker compose build web`, não só restart.
+
 ## Comercial e cobrança (implementado)
 
 - CRUD auditado de tenants, planos e assinaturas — endpoints platform com POST/GET/PATCH/DELETE, todos auditados via `PlatformAuditLog`.

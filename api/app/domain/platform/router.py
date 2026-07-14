@@ -21,6 +21,7 @@ from app.core.security import (
 )
 from app.domain.platform import service
 from app.domain.platform.schemas import (
+    ImpersonationLinkResponse,
     InvoiceSummary,
     LifecycleProcessed,
     LifecycleResponse,
@@ -334,6 +335,28 @@ async def delete_tenant(
     deleted = await service.soft_delete_tenant(session, tenant_id, actor_id=admin.id)
     if not deleted:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
+
+
+@router.post("/tenants/{tenant_id}/impersonate", response_model=ImpersonationLinkResponse)
+async def impersonate_tenant(
+    tenant_id: int,
+    request: Request,
+    admin: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ImpersonationLinkResponse:
+    ticket = await service.create_impersonation_ticket(
+        session,
+        company_id=tenant_id,
+        actor=admin,
+        settings=settings,
+        ip_address=request.client.host if request.client else None,
+    )
+    if ticket is None:
+        raise HTTPException(status_code=404, detail={"code": "tenant_has_no_users"})
+    return ImpersonationLinkResponse(
+        web_url=f"{settings.registro_web_url}/impersonate?ticket={ticket}"
+    )
 
 
 # ---------------------------------------------------------------------------

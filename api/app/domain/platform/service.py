@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.security import create_impersonation_token
 from app.domain.timeclock.service import ensure_default_shifts
 from app.integrations.asaas import AsaasClient, AsaasError
 from app.models import (
@@ -45,6 +46,38 @@ async def _log_platform_audit(
             created_at=datetime.now(UTC).replace(tzinfo=None),
         )
     )
+
+
+async def create_impersonation_ticket(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    actor: PlatformUser,
+    settings: Settings,
+    ip_address: str | None = None,
+) -> str | None:
+    user = await session.scalar(
+        select(User)
+        .where(User.company_id == company_id, User.active.is_(True), User.deleted_at.is_(None))
+        .order_by(User.id)
+        .limit(1)
+    )
+    if user is None:
+        return None
+    ticket = create_impersonation_token(
+        subject=user.id, company_id=company_id, secret=settings.jwt_secret
+    )
+    await _log_platform_audit(
+        session,
+        actor_id=actor.id,
+        action="tenant.impersonate",
+        target_type="company",
+        target_id=company_id,
+        payload={"user_id": user.id, "user_email": user.email},
+        ip_address=ip_address,
+    )
+    await session.commit()
+    return ticket
 
 
 # ---------------------------------------------------------------------------

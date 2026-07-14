@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Ban, CheckCircle, Loader2, MoreVertical, Pencil, Plus, Search, ShieldOff, Trash2,
+  Ban, CheckCircle, Loader2, LogIn, MoreVertical, Pencil, Plus, Search, ShieldOff, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Tenant, Plan } from "./page";
@@ -501,6 +501,17 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
     setConfirmState(state);
   }
 
+  async function impersonate(tenant: Tenant) {
+    try {
+      const res = await apiFetch<{ web_url: string }>(`/tenants/${tenant.id}/impersonate`, {
+        method: "POST",
+      });
+      window.open(res.web_url, "_blank");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao entrar no tenant");
+    }
+  }
+
   function deleteTenant(tenant: Tenant) {
     requestConfirm({
       title: "Apagar empresa",
@@ -579,6 +590,9 @@ export function TenantsClient({ initialTenants, plans }: { initialTenants: Tenan
               <TableCell className="text-right text-xs text-[var(--muted-foreground)]">{fmtDate(t.created_at)}</TableCell>
               <TableCell>
                 <div className="flex justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => impersonate(t)} title="Entrar como administrador do tenant">
+                    <LogIn className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => setEditing(t)} title="Editar empresa">
                     <Pencil className="h-4 w-4" />
                   </Button>

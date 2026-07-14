@@ -1008,6 +1008,17 @@ Frontend admin: `/users`, `/support-requests`, `/usage`.
 
 > Feature flags (`feature_flags`) foram implementadas em 2026-07-11 e removidas no mesmo dia (decisão: não seguir com a funcionalidade). Migration `20260711_0057_drop_feature_flags` desfaz a tabela.
 
+### Plataforma — impersonar tenant (2026-07-14)
+
+```
+POST /platform/tenants/{id}/impersonate  (PlatformUser autenticado) → { web_url }
+POST /auth/impersonate                   (público, rate-limited)    { ticket } → TokenResponse
+```
+
+`web_url` aponta para `{REGISTRO_WEB_URL}/impersonate?ticket=...`, um JWT `type=impersonation` de 2 minutos (`sub=user_id`, `company_id`) para o primeiro usuário ativo do tenant. `/auth/impersonate` troca o ticket por `access_token`/`refresh_token` reais (mesmo formato de `/auth/login`), validando o usuário via `find_active_user_by_id`. Cada emissão de ticket grava `PlatformAuditLog` (`action="tenant.impersonate"`). 404 `tenant_has_no_users` se a empresa não tiver usuário ativo. Detalhes do fluxo cross-origin (admin → web) em `docs/plataforma-saas.md`.
+
+Frontend admin: botão "Entrar como" em `/tenants`. Frontend tenant: route handler `web/app/impersonate/route.ts`.
+
 ### Plataforma — e-mail transacional (`/platform/settings/email`) (2026-07-11)
 
 ```

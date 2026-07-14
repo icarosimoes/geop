@@ -23,6 +23,10 @@ class PlatformTokenResponse(BaseModel):
     role: str
 
 
+class ImpersonationLinkResponse(BaseModel):
+    web_url: str
+
+
 class PlatformMetricsResponse(BaseModel):
     tenants_total: int
     tenants_active: int
