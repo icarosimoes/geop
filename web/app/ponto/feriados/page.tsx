@@ -8,13 +8,6 @@ export default async function FeriadosPontoPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Ponto</p>
-            <h1>Feriados</h1>
-            <p>Cadastre os feriados considerados no cálculo de hora extra 100% do espelho de ponto.</p>
-          </div>
-        </header>
         <HolidayManager />
       </AppLayout>
     );

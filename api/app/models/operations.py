@@ -68,39 +68,6 @@ class Procedure(Base, TenantMixin, LegacyEntityMixin, TimestampMixin):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
-class Occurrence(Base, TenantMixin, LegacyEntityMixin, TimestampMixin):
-    __tablename__ = "occurrences"
-    __table_args__ = (UniqueConstraint("company_id", "legacy_id", name="uq_occurrences_legacy"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    title: Mapped[str] = mapped_column(String(255))
-    description: Mapped[str | None] = mapped_column(Text)
-    comments: Mapped[str | None] = mapped_column(Text)
-    unit: Mapped[str | None] = mapped_column(String(255))
-    deadline: Mapped[date | None] = mapped_column(Date)
-    status: Mapped[int] = mapped_column(Integer, default=1, index=True)
-    legacy_type_id: Mapped[int | None] = mapped_column(Integer)
-    legacy_receiver_user_id: Mapped[int | None] = mapped_column(Integer)
-    location_id: Mapped[int | None] = mapped_column(
-        ForeignKey("locations.id", ondelete="SET NULL"),
-    )
-    sector_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sectors.id", ondelete="SET NULL"),
-    )
-    owner_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    updated_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    notify_user_ids: Mapped[list | None] = mapped_column(JSON)
-    file: Mapped[str | None] = mapped_column(Text)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
-
-
 class FiscalRequest(Base, TenantMixin, TimestampMixin):
     __tablename__ = "fiscal_requests"
     __table_args__ = (Index("ix_fiscal_requests_company_status", "company_id", "status"),)
@@ -217,20 +184,6 @@ class Attachment(Base, TenantMixin):
         DateTime,
         server_default=func.now(),
     )
-
-
-class OccurrenceParticipant(Base):
-    __tablename__ = "occurrence_participants"
-
-    occurrence_id: Mapped[int] = mapped_column(
-        ForeignKey("occurrences.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Meeting(Base, TenantMixin, LegacyEntityMixin, TimestampMixin):
@@ -562,14 +515,17 @@ class WorkOrder(Base, TenantMixin, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    comments: Mapped[str | None] = mapped_column(Text)
+    unit: Mapped[str | None] = mapped_column(String(255))
+    deadline: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(40), default="aberta")
     priority: Mapped[str | None] = mapped_column(String(20))
     category: Mapped[str | None] = mapped_column(String(120))
     location_id: Mapped[int | None] = mapped_column(
         ForeignKey("locations.id", ondelete="SET NULL"),
     )
-    occurrence_id: Mapped[int | None] = mapped_column(
-        ForeignKey("occurrences.id", ondelete="SET NULL"),
+    sector_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sectors.id", ondelete="SET NULL"),
     )
     maintenance_id: Mapped[int | None] = mapped_column(
         ForeignKey("maintenance_records.id", ondelete="SET NULL"),
@@ -590,6 +546,20 @@ class WorkOrder(Base, TenantMixin, TimestampMixin):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     validated_at: Mapped[datetime | None] = mapped_column(DateTime)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class WorkOrderParticipant(Base):
+    __tablename__ = "work_order_participants"
+
+    work_order_id: Mapped[int] = mapped_column(
+        ForeignKey("work_orders.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 # ---------------------------------------------------------------------------
@@ -628,9 +598,6 @@ class StockMovement(Base, TenantMixin, TimestampMixin):
     reason: Mapped[str | None] = mapped_column(String(255))
     work_order_id: Mapped[int | None] = mapped_column(
         ForeignKey("work_orders.id", ondelete="SET NULL"),
-    )
-    occurrence_id: Mapped[int | None] = mapped_column(
-        ForeignKey("occurrences.id", ondelete="SET NULL"),
     )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),

@@ -16,41 +16,41 @@ def auth_none(company_id: int = TENANT_A) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Occurrences
+# Work Orders
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_occurrences_list_forbidden_without_permission(client):
-    r = await client.get(f"{PREFIX}/occurrences", headers=auth_none())
+async def test_work_orders_list_forbidden_without_permission(client):
+    r = await client.get(f"{PREFIX}/work-orders", headers=auth_none())
     assert r.status_code == 403
-    assert r.json()["detail"]["required"] == "occurrence.view"
+    assert r.json()["detail"]["required"] == "work_order.view"
 
 
 @pytest.mark.asyncio
-async def test_occurrences_list_forbidden_with_wrong_permission(client):
-    r = await client.get(f"{PREFIX}/occurrences", headers=auth_with(["bulletin.view"]))
+async def test_work_orders_list_forbidden_with_wrong_permission(client):
+    r = await client.get(f"{PREFIX}/work-orders", headers=auth_with(["bulletin.view"]))
     assert r.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_occurrences_list_allowed_with_permission(client):
-    r = await client.get(f"{PREFIX}/occurrences", headers=auth_with(["occurrence.view"]))
+async def test_work_orders_list_allowed_with_permission(client):
+    r = await client.get(f"{PREFIX}/work-orders", headers=auth_with(["work_order.view"]))
     assert r.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_occurrences_create_forbidden_without_permission(client):
-    r = await client.post(f"{PREFIX}/occurrences", headers=auth_none(), json={})
+async def test_work_orders_create_forbidden_without_permission(client):
+    r = await client.post(f"{PREFIX}/work-orders", headers=auth_none(), json={})
     assert r.status_code == 403
-    assert r.json()["detail"]["required"] == "occurrence.create"
+    assert r.json()["detail"]["required"] == "work_order.create"
 
 
 @pytest.mark.asyncio
-async def test_occurrences_create_allowed_with_permission(client):
+async def test_work_orders_create_allowed_with_permission(client):
     r = await client.post(
-        f"{PREFIX}/occurrences",
-        headers=auth_with(["occurrence.create"]),
+        f"{PREFIX}/work-orders",
+        headers=auth_with(["work_order.create"]),
         json={"title": "Teste permissão", "category": "general"},
     )
     assert r.status_code in (201, 422)
@@ -70,7 +70,7 @@ async def test_bulletin_list_forbidden_without_permission(client):
 
 @pytest.mark.asyncio
 async def test_bulletin_list_forbidden_with_wrong_permission(client):
-    r = await client.get(f"{PREFIX}/bulletin", headers=auth_with(["occurrence.view"]))
+    r = await client.get(f"{PREFIX}/bulletin", headers=auth_with(["work_order.view"]))
     assert r.status_code == 403
 
 

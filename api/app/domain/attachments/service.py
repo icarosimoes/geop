@@ -12,7 +12,7 @@ from app.models import Attachment
 
 ALLOWED_ENTITY_TYPES = {
     "fiscal_request",
-    "occurrence",
+    "work_order",
     "procedure",
     "module_record",
     "employee_payslip",

@@ -33,7 +33,6 @@ from app.domain.maintenance.router import router as maintenance_router
 from app.domain.meetings.router import router as meetings_router
 from app.domain.modules.router import router as modules_router
 from app.domain.notifications.router import router as notifications_router
-from app.domain.occurrences.router import router as occurrences_router
 from app.domain.platform.router import router as platform_router
 from app.domain.platform.webhook_router import router as asaas_webhook_router
 from app.domain.preventive_plans.router import router as preventive_plans_router
@@ -138,7 +137,6 @@ v1_router.include_router(health_router)
 v1_router.include_router(auth_router)
 v1_router.include_router(dashboard_router)
 v1_router.include_router(employees_router)
-v1_router.include_router(occurrences_router)
 v1_router.include_router(fiscal_requests_router)
 v1_router.include_router(reports_router)
 v1_router.include_router(users_router)

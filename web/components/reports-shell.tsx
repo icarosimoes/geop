@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import type { FiscalRequestSlaReport, OccurrenceReport } from "@/app/relatorios/page";
+import type { FiscalRequestSlaReport, WorkOrderReport } from "@/app/relatorios/page";
 
 const SLA_STATE_LABELS: Record<string, string> = {
   on_time: "No prazo",
@@ -59,13 +59,13 @@ function TrendBars({ trend, color = "blue" }: { trend: Array<{ date: string; cou
 export function ReportsShell({
   dateFrom,
   dateTo,
-  occurrences,
+  workOrders,
   fiscalSla,
   forbidden,
 }: {
   dateFrom: string;
   dateTo: string;
-  occurrences: OccurrenceReport | null;
+  workOrders: WorkOrderReport | null;
   fiscalSla: FiscalRequestSlaReport | null;
   forbidden: boolean;
 }) {
@@ -87,7 +87,7 @@ export function ReportsShell({
         <div>
           <div className="eyebrow">Analytics</div>
           <h1>Relatórios</h1>
-          <p>Ocorrências por período e cumprimento de SLA das solicitações fiscais.</p>
+          <p>Ordens de Serviço por período e cumprimento de SLA das solicitações fiscais.</p>
         </div>
       </div>
 
@@ -112,35 +112,35 @@ export function ReportsShell({
       ) : (
         <div className="reports-grid">
           <section className="kpi-panel">
-            <h3>Ocorrências no período</h3>
+            <h3>Ordens de Serviço no período</h3>
             <div className="kpi-stat-grid">
               <div className="kpi-stat">
                 <span className="kpi-stat-label">Criadas</span>
-                <span className="kpi-stat-value accent-blue">{occurrences?.total ?? 0}</span>
+                <span className="kpi-stat-value accent-blue">{workOrders?.total ?? 0}</span>
               </div>
               <div className="kpi-stat">
                 <span className="kpi-stat-label">Atrasadas</span>
-                <span className={`kpi-stat-value ${(occurrences?.overdue ?? 0) > 0 ? "accent-red" : "accent-green"}`}>
-                  {occurrences?.overdue ?? 0}
+                <span className={`kpi-stat-value ${(workOrders?.overdue ?? 0) > 0 ? "accent-red" : "accent-green"}`}>
+                  {workOrders?.overdue ?? 0}
                 </span>
               </div>
               <div className="kpi-stat">
                 <span className="kpi-stat-label">Taxa de conclusão</span>
-                <span className={`kpi-stat-value ${(occurrences?.completion_rate_pct ?? 0) >= 70 ? "accent-green" : "accent-orange"}`}>
-                  {occurrences?.completion_rate_pct != null ? `${occurrences.completion_rate_pct}%` : "—"}
+                <span className={`kpi-stat-value ${(workOrders?.completion_rate_pct ?? 0) >= 70 ? "accent-green" : "accent-orange"}`}>
+                  {workOrders?.completion_rate_pct != null ? `${workOrders.completion_rate_pct}%` : "—"}
                 </span>
               </div>
               <div className="kpi-stat">
                 <span className="kpi-stat-label">Setores em aberto</span>
-                <span className="kpi-stat-value">{Object.keys(occurrences?.by_sector ?? {}).length}</span>
+                <span className="kpi-stat-value">{Object.keys(workOrders?.by_sector ?? {}).length}</span>
               </div>
             </div>
             <h3 style={{ marginTop: "var(--sp-5)" }}>Por status</h3>
-            <BarChart data={occurrences?.by_status ?? {}} color="blue" />
+            <BarChart data={workOrders?.by_status ?? {}} color="blue" />
             <h3 style={{ marginTop: "var(--sp-5)" }}>Por setor</h3>
-            <BarChart data={occurrences?.by_sector ?? {}} color="orange" />
+            <BarChart data={workOrders?.by_sector ?? {}} color="orange" />
             <h3 style={{ marginTop: "var(--sp-5)" }}>Criadas por dia</h3>
-            <TrendBars trend={occurrences?.trend ?? []} color="blue" />
+            <TrendBars trend={workOrders?.trend ?? []} color="blue" />
           </section>
 
           <section className="kpi-panel">

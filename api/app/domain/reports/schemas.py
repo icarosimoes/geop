@@ -6,7 +6,7 @@ class ReportTrendDay(BaseModel):
     count: int
 
 
-class OccurrenceReport(BaseModel):
+class WorkOrderReport(BaseModel):
     total: int
     by_status: dict[str, int]
     completion_rate_pct: int | None

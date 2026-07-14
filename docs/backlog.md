@@ -456,6 +456,14 @@ feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy man
 - [ ] Sem verificação de que o remetente/domínio está autenticado (SPF/DKIM) na conta Brevo antes do teste — a API do Registro não tem visibilidade disso; documentado como limitação conhecida em `api-reference.md`.
 - [x] Tenant sem Brevo próprio cai para a config do painel admin (`get_effective_email_config`) em vez de simplesmente não enviar e-mail de notificação — cascata tenant → painel admin → env vars, testada em `test_prepare_notifications_falls_back_to_platform_brevo`.
 
+## P14 — Padronização de CRUD e fusão de Ocorrências em Ordens de Serviço (2026-07-14)
+
+- [x] Contratos, Categorias de OS, Turnos, Funcionários, Feriados, Dispositivos, Vínculos e Ajustes/abonos de ponto padronizados no mesmo layout de Fornecedores (header com `module-heading`, modal centralizado `record-modal` em vez de form inline/drawer). Ver [registro-trabalho.md](registro-trabalho.md#2026-07-14--fusão-de-ocorrências-em-ordens-de-serviço-e-padronização-de-crud).
+- [x] "Ocorrências" fundida em "Ordens de Serviço": tabela `occurrences` dropada (migration `20260713_0061`), `work_orders` absorveu `sector_id`/`unit`/`comments`/`deadline`/participantes/export XLSX/export PDF/clone. Tela `/ordens-servico` ganhou toggle Kanban/Lista.
+- [ ] **Migration `20260713_0061` (destrutiva — dropa `occurrences` com dados reais) ainda não aplicada em produção.** Ao contrário das migrations anteriores desta sessão, esta não é aditiva/reversível sem perda: qualquer ocorrência real de qualquer tenant em produção some ao aplicar. Antes de rodar em produção, confirmar explicitamente com o usuário (mesmo já tendo autorizado a perda de dados em desenvolvimento) e seguir o procedimento manual de `docs/infra/runbook-producao.md` (backup do Postgres antes, `alembic upgrade head` no manager do Swarm).
+- [ ] Papéis customizados de tenants que tinham `occurrence.*` concedido explicitamente não ganham `work_order.*` automaticamente (permissões antigas foram só removidas, não substituídas). Se algum tenant reportar perda de acesso a Ordens de Serviço após o deploy, conceder `work_order.*` manualmente via `/roles`. Ver [usuarios-perfis.md](usuarios-perfis.md#perfis-pré-definidos-seed).
+- [ ] `UserMultiSelect` (seletor de participantes) foi extraído localmente em `kanban-board.tsx`, duplicando um padrão já existente em `operational-module.tsx` — candidato a componente compartilhado se mais telas precisarem de multi-seleção de usuários.
+
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.

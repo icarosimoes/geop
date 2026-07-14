@@ -34,15 +34,15 @@
 
 Tabela global (não tenant-scoped). 33 permissões + wildcard `*`.
 
-Formato do código: `{módulo}.{ação}` — ex: `occurrence.create`, `user.delete`.
+Formato do código: `{módulo}.{ação}` — ex: `work_order.create`, `user.delete`.
 
-Módulos: `occurrence`, `fiscal_request`, `user`, `registry`, `module`, `procedure`, `settings`, `meeting`, `shift_report`, `system`.
+Módulos: `work_order`, `fiscal_request`, `user`, `registry`, `module`, `procedure`, `settings`, `meeting`, `shift_report`, `system`.
 
 ## Perfis pré-definidos (seed)
 
-Criados automaticamente por empresa via migration `20260621_0039`:
+Criados automaticamente por empresa via migration `20260621_0039`, com os códigos `occurrence.*` originais listados abaixo (histórico da migration):
 
-| Código | Nome | Permissões |
+| Código | Nome | Permissões (na criação, 2026-06-21) |
 | --- | --- | --- |
 | `admin` | Administrador | `*` (acesso total) |
 | `gerente` | Gerente | Todas exceto `settings.edit` e `user.delete` |
@@ -50,6 +50,8 @@ Criados automaticamente por empresa via migration `20260621_0039`:
 | `governanca` | Governança | `occurrence.*`, `registry.view`, `procedure.view`, `shift_report.view` |
 | `manutencao` | Manutenção | `occurrence.view/create/edit`, `registry.view`, `procedure.view` |
 | `financeiro` | Financeiro | `fiscal_request.*`, `settings.view`, `occurrence.view` |
+
+**2026-07-14 — fusão de Ocorrências em Ordens de Serviço:** a migration `20260713_0061` removeu todas as permissões `occurrence.*` de `permissions`/`role_permissions` (a tabela `occurrences` foi dropada). Papéis que tinham `occurrence.*` concedido (como `recepcao`, `governanca`, `manutencao`, `financeiro` acima) **não ganharam `work_order.*` automaticamente** — só perderam o acesso antigo. `admin`/`gerente` (com `*` ou quase todas as permissões) não são afetados. Isso é uma limitação conhecida e aceita (não havia estado de tenant a preservar na fusão); se um tenant relatar que um papel customizado perdeu acesso a Ordens de Serviço, a correção é conceder `work_order.*` manualmente via `/roles`.
 
 ## Fluxo de convite por e-mail
 

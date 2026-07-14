@@ -8,13 +8,6 @@ export default async function FuncionariosPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Cadastros</p>
-            <h1>Funcionários</h1>
-            <p>Cadastro de RH dos funcionários do hotel, separado das contas de login do sistema.</p>
-          </div>
-        </header>
         <EmployeeManager user={user} />
       </AppLayout>
     );

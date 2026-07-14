@@ -8,13 +8,6 @@ export default async function AjustesPontoPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Ponto</p>
-            <h1>Ajustes e abonos de ponto</h1>
-            <p>Solicitações de correção enviadas pelo Portal do Colaborador, além de ajustes e abonos lançados diretamente pelo RH.</p>
-          </div>
-        </header>
         <AdjustmentManager user={user} />
       </AppLayout>
     );

@@ -31,12 +31,6 @@ type DashboardMetrics = {
       created_week: number;
       completed_week: number;
     };
-    occurrences: {
-      by_status: Record<string, number>;
-      completion_rate_pct: number | null;
-      by_sector: Record<string, number>;
-      overdue: number;
-    };
     fiscal_requests: {
       by_status: Record<string, number>;
       by_type: Record<string, number>;
@@ -46,7 +40,6 @@ type DashboardMetrics = {
     trend: Array<{
       date: string;
       work_orders: number;
-      occurrences: number;
       fiscal_requests: number;
     }>;
   };

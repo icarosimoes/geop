@@ -26,7 +26,6 @@ class RecentActivity(BaseModel):
 class TrendDay(BaseModel):
     date: str
     work_orders: int
-    occurrences: int
     fiscal_requests: int
 
 
@@ -42,13 +41,6 @@ class WorkOrderKpis(BaseModel):
     completed_week: int
 
 
-class OccurrenceKpis(BaseModel):
-    by_status: dict[str, int]
-    completion_rate_pct: int | None
-    by_sector: dict[str, int]
-    overdue: int
-
-
 class FiscalRequestKpis(BaseModel):
     by_status: dict[str, int]
     by_type: dict[str, int]
@@ -58,7 +50,6 @@ class FiscalRequestKpis(BaseModel):
 
 class DashboardKpis(BaseModel):
     work_orders: WorkOrderKpis
-    occurrences: OccurrenceKpis
     fiscal_requests: FiscalRequestKpis
     trend: list[TrendDay]
 

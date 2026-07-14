@@ -407,7 +407,7 @@ td strong { font-weight: 600; }
 .kanban-error button { background: none; border: none; color: var(--red); cursor: pointer; }
 .kanban-loading { position: fixed; bottom: var(--sp-5); right: var(--sp-5); background: var(--navy); color: white; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-pill); font-size: var(--font-sm); font-weight: 600; z-index: 1000; box-shadow: var(--shadow-lg); }
 
-.kanban-create-modal { width: min(560px, 95vw); }
+.kanban-create-modal { width: min(560px, 95vw); max-height: calc(100vh - 40px); overflow-y: auto; }
 .kanban-modal-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: var(--sp-4); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-4); }
 .kanban-modal-header h2 { font-size: var(--font-lg); font-weight: 700; color: var(--heading); margin: 0; }
 .kanban-modal-header button { background: none; border: none; color: var(--muted); cursor: pointer; }

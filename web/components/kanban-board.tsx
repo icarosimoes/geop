@@ -1,22 +1,29 @@
 "use client";
 
 import {
+  cloneWorkOrderAction,
   createWorkOrderAction,
   deleteWorkOrderAction,
+  fetchRegistryOptions,
   fetchWorkOrderCategories,
+  searchUsers,
   transitionWorkOrderAction,
   updateWorkOrderAction,
+  type RegistryOption,
+  type UserOption,
 } from "@/app/actions";
 import type { TenantUser } from "@/lib/api";
 import type { ModuleDefinition, ModuleRecord } from "@/lib/module-definitions";
-import { GripVertical, Plus, Search, Trash2, X } from "lucide-react";
+import {
+  Copy, Download, FileText, GripVertical, LayoutGrid, List, Pencil, Plus, Search, Trash2, X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 const KANBAN_COLUMNS = [
   { key: "aberta", label: "Aberta", color: "#3b82f6" },
   { key: "em_andamento", label: "Em andamento", color: "#f59e0b" },
-  { key: "aguardando_material", label: "Aguardando material", color: "#8b5cf6" },
+  { key: "aguardando_material", label: "Aguardando", color: "#8b5cf6" },
   { key: "concluida", label: "Concluída", color: "#10b981" },
   { key: "validada", label: "Validada", color: "#6b7280" },
 ];
@@ -46,6 +53,92 @@ function priorityBadge(priority: string | undefined) {
   );
 }
 
+function statusBadge(status: string) {
+  const col = KANBAN_COLUMNS.find((c) => c.key === status);
+  return (
+    <span className="status" style={{ background: `${col?.color ?? "#94a3b8"}22`, color: col?.color ?? "#64748b" }}>
+      {col?.label ?? status}
+    </span>
+  );
+}
+
+function UserMultiSelect({ name, defaultValues }: { name: string; defaultValues?: { id: number; name: string }[] }) {
+  const [selected, setSelected] = useState<{ id: number; name: string }[]>(defaultValues ?? []);
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState<UserOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const listId = `${name}-multi-listbox`;
+
+  function handleChange(v: string) {
+    setQuery(v);
+    setActiveIndex(-1);
+    clearTimeout(timer.current);
+    if (v.trim().length < 2) { setOptions([]); setOpen(false); return; }
+    timer.current = setTimeout(() => {
+      searchUsers(v).then((r) => { const filtered = r.filter((u) => !selected.some((s) => s.id === u.id)); setOptions(filtered); setOpen(filtered.length > 0); setActiveIndex(-1); });
+    }, 250);
+  }
+
+  function add(u: UserOption) {
+    setSelected((prev) => [...prev, { id: u.id, name: u.name }]);
+    setQuery("");
+    setOptions([]);
+    setOpen(false);
+    setActiveIndex(-1);
+  }
+
+  function remove(id: number) {
+    setSelected((prev) => prev.filter((u) => u.id !== id));
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (!open || !options.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIndex((i) => Math.min(i + 1, options.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIndex((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && activeIndex >= 0) { e.preventDefault(); add(options[activeIndex]); }
+    else if (e.key === "Escape") { setOpen(false); }
+  }
+
+  return (
+    <div className="autocomplete-wrap" role="combobox" aria-expanded={open} aria-haspopup="listbox" aria-owns={listId}>
+      {selected.length > 0 && (
+        <div className="notify-chips" role="list">
+          {selected.map((u) => (
+            <span key={u.id} className="notify-chip" role="listitem">
+              {u.name}
+              <button type="button" onClick={() => remove(u.id)} aria-label={`Remover ${u.name}`}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        value={query}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => { if (options.length) setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onKeyDown={handleKeyDown}
+        placeholder="Buscar participante..."
+        autoComplete="off"
+        aria-autocomplete="list"
+        aria-controls={listId}
+        aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+      />
+      {open && (
+        <ul id={listId} className="autocomplete-list" role="listbox">
+          {options.map((u, i) => (
+            <li key={u.id} id={`${listId}-${i}`} role="option" aria-selected={i === activeIndex} className={i === activeIndex ? "active" : undefined} onMouseDown={() => add(u)}>
+              <strong>{u.name}</strong><small>{u.email}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input type="hidden" name={name} value={JSON.stringify(selected.map((u) => u.id))} />
+    </div>
+  );
+}
+
 export function KanbanBoard({
   definition,
   user,
@@ -55,6 +148,7 @@ export function KanbanBoard({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showCreate, setShowCreate] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ModuleRecord | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
@@ -141,12 +235,17 @@ export function KanbanBoard({
           <h1>{definition.title}</h1>
           <p>{definition.description}</p>
         </div>
-        {canCreate && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={18} />
-            Nova OS
-          </button>
-        )}
+        <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+          <a className="secondary-button" href="/api/work-orders/export">
+            <Download size={16} /> Exportar XLSX
+          </a>
+          {canCreate && (
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={18} />
+              Nova OS
+            </button>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -165,76 +264,143 @@ export function KanbanBoard({
             placeholder="Buscar ordens de serviço…"
           />
         </label>
+        <div className="segmented">
+          <button className={view === "kanban" ? "selected" : ""} onClick={() => setView("kanban")} aria-label="Visão Kanban">
+            <LayoutGrid size={16} /> Kanban
+          </button>
+          <button className={view === "list" ? "selected" : ""} onClick={() => setView("list")} aria-label="Visão em lista">
+            <List size={16} /> Lista
+          </button>
+        </div>
         <span className="kanban-count">{filtered.length} ordem(ns)</span>
       </div>
 
-      <div className="kanban-container">
-        {KANBAN_COLUMNS.map((col) => {
-          const items = grouped.get(col.key) ?? [];
-          const isOver = dragOverColumn === col.key && dragSourceCol.current !== col.key;
-          return (
-            <div
-              key={col.key}
-              className={`kanban-column${isOver ? " kanban-column-dragover" : ""}`}
-              onDragOver={(e) => handleDragOver(e, col.key)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, col.key)}
-            >
-              <div className="kanban-column-header" style={{ "--col-color": col.color } as React.CSSProperties}>
-                <span className="kanban-column-title">{col.label}</span>
-                <span className="kanban-column-count">{items.length}</span>
+      {view === "kanban" ? (
+        <div className="kanban-container">
+          {KANBAN_COLUMNS.map((col) => {
+            const items = grouped.get(col.key) ?? [];
+            const isOver = dragOverColumn === col.key && dragSourceCol.current !== col.key;
+            return (
+              <div
+                key={col.key}
+                className={`kanban-column${isOver ? " kanban-column-dragover" : ""}`}
+                onDragOver={(e) => handleDragOver(e, col.key)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, col.key)}
+              >
+                <div className="kanban-column-header" style={{ "--col-color": col.color } as React.CSSProperties}>
+                  <span className="kanban-column-title">{col.label}</span>
+                  <span className="kanban-column-count">{items.length}</span>
+                </div>
+                <div className="kanban-column-body">
+                  {items.map((record) => (
+                    <article
+                      key={record.id}
+                      className={`kanban-card${draggedId === record.id ? " kanban-card-dragging" : ""}`}
+                      draggable={canEdit}
+                      onDragStart={(e) => handleDragStart(e, record.id, col.key)}
+                      onDragEnd={() => { setDraggedId(null); setDragOverColumn(null); }}
+                      onClick={() => canEdit ? setEditingRecord(record) : undefined}
+                    >
+                      <div className="kanban-card-header">
+                        <span className="kanban-card-id">
+                          {canEdit && <GripVertical size={12} className="kanban-grip" />}
+                          #{record.id}
+                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {priorityBadge(record.priority)}
+                          {canDelete && (
+                            <button
+                              className="kanban-card-delete"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(record.id, record.title); }}
+                              aria-label="Excluir"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <h3 className="kanban-card-title">{record.title}</h3>
+                      {record.category && record.category !== "Geral" && (
+                        <span className="kanban-card-category">{record.category}</span>
+                      )}
+                      <footer className="kanban-card-footer">
+                        <span>{record.owner}</span>
+                        <span>{record.updatedAt}</span>
+                      </footer>
+                      {record.slaDeadline && (
+                        <div className="kanban-card-sla">
+                          SLA: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(record.slaDeadline))}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                  {items.length === 0 && (
+                    <div className="kanban-empty">Nenhuma OS</div>
+                  )}
+                </div>
               </div>
-              <div className="kanban-column-body">
-                {items.map((record) => (
-                  <article
-                    key={record.id}
-                    className={`kanban-card${draggedId === record.id ? " kanban-card-dragging" : ""}`}
-                    draggable={canEdit}
-                    onDragStart={(e) => handleDragStart(e, record.id, col.key)}
-                    onDragEnd={() => { setDraggedId(null); setDragOverColumn(null); }}
-                    onClick={() => canEdit ? setEditingRecord(record) : undefined}
-                  >
-                    <div className="kanban-card-header">
-                      <span className="kanban-card-id">
-                        {canEdit && <GripVertical size={12} className="kanban-grip" />}
-                        #{record.id}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {priorityBadge(record.priority)}
+            );
+          })}
+        </div>
+      ) : (
+        <div className="module-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Categoria</th>
+                <th>Responsável</th>
+                <th>Prioridade</th>
+                <th>Status</th>
+                <th>Prazo</th>
+                <th>Atualização</th>
+                {(canEdit || canDelete) && <th>Ações</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((record) => (
+                <tr key={record.id} onClick={() => canEdit ? setEditingRecord(record) : undefined}>
+                  <td className="protocol">#{record.id}</td>
+                  <td><strong>{record.title}</strong></td>
+                  <td>{record.category ?? "—"}</td>
+                  <td>{record.owner}</td>
+                  <td>{priorityBadge(record.priority) ?? "—"}</td>
+                  <td>{statusBadge(record.status)}</td>
+                  <td className="muted">
+                    {record.deadline
+                      ? new Intl.DateTimeFormat("pt-BR").format(new Date(record.deadline))
+                      : record.slaDeadline
+                        ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(record.slaDeadline))
+                        : "—"}
+                  </td>
+                  <td className="muted">{record.updatedAt}</td>
+                  {(canEdit || canDelete) && (
+                    <td>
+                      <div className="row-actions">
+                        {canEdit && (
+                          <button onClick={(e) => { e.stopPropagation(); setEditingRecord(record); }} aria-label="Editar">
+                            <Pencil size={16} />
+                          </button>
+                        )}
                         {canDelete && (
-                          <button
-                            className="kanban-card-delete"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(record.id, record.title); }}
-                            aria-label="Excluir"
-                          >
-                            <Trash2 size={13} />
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(record.id, record.title); }} aria-label="Excluir">
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
-                    </div>
-                    <h3 className="kanban-card-title">{record.title}</h3>
-                    {record.category && record.category !== "Geral" && (
-                      <span className="kanban-card-category">{record.category}</span>
-                    )}
-                    <footer className="kanban-card-footer">
-                      <span>{record.owner}</span>
-                      <span>{record.updatedAt}</span>
-                    </footer>
-                    {record.slaDeadline && (
-                      <div className="kanban-card-sla">
-                        SLA: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(record.slaDeadline))}
-                      </div>
-                    )}
-                  </article>
-                ))}
-                {items.length === 0 && (
-                  <div className="kanban-empty">Nenhuma OS</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={9} className="module-state">Nenhuma OS encontrada.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {isPending && <div className="kanban-loading">Salvando…</div>}
 
@@ -262,6 +428,14 @@ function useCategoryOptions() {
     fetchWorkOrderCategories().then(setCategories);
   }, []);
   return categories;
+}
+
+function useSectorOptions() {
+  const [sectors, setSectors] = useState<RegistryOption[]>([]);
+  useEffect(() => {
+    fetchRegistryOptions("Setor").then(setSectors);
+  }, []);
+  return sectors;
 }
 
 function CategorySelect({ value, onChange, categories }: {
@@ -314,13 +488,22 @@ function CreateWorkOrderModal({
   const [priority, setPriority] = useState("");
   const [category, setCategory] = useState("");
   const [slaHours, setSlaHours] = useState("");
+  const [sectorId, setSectorId] = useState("");
+  const [unit, setUnit] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [comments, setComments] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const categories = useCategoryOptions();
+  const sectors = useSectorOptions();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    const formData = new FormData(e.currentTarget);
+    let participantIds: number[] = [];
+    try { participantIds = JSON.parse(String(formData.get("participant_ids") ?? "[]")); } catch { /* empty */ }
 
     startTransition(async () => {
       const result = await createWorkOrderAction({
@@ -329,6 +512,11 @@ function CreateWorkOrderModal({
         priority: priority || undefined,
         category: category.trim() || undefined,
         sla_hours: slaHours ? parseInt(slaHours, 10) : undefined,
+        sector_id: sectorId ? Number(sectorId) : undefined,
+        unit: unit.trim() || undefined,
+        deadline: deadline || undefined,
+        comments: comments.trim() || undefined,
+        participant_ids: participantIds.length ? participantIds : undefined,
       });
       if (!result.ok) {
         setError(result.error ?? "Erro ao criar OS.");
@@ -392,6 +580,36 @@ function CreateWorkOrderModal({
               />
             </label>
           </div>
+          <div className="form-grid">
+            <label>
+              Setor
+              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+                <option value="">Sem setor</option>
+                {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Unidade/Apartamento
+              <input type="text" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Ex: 302" />
+            </label>
+            <label>
+              Prazo
+              <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </label>
+          </div>
+          <label>
+            Participantes
+            <UserMultiSelect name="participant_ids" />
+          </label>
+          <label>
+            Comentários
+            <textarea
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Observações adicionais (opcional)"
+              rows={3}
+            />
+          </label>
           <footer>
             <button type="button" onClick={onClose}>Cancelar</button>
             <button type="submit" disabled={isPending || !title.trim()}>
@@ -417,13 +635,23 @@ function EditWorkOrderModal({
   const [description, setDescription] = useState(record.description ?? "");
   const [priority, setPriority] = useState(record.priority ?? "");
   const [category, setCategory] = useState(record.category === "Geral" ? "" : record.category);
+  const [sectorId, setSectorId] = useState(record.sectorId ? String(record.sectorId) : "");
+  const [unit, setUnit] = useState(record.unit ?? "");
+  const [deadline, setDeadline] = useState(record.deadline ?? "");
+  const [comments, setComments] = useState(record.comments ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [cloning, startCloneTransition] = useTransition();
   const categories = useCategoryOptions();
+  const sectors = useSectorOptions();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    const formData = new FormData(e.currentTarget);
+    let participantIds: number[] = [];
+    try { participantIds = JSON.parse(String(formData.get("participant_ids") ?? "[]")); } catch { /* empty */ }
 
     startTransition(async () => {
       const result = await updateWorkOrderAction(record.id, {
@@ -431,6 +659,11 @@ function EditWorkOrderModal({
         description: description.trim() || undefined,
         priority: priority || undefined,
         category: category.trim() || undefined,
+        sector_id: sectorId ? Number(sectorId) : undefined,
+        unit: unit.trim() || undefined,
+        deadline: deadline || undefined,
+        comments: comments.trim() || undefined,
+        participant_ids: participantIds.length ? participantIds : undefined,
       });
       if (!result.ok) {
         setError(result.error ?? "Erro ao atualizar OS.");
@@ -439,6 +672,18 @@ function EditWorkOrderModal({
       onSaved();
     });
   };
+
+  function handleClone() {
+    setError(null);
+    startCloneTransition(async () => {
+      const result = await cloneWorkOrderAction(record.id);
+      if (!result.ok) {
+        setError(result.error ?? "Erro ao duplicar OS.");
+        return;
+      }
+      onSaved();
+    });
+  }
 
   return (
     <div className="modal-layer" onClick={onClose}>
@@ -481,6 +726,43 @@ function EditWorkOrderModal({
               Categoria
               <CategorySelect value={category} onChange={setCategory} categories={categories} />
             </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Setor
+              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+                <option value="">Sem setor</option>
+                {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Unidade/Apartamento
+              <input type="text" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Ex: 302" />
+            </label>
+            <label>
+              Prazo
+              <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </label>
+          </div>
+          <label>
+            Participantes
+            <UserMultiSelect name="participant_ids" defaultValues={record.participants} />
+          </label>
+          <label>
+            Comentários
+            <textarea
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              rows={3}
+            />
+          </label>
+          <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+            <a className="secondary-button" href={`/api/work-orders/${record.id}/pdf`} target="_blank" rel="noopener noreferrer">
+              <FileText size={16} /> Exportar PDF
+            </a>
+            <button type="button" className="secondary-button" onClick={handleClone} disabled={cloning}>
+              <Copy size={16} /> {cloning ? "Duplicando…" : "Clonar"}
+            </button>
           </div>
           <footer>
             <button type="button" onClick={onClose}>Cancelar</button>

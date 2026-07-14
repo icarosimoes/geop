@@ -12,16 +12,15 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.domain.occurrences.service import STATUS_LABELS
+from app.domain.work_orders.service import STATUS_LABELS
 
 
-def generate_occurrence_pdf(
+def generate_work_order_pdf(
     *,
     company_name: str,
-    occurrence,
+    order,
     sector_name: str | None,
-    location_name: str | None,
-    owner_name: str | None,
+    assigned_name: str | None,
     participants: list[tuple[int, str]],
     timeline: list[dict],
 ) -> io.BytesIO:
@@ -36,7 +35,7 @@ def generate_occurrence_pdf(
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "OccTitle",
+        "WOTitle",
         parent=styles["Heading1"],
         fontSize=16,
         spaceAfter=6,
@@ -54,22 +53,21 @@ def generate_occurrence_pdf(
 
     elements.append(Paragraph(company_name, styles["Heading3"]))
     elements.append(Spacer(1, 0.3 * cm))
-    elements.append(Paragraph(occurrence.title, title_style))
+    elements.append(Paragraph(order.title, title_style))
     elements.append(Spacer(1, 0.3 * cm))
 
     meta = [
-        ["Status", STATUS_LABELS.get(occurrence.status, "—")],
+        ["Status", STATUS_LABELS.get(order.status, "—")],
         ["Setor", sector_name or "—"],
-        ["Local", location_name or "—"],
-        ["Responsável", owner_name or "—"],
-        ["Unidade", occurrence.unit or "—"],
+        ["Responsável", assigned_name or "—"],
+        ["Unidade", order.unit or "—"],
         [
             "Prazo",
-            occurrence.deadline.strftime("%d/%m/%Y") if occurrence.deadline else "—",
+            order.deadline.strftime("%d/%m/%Y") if order.deadline else "—",
         ],
         [
             "Criado em",
-            occurrence.created_at.strftime("%d/%m/%Y %H:%M") if occurrence.created_at else "—",
+            order.created_at.strftime("%d/%m/%Y %H:%M") if order.created_at else "—",
         ],
     ]
     t = Table(meta, colWidths=[4 * cm, 12 * cm])
@@ -86,9 +84,13 @@ def generate_occurrence_pdf(
     )
     elements.append(t)
 
-    if occurrence.description:
+    if order.description:
         elements.append(Paragraph("Descrição", h2))
-        elements.append(Paragraph(occurrence.description, body))
+        elements.append(Paragraph(order.description, body))
+
+    if order.comments:
+        elements.append(Paragraph("Comentários", h2))
+        elements.append(Paragraph(order.comments, body))
 
     if participants:
         elements.append(Paragraph("Participantes", h2))
@@ -101,7 +103,7 @@ def generate_occurrence_pdf(
             ts = entry.get("created_at", "")
             if isinstance(ts, datetime):
                 ts = ts.strftime("%d/%m/%Y %H:%M")
-            user = entry.get("user_name", "Sistema")
+            user = entry.get("user", "Sistema")
             etype = entry.get("event_type", "")
             msg = entry.get("message", "")
             if etype == "comment" and msg:
@@ -109,7 +111,7 @@ def generate_occurrence_pdf(
             elif etype == "create":
                 elements.append(
                     Paragraph(
-                        f"<b>{user}</b> ({ts}): criou a ocorrência",
+                        f"<b>{user}</b> ({ts}): criou a ordem de serviço",
                         body,
                     )
                 )

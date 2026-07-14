@@ -8,13 +8,6 @@ export default async function DispositivosPontoPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Ponto</p>
-            <h1>Dispositivos</h1>
-            <p>Cadastre os relógios de ponto Control iD e obtenha a URL de webhook de cada um.</p>
-          </div>
-        </header>
         <DeviceManager />
       </AppLayout>
     );

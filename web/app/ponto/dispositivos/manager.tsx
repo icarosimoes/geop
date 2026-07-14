@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import {
   createDeviceAction,
   deleteDeviceAction,
@@ -21,8 +21,10 @@ export function DeviceManager() {
   const [serial, setSerial] = useState("");
   const [locationId, setLocationId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -38,10 +40,19 @@ export function DeviceManager() {
     fetchRegistryOptions("locais").then(setLocations);
   }, []);
 
+  function closeModal() {
+    setShowForm(false);
+    setName("");
+    setSerial("");
+    setLocationId("");
+    setError("");
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
+    setError("");
     const result = await createDeviceAction({
       name: name.trim(),
       serial_number: serial.trim() || null,
@@ -49,14 +60,12 @@ export function DeviceManager() {
     });
     setSaving(false);
     if (result.ok) {
-      setName("");
-      setSerial("");
-      setLocationId("");
       setNewToken(String(result.data?.webhook_token ?? ""));
+      closeModal();
       showToast("Dispositivo criado.");
       reload();
     } else {
-      showToast(result.error ?? "Erro ao criar dispositivo.");
+      setError(result.error ?? "Erro ao criar dispositivo.");
     }
   }
 
@@ -72,119 +81,135 @@ export function DeviceManager() {
   }
 
   return (
-    <section className="module-panel">
-      <form
-        onSubmit={handleCreate}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--sp-3)",
-          padding: "var(--sp-4) var(--sp-5)",
-          borderBottom: "1px solid var(--field-border)",
-        }}
-      >
-        <div className="report-filter-field">
-          <label htmlFor="device_name">Nome do relógio</label>
-          <input
-            id="device_name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex.: Recepção"
-            required
-          />
+    <>
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Ponto</p>
+          <h1>Dispositivos</h1>
+          <p>Cadastre os relógios de ponto Control iD e obtenha a URL de webhook de cada um.</p>
         </div>
-        <div className="report-filter-group">
-          <div className="report-filter-field" style={{ flex: "1 1 200px" }}>
-            <label htmlFor="device_serial">Número de série</label>
-            <input
-              id="device_serial"
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              placeholder="Opcional"
-            />
-          </div>
-          <div className="report-filter-field" style={{ flex: "1 1 200px" }}>
-            <label htmlFor="device_location">Local</label>
-            <select id="device_location" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">Opcional</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="primary-button" type="submit" disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Plus size={16} /> {saving ? "Criando..." : "Adicionar"}
-          </button>
-        </div>
-      </form>
+        <button className="primary-button" onClick={() => setShowForm(true)}>
+          <Plus size={18} /> Novo dispositivo
+        </button>
+      </header>
 
-      {newToken && (
-        <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
-          <strong>Dispositivo criado.</strong> Configure no relógio a URL completa da API do
-          Registro (ex.: <code>https://api.SEU-DOMINIO.com.br</code>) seguida do caminho abaixo:
-          <div style={{ marginTop: 8 }}>
-            <code>{WEBHOOK_PATH(newToken)}</code>
+      <section className="module-panel">
+        {newToken && (
+          <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
+            <strong>Dispositivo criado.</strong> Configure no relógio a URL completa da API do
+            Registro (ex.: <code>https://api.SEU-DOMINIO.com.br</code>) seguida do caminho abaixo:
+            <div style={{ marginTop: 8 }}>
+              <code>{WEBHOOK_PATH(newToken)}</code>
+            </div>
+            <small className="field-hint">
+              Guarde o token — por segurança ele não é exibido novamente aqui além desta tela de
+              criação (mas continua visível na lista abaixo).
+            </small>
           </div>
-          <small className="field-hint">
-            Guarde o token — por segurança ele não é exibido novamente aqui além desta tela de
-            criação (mas continua visível na lista abaixo).
-          </small>
-        </div>
-      )}
+        )}
 
-      {loading ? (
-        <div className="module-state">Carregando dispositivos...</div>
-      ) : devices.length === 0 ? (
-        <div className="module-state">
-          <strong>Nenhum dispositivo cadastrado</strong>
-          <span>Adicione um relógio de ponto para começar a receber batidas.</span>
-        </div>
-      ) : (
-        <div className="module-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Modelo</th>
-                <th>Local</th>
-                <th>Token do webhook</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {devices.map((device) => (
-                <tr key={device.id}>
-                  <td>
-                    <strong>{device.name}</strong>
-                  </td>
-                  <td>{device.model}</td>
-                  <td>{device.location ?? "—"}</td>
-                  <td>
-                    <code>{device.webhook_token}</code>
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button onClick={() => handleDelete(device)} aria-label="Excluir">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div className="module-state">Carregando dispositivos...</div>
+        ) : devices.length === 0 ? (
+          <div className="module-state">
+            <strong>Nenhum dispositivo cadastrado</strong>
+            <span>Adicione um relógio de ponto para começar a receber batidas.</span>
+          </div>
+        ) : (
+          <div className="module-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Modelo</th>
+                  <th>Local</th>
+                  <th>Token do webhook</th>
+                  <th>Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {devices.map((device) => (
+                  <tr key={device.id}>
+                    <td>
+                      <strong>{device.name}</strong>
+                    </td>
+                    <td>{device.model}</td>
+                    <td>{device.location ?? "—"}</td>
+                    <td>
+                      <code>{device.webhook_token}</code>
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button onClick={() => handleDelete(device)} aria-label="Excluir">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <footer className="module-pagination">
+          <span>{devices.length} dispositivo(s)</span>
+        </footer>
+      </section>
+
+      {showForm && (
+        <div className="modal-layer" role="presentation" onClick={closeModal}>
+          <section className="record-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <span>Ponto</span>
+                <h2>Novo dispositivo</h2>
+              </div>
+              <button className="icon-button" onClick={closeModal}><X /></button>
+            </header>
+            <form onSubmit={handleCreate}>
+              {error && <div className="kanban-form-error">{error}</div>}
+              <label>Nome do relógio *
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex.: Recepção"
+                  required
+                  autoFocus
+                />
+              </label>
+              <div className="form-grid">
+                <label>Número de série
+                  <input
+                    value={serial}
+                    onChange={(e) => setSerial(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </label>
+                <label>Local
+                  <select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                    <option value="">Opcional</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <footer>
+                <button type="button" onClick={closeModal}>Cancelar</button>
+                <button type="submit" disabled={saving}>{saving ? "Criando…" : "Criar dispositivo"}</button>
+              </footer>
+            </form>
+          </section>
         </div>
       )}
-      <footer className="module-pagination">
-        <span>{devices.length} dispositivo(s)</span>
-      </footer>
+
       {toast && (
         <div className="module-toast" role="status">
           {toast}
         </div>
       )}
-    </section>
+    </>
   );
 }

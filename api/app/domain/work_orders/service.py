@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import NamedTuple
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,7 @@ from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
 from app.core.pagination import CursorPage, paginate_by_cursor
 from app.integrations.notifications import notify_record_event
-from app.models import User, WorkOrder
+from app.models import Sector, User, WorkOrder, WorkOrderParticipant
 from app.models.operations import WORK_ORDER_STATUSES
 
 
@@ -43,6 +44,7 @@ class WorkOrderRow(NamedTuple):
     order: WorkOrder
     assigned_name: str | None
     created_by_name: str | None
+    sector_name: str | None
 
 
 TRANSITIONS: dict[str, list[str]] = {
@@ -56,10 +58,34 @@ TRANSITIONS: dict[str, list[str]] = {
 STATUS_LABELS: dict[str, str] = {
     "aberta": "Aberta",
     "em_andamento": "Em andamento",
-    "aguardando_material": "Aguardando material",
+    "aguardando_material": "Aguardando",
     "concluida": "Concluída",
     "validada": "Validada",
 }
+
+
+async def _sync_participants(
+    session: AsyncSession, work_order_id: int, participant_ids: list[int]
+) -> None:
+    await session.execute(
+        sa_delete(WorkOrderParticipant).where(
+            WorkOrderParticipant.work_order_id == work_order_id
+        )
+    )
+    for uid in participant_ids:
+        session.add(WorkOrderParticipant(work_order_id=work_order_id, user_id=uid))
+
+
+async def _get_participants(session: AsyncSession, work_order_id: int) -> list[tuple[int, str]]:
+    rows = (
+        await session.execute(
+            select(WorkOrderParticipant.user_id, User.name)
+            .join(User, User.id == WorkOrderParticipant.user_id)
+            .where(WorkOrderParticipant.work_order_id == work_order_id)
+            .order_by(User.name)
+        )
+    ).all()
+    return [(uid, name) for uid, name in rows]
 
 
 async def list_orders(
@@ -99,9 +125,11 @@ async def list_orders(
                 WorkOrder,
                 assigned.c.name.label("assigned_name"),
                 created_by.c.name.label("created_by_name"),
+                Sector.name.label("sector_name"),
             )
             .outerjoin(assigned, assigned.c.id == WorkOrder.assigned_user_id)
             .outerjoin(created_by, created_by.c.id == WorkOrder.created_by_user_id)
+            .outerjoin(Sector, Sector.id == WorkOrder.sector_id)
             .where(*filters)
             .order_by(WorkOrder.updated_at.desc())
             .offset((page - 1) * page_size)
@@ -137,9 +165,11 @@ async def list_orders_cursor(
             WorkOrder,
             assigned.c.name.label("assigned_name"),
             created_by.c.name.label("created_by_name"),
+            Sector.name.label("sector_name"),
         )
         .outerjoin(assigned, assigned.c.id == WorkOrder.assigned_user_id)
         .outerjoin(created_by, created_by.c.id == WorkOrder.created_by_user_id)
+        .outerjoin(Sector, Sector.id == WorkOrder.sector_id)
         .where(*filters)
     )
     return await paginate_by_cursor(
@@ -151,7 +181,7 @@ async def get_order(
     session: AsyncSession,
     company_id: int,
     order_id: int,
-) -> WorkOrderRow | None:
+) -> tuple | None:
     assigned = User.__table__.alias("assigned")
     created_by = User.__table__.alias("created_by")
 
@@ -161,9 +191,11 @@ async def get_order(
                 WorkOrder,
                 assigned.c.name.label("assigned_name"),
                 created_by.c.name.label("created_by_name"),
+                Sector.name.label("sector_name"),
             )
             .outerjoin(assigned, assigned.c.id == WorkOrder.assigned_user_id)
             .outerjoin(created_by, created_by.c.id == WorkOrder.created_by_user_id)
+            .outerjoin(Sector, Sector.id == WorkOrder.sector_id)
             .where(
                 WorkOrder.id == order_id,
                 WorkOrder.company_id == company_id,
@@ -171,7 +203,10 @@ async def get_order(
             )
         )
     ).first()
-    return row
+    if row is None:
+        return None
+    participants = await _get_participants(session, row[0].id)
+    return (*row, participants)
 
 
 async def create_order(
@@ -183,15 +218,19 @@ async def create_order(
     *,
     title: str,
     description: str | None,
+    comments: str | None = None,
+    unit: str | None = None,
+    deadline=None,
     priority: str | None,
     category: str | None,
     location_id: int | None,
-    occurrence_id: int | None,
+    sector_id: int | None = None,
     maintenance_id: int | None,
     assigned_user_id: int | None,
     notify_user_ids: list[int] | None,
     sla_hours: int | None,
-) -> WorkOrderRow | None:
+    participant_ids: list[int] | None = None,
+) -> tuple | None:
     sla_deadline = None
     if sla_hours:
         sla_deadline = datetime.now() + timedelta(hours=sla_hours)
@@ -200,11 +239,14 @@ async def create_order(
         company_id=company_id,
         title=title,
         description=description,
+        comments=comments,
+        unit=unit,
+        deadline=deadline,
         status="aberta",
         priority=priority,
         category=category,
         location_id=location_id,
-        occurrence_id=occurrence_id,
+        sector_id=sector_id,
         maintenance_id=maintenance_id,
         assigned_user_id=assigned_user_id,
         created_by_user_id=user_id,
@@ -214,6 +256,8 @@ async def create_order(
     )
     session.add(rec)
     await session.flush()
+    if participant_ids:
+        await _sync_participants(session, rec.id, participant_ids)
     await record_event(
         session,
         company_id=company_id,
@@ -249,7 +293,7 @@ async def update_order(
     user_email: str,
     order_id: int,
     updates: dict,
-) -> WorkOrderRow | None:
+) -> tuple | None:
     rec = await session.scalar(
         select(WorkOrder).where(
             WorkOrder.id == order_id,
@@ -260,9 +304,14 @@ async def update_order(
     if rec is None:
         return None
 
+    participant_ids = updates.pop("participant_ids", None)
+
     before = {k: str(getattr(rec, k)) for k in updates if k != "notify_user_ids"}
     for field, value in updates.items():
         setattr(rec, field, value)
+
+    if participant_ids is not None:
+        await _sync_participants(session, rec.id, participant_ids)
 
     diff = compute_diff(
         before,
@@ -309,7 +358,7 @@ async def transition_order(
     order_id: int,
     target_status: str,
     notes: str | None = None,
-) -> WorkOrderRow | None:
+) -> tuple | None:
     if target_status not in WORK_ORDER_STATUSES:
         raise ValueError(f"Status inválido: {target_status}")
 
@@ -424,3 +473,77 @@ async def count_by_status(
         )
     ).all()
     return {status: count for status, count in rows}
+
+
+async def export_orders(
+    session: AsyncSession,
+    company_id: int,
+    search: str | None = None,
+) -> list:
+    from app.core.export import MAX_EXPORT_ROWS
+
+    assigned = User.__table__.alias("assigned")
+
+    filters = [WorkOrder.company_id == company_id, WorkOrder.deleted_at.is_(None)]
+    if search:
+        pattern = f"%{search.strip()}%"
+        filters.append(or_(WorkOrder.title.ilike(pattern), WorkOrder.description.ilike(pattern)))
+    rows = (
+        await session.execute(
+            select(
+                WorkOrder,
+                Sector.name.label("sector_name"),
+                assigned.c.name.label("assigned_name"),
+            )
+            .outerjoin(Sector, Sector.id == WorkOrder.sector_id)
+            .outerjoin(assigned, assigned.c.id == WorkOrder.assigned_user_id)
+            .where(*filters)
+            .order_by(WorkOrder.updated_at.desc(), WorkOrder.id.desc())
+            .limit(MAX_EXPORT_ROWS)
+        )
+    ).all()
+    return rows
+
+
+async def clone_order(
+    session: AsyncSession,
+    company_id: int,
+    user_id: int,
+    user_name: str,
+    user_email: str,
+    order_id: int,
+) -> tuple | None:
+    original = await session.scalar(
+        select(WorkOrder).where(
+            WorkOrder.id == order_id,
+            WorkOrder.company_id == company_id,
+            WorkOrder.deleted_at.is_(None),
+        )
+    )
+    if original is None:
+        return None
+
+    participants = await _get_participants(session, original.id)
+    p_ids = [uid for uid, _ in participants]
+
+    return await create_order(
+        session,
+        company_id,
+        user_id,
+        user_name,
+        user_email,
+        title=f"Cópia de {original.title}",
+        description=original.description,
+        comments=original.comments,
+        unit=original.unit,
+        deadline=original.deadline,
+        priority=original.priority,
+        category=original.category,
+        location_id=original.location_id,
+        sector_id=original.sector_id,
+        maintenance_id=original.maintenance_id,
+        assigned_user_id=original.assigned_user_id,
+        notify_user_ids=original.notify_user_ids,
+        sla_hours=original.sla_hours,
+        participant_ids=p_ids,
+    )

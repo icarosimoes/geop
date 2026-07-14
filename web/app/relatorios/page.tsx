@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 type ReportTrendDay = { date: string; count: number };
 
-export type OccurrenceReport = {
+export type WorkOrderReport = {
   total: number;
   by_status: Record<string, number>;
   completion_rate_pct: number | null;
@@ -40,12 +40,12 @@ export default async function RelatoriosPage({
 
   try {
     const user = await currentTenantUser();
-    let occurrences: OccurrenceReport | null = null;
+    let workOrders: WorkOrderReport | null = null;
     let fiscalSla: FiscalRequestSlaReport | null = null;
     let forbidden = false;
     try {
-      [occurrences, fiscalSla] = await Promise.all([
-        tenantFetch<OccurrenceReport>(`/reports/occurrences${suffix}`),
+      [workOrders, fiscalSla] = await Promise.all([
+        tenantFetch<WorkOrderReport>(`/reports/work-orders${suffix}`),
         tenantFetch<FiscalRequestSlaReport>(`/reports/fiscal-requests-sla${suffix}`),
       ]);
     } catch (error) {
@@ -57,7 +57,7 @@ export default async function RelatoriosPage({
         <ReportsShell
           dateFrom={dateFrom}
           dateTo={dateTo}
-          occurrences={occurrences}
+          workOrders={workOrders}
           fiscalSla={fiscalSla}
           forbidden={forbidden}
         />

@@ -12,14 +12,14 @@ from app.models import (
     FiscalRequest,
     Meeting,
     ModuleRecord,
-    Occurrence,
     Procedure,
     ShiftReport,
     User,
+    WorkOrder,
 )
 
 VALID_ENTITY_TYPES = {
-    "occurrence",
+    "work_order",
     "fiscal_request",
     "procedure",
     "meeting",
@@ -32,7 +32,7 @@ VALID_ENTITY_TYPES = {
 }
 
 ENTITY_MODEL_MAP: dict[str, Any] = {
-    "occurrence": Occurrence,
+    "work_order": WorkOrder,
     "fiscal_request": FiscalRequest,
     "procedure": Procedure,
     "meeting": Meeting,
@@ -210,16 +210,16 @@ async def add_comment(
     )
 
     module_labels = {
-        "occurrence": "Ocorrências",
+        "work_order": "Ordens de Serviço",
         "fiscal_request": "Solicitações Fiscais",
     }
     module_label = module_labels.get(entity_type, entity_type)
 
-    if entity_type == "occurrence":
+    if entity_type == "work_order":
         record = await session.scalar(
-            select(Occurrence).where(
-                Occurrence.id == entity_id,
-                Occurrence.company_id == company_id,
+            select(WorkOrder).where(
+                WorkOrder.id == entity_id,
+                WorkOrder.company_id == company_id,
             )
         )
         if record:
@@ -231,7 +231,7 @@ async def add_comment(
                 event="comment",
                 title=record.title,
                 module=module_label,
-                owner_user_id=record.owner_user_id,
+                owner_user_id=record.assigned_user_id,
                 created_by_user_id=record.created_by_user_id,
                 notify_user_ids=record.notify_user_ids,
                 detail=message,

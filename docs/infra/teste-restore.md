@@ -90,7 +90,7 @@ SELECT 'companies' AS tabela, COUNT(*) AS total FROM companies
 UNION ALL
 SELECT 'users', COUNT(*) FROM users WHERE deleted_at IS NULL
 UNION ALL
-SELECT 'occurrences', COUNT(*) FROM occurrences WHERE deleted_at IS NULL
+SELECT 'work_orders', COUNT(*) FROM work_orders WHERE deleted_at IS NULL
 UNION ALL
 SELECT 'fiscal_requests', COUNT(*) FROM fiscal_requests WHERE deleted_at IS NULL
 UNION ALL
@@ -143,8 +143,8 @@ docker exec -e PGPASSWORD=teste-restore-temp restore-test-db psql -U registro -d
 SELECT 'users sem company' AS verificacao, COUNT(*) AS total
 FROM users WHERE company_id IS NULL AND deleted_at IS NULL
 UNION ALL
-SELECT 'occurrences sem company', COUNT(*)
-FROM occurrences WHERE company_id IS NULL AND deleted_at IS NULL;
+SELECT 'work_orders sem company', COUNT(*)
+FROM work_orders WHERE company_id IS NULL AND deleted_at IS NULL;
 "
 ```
 
@@ -186,7 +186,7 @@ docker ps -a | grep restore-test || echo "Ambiente de teste removido com sucesso
 |---|---|---|
 | 1 | Dump lido sem erro de integridade (`pg_restore --list`) | OK / FALHA |
 | 2 | Restore executou sem erros fatais | OK / FALHA |
-| 3 | Tabelas principais tem registros (companies, users, occurrences) | OK / FALHA |
+| 3 | Tabelas principais tem registros (companies, users, work_orders) | OK / FALHA |
 | 4 | Migration atualizada (`alembic_version` presente) | OK / FALHA |
 | 5 | Usuarios admin existem e tem `password_hash` | OK / FALHA |
 | 6 | Nao ha registros orfaos (sem `company_id`) | OK / FALHA |

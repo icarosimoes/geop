@@ -134,20 +134,20 @@ class TestAuthNegative:
 
 
 # ---------------------------------------------------------------------------
-# Occurrences
+# Work Orders
 # ---------------------------------------------------------------------------
 
 
-class TestOccurrencesNegative:
+class TestWorkOrdersNegative:
     @pytest.mark.asyncio
     async def test_create_missing_title(self, client: AsyncClient):
-        r = await client.post(f"{API}/occurrences", json={}, headers=auth_header(TENANT_A))
+        r = await client.post(f"{API}/work-orders", json={}, headers=auth_header(TENANT_A))
         assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_update_nonexistent(self, client: AsyncClient):
         r = await client.patch(
-            f"{API}/occurrences/999999",
+            f"{API}/work-orders/999999",
             json={"title": "nope"},
             headers=auth_header(TENANT_A),
         )
@@ -155,49 +155,49 @@ class TestOccurrencesNegative:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent(self, client: AsyncClient):
-        r = await client.delete(f"{API}/occurrences/999999", headers=auth_header(TENANT_A))
+        r = await client.delete(f"{API}/work-orders/999999", headers=auth_header(TENANT_A))
         assert r.status_code == 404
 
     @pytest.mark.asyncio
     async def test_clone_nonexistent(self, client: AsyncClient):
-        r = await client.post(f"{API}/occurrences/999999/clone", headers=auth_header(TENANT_A))
+        r = await client.post(f"{API}/work-orders/999999/clone", headers=auth_header(TENANT_A))
         assert r.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_nonexistent(self, client: AsyncClient):
-        r = await client.get(f"{API}/occurrences/999999", headers=auth_header(TENANT_A))
+        r = await client.get(f"{API}/work-orders/999999", headers=auth_header(TENANT_A))
         assert r.status_code == 404
 
     @pytest.mark.asyncio
     async def test_list_page_zero(self, client: AsyncClient):
-        r = await client.get(f"{API}/occurrences?page=0", headers=auth_header(TENANT_A))
+        r = await client.get(f"{API}/work-orders?page=0", headers=auth_header(TENANT_A))
         assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_list_page_negative(self, client: AsyncClient):
-        r = await client.get(f"{API}/occurrences?page=-1", headers=auth_header(TENANT_A))
+        r = await client.get(f"{API}/work-orders?page=-1", headers=auth_header(TENANT_A))
         assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_list_page_size_too_large(self, client: AsyncClient):
-        r = await client.get(f"{API}/occurrences?page_size=101", headers=auth_header(TENANT_A))
+        r = await client.get(f"{API}/work-orders?page_size=101", headers=auth_header(TENANT_A))
         assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_list_page_size_zero(self, client: AsyncClient):
-        r = await client.get(f"{API}/occurrences?page_size=0", headers=auth_header(TENANT_A))
+        r = await client.get(f"{API}/work-orders?page_size=0", headers=auth_header(TENANT_A))
         assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_create_without_auth(self, client: AsyncClient):
-        r = await client.post(f"{API}/occurrences", json={"title": "no auth"})
+        r = await client.post(f"{API}/work-orders", json={"title": "no auth"})
         assert r.status_code == 401
 
     @pytest.mark.asyncio
     async def test_create_wrong_permission(self, client: AsyncClient):
-        token = make_token(TENANT_A, user_id=1, permissions=["occurrence.view"])
+        token = make_token(TENANT_A, user_id=1, permissions=["work_order.view"])
         r = await client.post(
-            f"{API}/occurrences",
+            f"{API}/work-orders",
             json={"title": "forbidden"},
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -205,9 +205,9 @@ class TestOccurrencesNegative:
 
     @pytest.mark.asyncio
     async def test_delete_wrong_permission(self, client: AsyncClient):
-        token = make_token(TENANT_A, user_id=1, permissions=["occurrence.view"])
+        token = make_token(TENANT_A, user_id=1, permissions=["work_order.view"])
         r = await client.delete(
-            f"{API}/occurrences/1",
+            f"{API}/work-orders/1",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 403
@@ -466,7 +466,7 @@ class TestAttachmentsNegative:
     async def test_upload_missing_entity_id(self, client: AsyncClient):
         """entity_id is required; omitting it should 422."""
         r = await client.post(
-            f"{API}/attachments?entity_type=occurrence",
+            f"{API}/attachments?entity_type=work_order",
             files={"file": ("test.txt", b"hello", "text/plain")},
             headers=auth_header(TENANT_A),
         )
@@ -476,7 +476,7 @@ class TestAttachmentsNegative:
     async def test_upload_entity_id_zero(self, client: AsyncClient):
         """entity_id must be ge=1."""
         r = await client.post(
-            f"{API}/attachments?entity_type=occurrence&entity_id=0",
+            f"{API}/attachments?entity_type=work_order&entity_id=0",
             files={"file": ("test.txt", b"hello", "text/plain")},
             headers=auth_header(TENANT_A),
         )
@@ -495,7 +495,7 @@ class TestAttachmentsNegative:
     @pytest.mark.asyncio
     async def test_upload_without_auth(self, client: AsyncClient):
         r = await client.post(
-            f"{API}/attachments?entity_type=occurrence&entity_id=1",
+            f"{API}/attachments?entity_type=work_order&entity_id=1",
             files={"file": ("test.txt", b"hello", "text/plain")},
         )
         assert r.status_code == 401
@@ -643,7 +643,7 @@ class TestGeneralNegative:
             algorithm="HS256",
         )
         r = await client.get(
-            f"{API}/occurrences",
+            f"{API}/work-orders",
             headers={"Authorization": f"Bearer {expired}"},
         )
         assert r.status_code == 401
@@ -651,7 +651,7 @@ class TestGeneralNegative:
     @pytest.mark.asyncio
     async def test_bearer_with_empty_token(self, client: AsyncClient):
         r = await client.get(
-            f"{API}/occurrences",
+            f"{API}/work-orders",
             headers={"Authorization": "Bearer "},
         )
         assert r.status_code in (401, 403, 422)
@@ -659,7 +659,7 @@ class TestGeneralNegative:
     @pytest.mark.asyncio
     async def test_wrong_auth_scheme(self, client: AsyncClient):
         r = await client.get(
-            f"{API}/occurrences",
+            f"{API}/work-orders",
             headers={"Authorization": "Basic dXNlcjpwYXNz"},
         )
         assert r.status_code == 401
@@ -680,7 +680,7 @@ class TestGeneralNegative:
             algorithm="HS256",
         )
         r = await client.get(
-            f"{API}/occurrences",
+            f"{API}/work-orders",
             headers={"Authorization": f"Bearer {bad_token}"},
         )
         assert r.status_code == 401

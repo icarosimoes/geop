@@ -7,12 +7,11 @@
 | `/` | entrada | redireciona conforme cookie tenant | sessão server-side |
 | `/login` | autenticação tenant | operacional | API `/auth/login` |
 | `/dashboard` | dashboard autenticado | operacional | métricas reais via API `/dashboard/metrics` |
-| `/ocorrencias` | lista e CRUD | CRUD via API, campo Local via select de cadastros | API `occurrences` + `registries` isolada por tenant |
 | `/reunioes` | lista e CRUD | CRUD via API + mutações server-side | API `meetings` (tabela dedicada) isolada por tenant |
 | `/relatorios-turno` | lista e CRUD + pendências inline | CRUD via API + seção HandoffSection integrada | API `shift-reports` + `handoffs` isolada por tenant |
 | `/inspecoes` | tela dedicada com abas | Inspeções: CRUD com checklist 30 itens + payload completo. Checklists: CRUD de templates com itens | API `modules/inspecoes` + `checklists/templates` |
 | `/solicitacoes-fiscais` | lista, formulário condicional, SLA, anexos e tratativa | CRUD via API + mutações server-side | API `fiscal_requests` isolada por tenant |
-| `/ordens-servico` | Kanban com drag-and-drop | CRUD + transições + categorias via select | API `work-orders` + `work-orders/categories` isolada por tenant |
+| `/ordens-servico` | Kanban com drag-and-drop, toggle para visão em Lista | CRUD + transições + categorias via select + setor/unidade/prazo/comentários/participantes + export XLSX/PDF + clone. Absorveu `/ocorrencias` em 2026-07-14 (rota removida) | API `work-orders` + `work-orders/categories` + `work-orders/export` isolada por tenant |
 | `/preventivas` | lista e CRUD | CRUD via API + geração automática de OS | API `preventive-plans` isolada por tenant |
 | `/mural` | cartões e CRUD | CRUD via API + mutações server-side | API `bulletin` (tabela dedicada) isolada por tenant |
 | `/cadastros/setores` | CRUD simples | registries categoria Setor | API `registries` |
@@ -56,7 +55,6 @@ Todas as rotas operacionais estão integradas com a API. A tabela abaixo lista o
 | Rota | Endpoint API |
 | --- | --- |
 | `/dashboard` | `GET /dashboard/metrics` |
-| `/ocorrencias` | `GET/POST/PATCH/DELETE /occurrences` |
 | `/solicitacoes-fiscais` | `GET/POST/PATCH/DELETE /fiscal-requests` |
 | `/usuarios` | `GET/POST/PATCH/DELETE /users` + `POST /users/invite` + `POST /users/{id}/avatar` + `GET /roles` + `GET /registries?category=setor` |
 | `/perfis` | `GET/POST/PATCH/DELETE /roles` + `GET /roles/permissions` |
@@ -69,7 +67,7 @@ Todas as rotas operacionais estão integradas com a API. A tabela abaixo lista o
 | `/diarios-obra` | `GET/POST/PATCH/DELETE /modules/diarios-obra` |
 | `/manutencao` | `GET/POST/PATCH/DELETE /modules/manutencao` |
 | `/mural` | `GET/POST/PATCH/DELETE /bulletin` |
-| `/ordens-servico` | `GET/POST/PATCH/DELETE /work-orders` + `POST /work-orders/{id}/transition/{status}` |
+| `/ordens-servico` | `GET/POST/PATCH/DELETE /work-orders` + `POST /work-orders/{id}/transition/{status}` + `GET /work-orders/export` + `POST /work-orders/{id}/clone` + `GET /work-orders/{id}/pdf` |
 | `/preventivas` | `GET/POST/PATCH/DELETE /preventive-plans` + `POST /preventive-plans/generate` |
 | `/checklists` | `GET/POST/PATCH/DELETE /checklists/templates` + `GET /checklists/executions` + toggle/complete/generate |
 | `/estoque` | `GET/POST/PATCH/DELETE /stock/items` + `POST/GET /stock/movements` |

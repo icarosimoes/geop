@@ -41,7 +41,7 @@ async def seed() -> None:
             code="professional",
             name="Profissional",
             price_cents=14990,
-            features={"occurrences": True, "inspections": True, "reports": True},
+            features={"work_orders": True, "inspections": True, "reports": True},
             limits={"max_users": 25},
             active=True,
             public=True,

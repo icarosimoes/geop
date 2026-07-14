@@ -3,7 +3,7 @@
 import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
-  FileText, Home, Link2, MapPin, Menu, Package, PanelLeftClose, PanelLeftOpen,
+  FileText, Home, Link2, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
   Receipt, Settings, ShieldCheck, Timer, Truck, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -16,7 +16,6 @@ import { NotificationPanel, NotificationBadge } from "./notification-panel";
 
 const navOperation = [
   { slug: "dashboard", label: "Dashboard", icon: Home, href: "/dashboard" },
-  { slug: "ocorrencias", label: "Ocorrências", icon: FileClock, href: "/ocorrencias" },
   { slug: "ordens-servico", label: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
   { slug: "reunioes", label: "Reuniões", icon: Users, href: "/reunioes" },
   { slug: "relatorios-turno", label: "Relatórios de turno", icon: FileText, href: "/relatorios-turno" },

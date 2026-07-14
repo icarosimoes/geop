@@ -223,7 +223,7 @@ async def brevo_test_send(
 # ── Destinatários de notificação por módulo ──
 
 VALID_MODULES = [
-    "occurrences",
+    "work_orders",
     "fiscal_requests",
     "meetings",
     "shift_reports",

@@ -47,7 +47,6 @@ class MovementCreate(BaseModel):
     quantity: int
     reason: str | None = None
     work_order_id: int | None = None
-    occurrence_id: int | None = None
 
 
 class MovementOut(BaseModel):
@@ -58,7 +57,6 @@ class MovementOut(BaseModel):
     quantity: int
     reason: str | None
     work_order_id: int | None
-    occurrence_id: int | None
     user_id: int
     user_name: str | None = None
     created_at: datetime | None

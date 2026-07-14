@@ -20,11 +20,11 @@
 | Inspeções/Obra | check suites, inspection suites, vistorias V2, auditorias, diário de obra | tabelas dedicadas com RLS |
 | Reuniões | tabela dedicada com participantes, pautas e ata PDF | `meetings` + filhas |
 | Relatórios de turno | tabela dedicada com filtro por data e turno | `shift_reports` |
-| Ordens de serviço | CRUD + workflow de 5 estados + Kanban com drag-and-drop | `work_orders` com RLS |
+| Ordens de serviço | CRUD + workflow de 5 estados + Kanban com drag-and-drop e toggle para visão em Lista. Absorveu "Ocorrências" em 2026-07-14 (participantes, export XLSX/PDF, clone, setor/unidade/prazo/comentários) | `work_orders` com RLS |
 | Manutenção preventiva | planos recorrentes (daily→annual) com geração automática de OS | `preventive_plans` |
 | Checklists recorrentes | templates com itens, execuções automáticas, toggle individual, conclusão | `checklist_templates` + `checklist_executions` |
-| Dashboard KPIs | indicadores avançados de OS, ocorrências e fiscais + tendência 7 dias | `/dashboard/metrics` expandido |
-| Estoque e materiais | itens com entrada/saída/ajuste, vínculo com OS e ocorrências, alerta mínimo | `stock_items` + `stock_movements` |
+| Dashboard KPIs | indicadores avançados de OS e fiscais + tendência 7 dias | `/dashboard/metrics` expandido |
+| Estoque e materiais | itens com entrada/saída/ajuste, vínculo com OS, alerta mínimo | `stock_items` + `stock_movements` |
 | Pendências de turno | handoff estruturado com leitura e resolução, direcionável por turno/data | `shift_handoffs` |
 | Ponto eletrônico (relógio físico) | Control iD via webhook + agente Go de ponte local (bridge LAN→nuvem) | `timeclock` + `agent/` |
 | Portal do Colaborador (PWA) | login por PIN (token isolado de `User`), bater ponto com geofencing, escala, contracheque | `timeclock/mobile` + `colaborador/` |

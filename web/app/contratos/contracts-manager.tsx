@@ -502,7 +502,7 @@ export function ContractsManager({
       {/* Create / edit modal */}
       {modalMode === "form" && (
         <div className="modal-layer" role="presentation" onClick={closeModal}>
-          <section className="record-modal" role="dialog" aria-modal="true" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+          <section className="record-modal contract-form-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <header>
               <div>
                 <span>Gestão</span>
@@ -510,13 +510,15 @@ export function ContractsManager({
               </div>
               <button className="icon-button" onClick={closeModal}><X /></button>
             </header>
-            <ContractForm
-              initial={selectedContract}
-              suppliers={supplierOptions}
-              costCenters={costCenterOptions}
-              onSave={selectedContract ? handleUpdateContract : handleCreateContract}
-              onCancel={closeModal}
-            />
+            <div className="contract-modal-scroll">
+              <ContractForm
+                initial={selectedContract}
+                suppliers={supplierOptions}
+                costCenters={costCenterOptions}
+                onSave={selectedContract ? handleUpdateContract : handleCreateContract}
+                onCancel={closeModal}
+              />
+            </div>
           </section>
         </div>
       )}
@@ -725,6 +727,17 @@ export function ContractsManager({
         .checkbox-row { display: flex !important; flex-direction: row !important; align-items: center; gap: var(--sp-2); }
         .checkbox-row input { width: auto !important; min-height: 0 !important; }
         .record-modal.has-timeline label > span { font-size: var(--font-base); font-weight: 400; color: var(--ink); }
+
+        .record-modal.contract-form-modal {
+          width: min(880px, 96vw);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .contract-modal-scroll {
+          overflow-y: auto;
+          border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+        }
       `}</style>
     </>
   );

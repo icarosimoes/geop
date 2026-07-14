@@ -31,7 +31,6 @@ type Ticket = {
 type TrendDay = {
   date: string;
   work_orders: number;
-  occurrences: number;
   fiscal_requests: number;
 };
 
@@ -47,13 +46,6 @@ type WorkOrderKpis = {
   completed_week: number;
 };
 
-type OccurrenceKpis = {
-  by_status: Record<string, number>;
-  completion_rate_pct: number | null;
-  by_sector: Record<string, number>;
-  overdue: number;
-};
-
 type FiscalRequestKpis = {
   by_status: Record<string, number>;
   by_type: Record<string, number>;
@@ -63,7 +55,6 @@ type FiscalRequestKpis = {
 
 type DashboardKpis = {
   work_orders: WorkOrderKpis;
-  occurrences: OccurrenceKpis;
   fiscal_requests: FiscalRequestKpis;
   trend: TrendDay[];
 };
@@ -154,7 +145,7 @@ function BarChart({ data, max, color = "blue" }: { data: Record<string, number>;
 
 function TrendChart({ trend }: { trend: TrendDay[] }) {
   const maxVal = Math.max(
-    ...trend.flatMap((d) => [d.work_orders, d.occurrences, d.fiscal_requests]),
+    ...trend.flatMap((d) => [d.work_orders, d.fiscal_requests]),
     1,
   );
   const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -165,7 +156,6 @@ function TrendChart({ trend }: { trend: TrendDay[] }) {
         <h3>Últimos 7 dias</h3>
         <div className="kpi-trend-legend">
           <span><i style={{ background: "var(--blue)" }} /> OS</span>
-          <span><i style={{ background: "var(--orange)" }} /> Ocorrências</span>
           <span><i style={{ background: "var(--green)" }} /> Fiscais</span>
         </div>
       </div>
@@ -173,7 +163,6 @@ function TrendChart({ trend }: { trend: TrendDay[] }) {
         {trend.map((day) => (
           <div key={day.date} className="kpi-trend-day">
             <div className="kpi-trend-bar blue" style={{ height: `${(day.work_orders / maxVal) * 100}%` }} />
-            <div className="kpi-trend-bar orange" style={{ height: `${(day.occurrences / maxVal) * 100}%` }} />
             <div className="kpi-trend-bar green" style={{ height: `${(day.fiscal_requests / maxVal) * 100}%` }} />
           </div>
         ))}
@@ -205,7 +194,7 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
     return metrics.recent.map((item) => ({
       id: item.id,
       title: item.title,
-      module: item.module || "Ocorrências",
+      module: item.module || "Ordens de Serviço",
       area: item.area,
       owner: item.owner,
       status: item.status as TicketStatus,
@@ -239,11 +228,11 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
           <h1>{greeting}, {firstName}</h1>
           <p>Acompanhe o que precisa de atenção na operação.</p>
         </div>
-        <Link href="/ocorrencias?new=1" className="primary-button"><Plus size={18} /> Nova ocorrência</Link>
+        <Link href="/ordens-servico?new=1" className="primary-button"><Plus size={18} /> Nova OS</Link>
       </div>
 
       <section className="metrics-grid" aria-label="Indicadores principais">
-        <article className="metric-card accent-blue"><span>Ocorrências abertas</span><strong>{openOccurrences}</strong><small>{myOccurrences} aguardam sua análise</small><FileClock /></article>
+        <article className="metric-card accent-blue"><span>OS abertas</span><strong>{openOccurrences}</strong><small>{myOccurrences} aguardam sua análise</small><FileClock /></article>
         <article className="metric-card accent-orange"><span>Solicitações fiscais</span><strong>{openFiscal}</strong><small>pendentes de resolução</small><Receipt /></article>
         <article className="metric-card accent-green"><span>Concluídos no mês</span><strong>{completedMonth}</strong><small>ocorrências finalizadas</small><ShieldCheck /></article>
         <article className="metric-card accent-purple"><span>Equipe ativa</span><strong>{activeUsers}</strong><small>{activeSectors} setores em operação</small><Users /></article>
@@ -279,31 +268,6 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
                 )}
                 color="blue"
               />
-            </div>
-
-            <div className="kpi-panel">
-              <h3>Ocorrências</h3>
-              <div className="kpi-stat-grid">
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Abertas</span>
-                  <span className="kpi-stat-value accent-blue">{(kpis.occurrences.by_status.em_andamento ?? 0) + (kpis.occurrences.by_status.aguardando ?? 0)}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Atrasadas</span>
-                  <span className={`kpi-stat-value ${kpis.occurrences.overdue > 0 ? "accent-red" : "accent-green"}`}>{kpis.occurrences.overdue}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Taxa conclusão</span>
-                  <span className={`kpi-stat-value ${(kpis.occurrences.completion_rate_pct ?? 0) >= 70 ? "accent-green" : "accent-orange"}`}>{kpis.occurrences.completion_rate_pct != null ? `${kpis.occurrences.completion_rate_pct}%` : "—"}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Concluídas</span>
-                  <span className="kpi-stat-value accent-green">{kpis.occurrences.by_status.concluido ?? 0}</span>
-                </div>
-              </div>
-              {Object.keys(kpis.occurrences.by_sector).length > 0 && (
-                <BarChart data={kpis.occurrences.by_sector} color="orange" />
-              )}
             </div>
 
             <div className="kpi-panel">
@@ -344,7 +308,7 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
         <section className="panel activity-panel">
           <div className="panel-heading">
             <div><h2>Atividades recentes</h2><p>Itens que exigem acompanhamento</p></div>
-            <Link href="/ocorrencias" className="secondary-button">Ver todas <ChevronRight size={16} /></Link>
+            <Link href="/ordens-servico" className="secondary-button">Ver todas <ChevronRight size={16} /></Link>
           </div>
           <div className="table-tools">
             <div className="segmented"><button className={scope === "all" ? "selected" : ""} onClick={() => setScope("all")}>Todas</button><button className={scope === "mine" ? "selected" : ""} onClick={() => setScope("mine")}>Minhas</button><button className={scope === "pending" ? "selected" : ""} onClick={() => setScope("pending")}>Pendentes</button></div>
@@ -370,7 +334,7 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
           <section className="panel progress-panel">
             <div className="panel-heading"><div><h2>Resumo</h2><p>{openOccurrences + openFiscal} itens abertos</p></div></div>
             <div className="summary-stats">
-              <div><span>Ocorrências</span><strong>{openOccurrences}</strong></div>
+              <div><span>OS abertas</span><strong>{openOccurrences}</strong></div>
               <div><span>Solicitações fiscais</span><strong>{openFiscal}</strong></div>
               <div><span>Concluídos (mês)</span><strong>{completedMonth}</strong></div>
               {kpis && <>
@@ -386,7 +350,7 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
         </aside>
       </div>
 
-      {selectedTicket ? <><button className="panel-backdrop" aria-label="Fechar detalhes" onClick={() => setSelectedTicket(null)}/><aside className="record-drawer"><header><div><span>Ocorrência #{selectedTicket.id}</span><h2>{selectedTicket.title}</h2></div><button className="icon-button" onClick={() => setSelectedTicket(null)}><X/></button></header><dl><div><dt>Status</dt><dd><span className={statusClass[selectedTicket.status] ?? "status status-progress"}>{selectedTicket.status}</span></dd></div><div><dt>Área</dt><dd>{selectedTicket.area}</dd></div><div><dt>Responsável</dt><dd>{selectedTicket.owner}</dd></div><div><dt>Atualização</dt><dd>{selectedTicket.updatedAt}</dd></div></dl><footer><Link href="/ocorrencias" className="primary-button">Abrir no módulo</Link></footer></aside></> : null}
+      {selectedTicket ? <><button className="panel-backdrop" aria-label="Fechar detalhes" onClick={() => setSelectedTicket(null)}/><aside className="record-drawer"><header><div><span>Item #{selectedTicket.id}</span><h2>{selectedTicket.title}</h2></div><button className="icon-button" onClick={() => setSelectedTicket(null)}><X/></button></header><dl><div><dt>Status</dt><dd><span className={statusClass[selectedTicket.status] ?? "status status-progress"}>{selectedTicket.status}</span></dd></div><div><dt>Área</dt><dd>{selectedTicket.area}</dd></div><div><dt>Responsável</dt><dd>{selectedTicket.owner}</dd></div><div><dt>Atualização</dt><dd>{selectedTicket.updatedAt}</dd></div></dl><footer><Link href="/ordens-servico" className="primary-button">Abrir no módulo</Link></footer></aside></> : null}
     </>
   );
 }

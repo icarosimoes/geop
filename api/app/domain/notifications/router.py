@@ -19,7 +19,7 @@ from app.models import Notification, NotificationPreference
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 VALID_MODULES = [
-    "occurrences",
+    "work_orders",
     "fiscal_requests",
     "meetings",
     "shift_reports",

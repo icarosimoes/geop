@@ -172,7 +172,6 @@ async def create_movement(
     quantity: int,
     reason: str | None,
     work_order_id: int | None,
-    occurrence_id: int | None,
 ) -> dict:
     if movement_type not in MOVEMENT_TYPES:
         raise ValueError(f"Tipo inválido: {movement_type}")
@@ -207,7 +206,6 @@ async def create_movement(
         quantity=quantity,
         reason=reason,
         work_order_id=work_order_id,
-        occurrence_id=occurrence_id,
         user_id=user_id,
     )
     session.add(mov)

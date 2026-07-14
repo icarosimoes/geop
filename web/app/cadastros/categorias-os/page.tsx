@@ -8,13 +8,6 @@ export default async function CategoriasOSPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Cadastros</p>
-            <h1>Categorias de OS</h1>
-            <p>Gerencie as categorias disponíveis para Ordens de Serviço.</p>
-          </div>
-        </header>
         <CategoryManager />
       </AppLayout>
     );

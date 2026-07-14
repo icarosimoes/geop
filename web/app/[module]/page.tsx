@@ -17,47 +17,7 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
     const user = await currentTenantUser();
     let hydratedDefinition = definition;
 
-    if (module === "ocorrencias") {
-      try {
-        type OccurrencePage = {
-          items: Array<{ id: number; legacy_id: number; title: string; description: string | null; category: string; location: string | null; owner: string; status: string; deadline: string | null; sector_id: number | null; updated_at: string }>;
-          total: number;
-          page: number;
-          page_size: number;
-        };
-        type SectorItem = { id: number; name: string; category: string };
-        type SectorPage = { items: SectorItem[]; total: number };
-        const pg = Math.max(1, parseInt(query.page ?? "1", 10) || 1);
-        const search = query.search ?? "";
-        const searchParam = search ? `&search=${encodeURIComponent(search)}` : "";
-        const [data, localsData] = await Promise.all([
-          tenantFetch<OccurrencePage>(`/occurrences?page=${pg}&page_size=20${searchParam}`),
-          tenantFetch<SectorPage>("/registries?category=local&page=1&page_size=100"),
-        ]);
-        hydratedDefinition = {
-          ...definition,
-          source: "api",
-          records: data.items.map((item) => ({
-              id: item.id,
-              title: item.title,
-              description: item.description ?? undefined,
-              category: item.category,
-              location: item.location ?? undefined,
-              owner: item.owner,
-              status: item.status,
-              deadline: item.deadline ?? undefined,
-              sectorId: item.sector_id ?? undefined,
-              updatedAt: new Intl.DateTimeFormat("pt-BR").format(new Date(item.updated_at)),
-          })),
-          serverPagination: { total: data.total, page: data.page, pageSize: data.page_size, search },
-          extraData: {
-            sectors: localsData.items.map((s) => ({ id: s.id, name: s.name })),
-          },
-        };
-      } catch (error) {
-        if (error instanceof Error && error.message === "unauthorized") throw error;
-      }
-    } else if (module === "solicitacoes-fiscais") {
+    if (module === "solicitacoes-fiscais") {
       type FiscalRequestItem = {
         id: number;
         protocol: string;
@@ -462,6 +422,9 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
         id: number; title: string; description: string | null;
         status: string; priority: string | null; category: string | null;
         assigned_user_name: string | null; sla_deadline: string | null;
+        sector_id: number | null; sector_name: string | null;
+        unit: string | null; comments: string | null; deadline: string | null;
+        participants: { id: number; name: string }[] | null;
         created_at: string; updated_at: string;
       };
       type WorkOrderPage = { items: WorkOrderItem[]; total: number; page: number; page_size: number };
@@ -487,6 +450,12 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
             status: item.status,
             priority: item.priority ?? undefined,
             slaDeadline: item.sla_deadline ?? undefined,
+            sectorId: item.sector_id ?? undefined,
+            sectorName: item.sector_name ?? undefined,
+            unit: item.unit ?? undefined,
+            comments: item.comments ?? undefined,
+            deadline: item.deadline ?? undefined,
+            participants: item.participants ?? undefined,
             updatedAt: new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.updated_at)),
           })),
           serverPagination: { total: data.total, page: data.page, pageSize: data.page_size, search },

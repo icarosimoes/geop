@@ -165,55 +165,6 @@ export async function deleteFiscalRequestAction(id: number): Promise<MutationRes
   return { ok: true };
 }
 
-export interface OccurrencePayload {
-  title: string;
-  description?: string;
-  unit?: string;
-  deadline?: string;
-  status?: number;
-  sector_id?: number;
-  location_id?: number;
-  owner_user_id?: number;
-  notify_user_ids?: number[];
-  participant_ids?: number[];
-}
-
-export async function createOccurrenceAction(body: OccurrencePayload): Promise<MutationResult> {
-  const response = await authedFetch("/occurrences", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao criar ocorrencia." };
-  }
-  return { ok: true, data: await response.json() };
-}
-
-export async function updateOccurrenceAction(
-  id: number,
-  body: Partial<OccurrencePayload>,
-): Promise<MutationResult> {
-  const response = await authedFetch(`/occurrences/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao atualizar ocorrencia." };
-  }
-  return { ok: true, data: await response.json() };
-}
-
-export async function deleteOccurrenceAction(id: number): Promise<MutationResult> {
-  const response = await authedFetch(`/occurrences/${id}`, { method: "DELETE" });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao excluir ocorrencia." };
-  }
-  return { ok: true };
-}
-
 export interface UserPayload {
   name: string;
   email: string;
@@ -1102,17 +1053,6 @@ export async function fetchShiftReportDetail(id: number) {
   return response.json();
 }
 
-// --- Occurrence extras ---
-
-export async function cloneOccurrenceAction(id: number): Promise<MutationResult> {
-  const response = await authedFetch(`/occurrences/${id}/clone`, { method: "POST" });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao duplicar ocorrência." };
-  }
-  return { ok: true, data: await response.json() };
-}
-
 // --- Roles ---
 
 export interface RolePayload {
@@ -1345,7 +1285,6 @@ export interface StockMovementPayload {
   quantity: number;
   reason?: string;
   work_order_id?: number;
-  occurrence_id?: number;
 }
 
 export async function createStockMovementAction(body: StockMovementPayload): Promise<MutationResult> {
@@ -1448,11 +1387,15 @@ export interface WorkOrderPayload {
   priority?: string;
   category?: string;
   location_id?: number;
-  occurrence_id?: number;
   maintenance_id?: number;
   assigned_user_id?: number;
   notify_user_ids?: number[];
   sla_hours?: number;
+  sector_id?: number;
+  unit?: string;
+  comments?: string;
+  deadline?: string;
+  participant_ids?: number[];
 }
 
 export async function createWorkOrderAction(body: WorkOrderPayload): Promise<MutationResult> {
@@ -1493,6 +1436,15 @@ export async function deleteWorkOrderAction(id: number): Promise<MutationResult>
     return { ok: false, error: "Erro ao excluir ordem de serviço." };
   }
   return { ok: true };
+}
+
+export async function cloneWorkOrderAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/work-orders/${id}/clone`, { method: "POST" });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao duplicar ordem de serviço." };
+  }
+  return { ok: true, data: await response.json() };
 }
 
 export async function fetchLocationsAction(): Promise<{ id: number; name: string }[]> {

@@ -199,16 +199,23 @@ export function AdjustmentManager({ user }: { user: TenantUser }) {
 
   return (
     <>
-      {canManage && (
-        <div style={{ display: "flex", gap: "var(--sp-3)", marginBottom: "var(--sp-5)" }}>
-          <button className="primary-button" onClick={() => setDrawer("ajustar")}>
-            <Plus size={16} /> Ajustar Ponto
-          </button>
-          <button className="secondary-button" onClick={() => setDrawer("abonar")}>
-            <Plus size={16} /> Abonar Ponto
-          </button>
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Ponto</p>
+          <h1>Ajustes e abonos de ponto</h1>
+          <p>Solicitações de correção enviadas pelo Portal do Colaborador, além de ajustes e abonos lançados diretamente pelo RH.</p>
         </div>
-      )}
+        {canManage && (
+          <div style={{ display: "flex", gap: "var(--sp-3)" }}>
+            <button className="secondary-button" onClick={() => setDrawer("abonar")}>
+              <Plus size={16} /> Abonar ponto
+            </button>
+            <button className="primary-button" onClick={() => setDrawer("ajustar")}>
+              <Plus size={18} /> Ajustar ponto
+            </button>
+          </div>
+        )}
+      </header>
 
       {stats && (
         <div className="kpi-grid">
@@ -321,13 +328,12 @@ export function AdjustmentManager({ user }: { user: TenantUser }) {
       </section>
 
       {drawer && (
-        <>
-          <button className="panel-backdrop" aria-label="Fechar" onClick={closeDrawer} />
-          <aside className="record-drawer">
+        <div className="modal-layer" role="presentation" onClick={closeDrawer}>
+          <section className="record-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <header>
               <div>
                 <span>Ponto</span>
-                <h2>{drawer === "ajustar" ? "Ajustar Ponto" : "Abonar Ponto"}</h2>
+                <h2>{drawer === "ajustar" ? "Ajustar ponto" : "Abonar ponto"}</h2>
               </div>
               <button className="icon-button" onClick={closeDrawer} aria-label="Fechar">
                 <X />
@@ -335,7 +341,7 @@ export function AdjustmentManager({ user }: { user: TenantUser }) {
             </header>
 
             {drawer === "ajustar" ? (
-              <form className="kanban-create-form" onSubmit={handleAjustar} style={{ paddingTop: "var(--sp-5)" }}>
+              <form onSubmit={handleAjustar}>
                 <label>
                   Funcionário
                   <EmployeeAutocomplete
@@ -368,11 +374,11 @@ export function AdjustmentManager({ user }: { user: TenantUser }) {
                 </label>
                 <footer>
                   <button type="button" onClick={closeDrawer}>Cancelar</button>
-                  <button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
+                  <button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
                 </footer>
               </form>
             ) : (
-              <form className="kanban-create-form" onSubmit={handleAbonar} style={{ paddingTop: "var(--sp-5)" }}>
+              <form onSubmit={handleAbonar}>
                 <label>
                   Funcionário
                   <EmployeeAutocomplete
@@ -402,12 +408,12 @@ export function AdjustmentManager({ user }: { user: TenantUser }) {
                 </label>
                 <footer>
                   <button type="button" onClick={closeDrawer}>Cancelar</button>
-                  <button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
+                  <button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar"}</button>
                 </footer>
               </form>
             )}
-          </aside>
-        </>
+          </section>
+        </div>
       )}
 
       {toast && (

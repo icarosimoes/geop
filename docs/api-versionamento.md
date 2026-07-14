@@ -13,7 +13,7 @@ Em `main.py`, todos os routers são agrupados sob um `v1_router`:
 ```python
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(health_router)
-v1_router.include_router(occurrences_router)
+v1_router.include_router(work_orders_router)
 # ...
 app.include_router(v1_router)
 ```
@@ -55,7 +55,7 @@ v2_router.include_router(health_router)
 v2_router.include_router(auth_router)
 
 # Endpoints com breaking changes — usar versão nova
-v2_router.include_router(occurrences_v2_router)
+v2_router.include_router(work_orders_v2_router)
 
 app.include_router(v1_router)
 app.include_router(v2_router)

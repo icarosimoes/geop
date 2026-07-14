@@ -39,8 +39,6 @@ from app.models.operations import (
     ModuleRecord,
     Notification,
     NotificationPreference,
-    Occurrence,
-    OccurrenceParticipant,
     PreventivePlan,
     Procedure,
     PunchAdjustmentRequest,
@@ -63,6 +61,7 @@ from app.models.operations import (
     WorkDiaryObservation,
     WorkDiaryTeam,
     WorkOrder,
+    WorkOrderParticipant,
 )
 from app.models.platform import (
     CompanySetting,
@@ -120,8 +119,6 @@ __all__ = [
     "ModuleRecord",
     "Notification",
     "NotificationPreference",
-    "Occurrence",
-    "OccurrenceParticipant",
     "Permission",
     "Plan",
     "PlatformAuditLog",
@@ -153,5 +150,6 @@ __all__ = [
     "WorkDiaryObservation",
     "WorkDiaryTeam",
     "WorkOrder",
+    "WorkOrderParticipant",
     "role_permissions",
 ]

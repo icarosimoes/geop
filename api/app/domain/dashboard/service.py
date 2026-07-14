@@ -4,11 +4,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
-from app.models import FiscalRequest, Occurrence, Sector, User, WorkOrder
+from app.models import FiscalRequest, Sector, User, WorkOrder
 
 TTL_METRICS = 300
 TTL_RECENT = 180
 TTL_KPIS = 600
+
+WO_OPEN_STATUSES = ("aberta", "em_andamento", "aguardando_material")
+WO_DONE_STATUSES = ("concluida", "validada")
 
 
 async def get_metrics(
@@ -20,19 +23,21 @@ async def get_metrics(
     hit = await cache_get(cache_key)
     if hit is not None:
         return hit
-    base = [Occurrence.company_id == company_id, Occurrence.deleted_at.is_(None)]
+    base = [WorkOrder.company_id == company_id, WorkOrder.deleted_at.is_(None)]
 
     open_occurrences = (
         await session.scalar(
-            select(func.count(Occurrence.id)).where(*base, Occurrence.status.in_([1, 3]))
+            select(func.count(WorkOrder.id)).where(*base, WorkOrder.status.notin_(WO_DONE_STATUSES))
         )
         or 0
     )
 
     my_occurrences = (
         await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                *base, Occurrence.status.in_([1, 3]), Occurrence.owner_user_id == user_id
+            select(func.count(WorkOrder.id)).where(
+                *base,
+                WorkOrder.status.notin_(WO_DONE_STATUSES),
+                WorkOrder.assigned_user_id == user_id,
             )
         )
         or 0
@@ -52,8 +57,10 @@ async def get_metrics(
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     completed_month = (
         await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                *base, Occurrence.status == 2, Occurrence.updated_at >= month_start
+            select(func.count(WorkOrder.id)).where(
+                *base,
+                WorkOrder.status.in_(WO_DONE_STATUSES),
+                WorkOrder.completed_at >= month_start,
             )
         )
         or 0
@@ -106,19 +113,21 @@ async def _recent_all(session: AsyncSession, company_id: int) -> list[dict]:
 
     sql = raw("""
         SELECT * FROM (
-            (SELECT o.id, o.title, 'Ocorrências' AS module,
+            (SELECT wo.id, wo.title, 'Ordens de Serviço' AS module,
                     COALESCE(s.name, 'Sem setor') AS area,
                     COALESCE(u.name, 'Não atribuído') AS owner,
-                    CASE o.status WHEN 1 THEN 'Em andamento'
-                                  WHEN 2 THEN 'Concluído'
-                                  WHEN 3 THEN 'Aguardando'
-                                  ELSE 'Em andamento' END AS status,
-                    o.updated_at
-             FROM occurrences o
-             LEFT JOIN sectors s ON s.id = o.sector_id
-             LEFT JOIN users u ON u.id = o.owner_user_id
-             WHERE o.company_id = :cid AND o.deleted_at IS NULL
-             ORDER BY o.updated_at DESC LIMIT 5)
+                    CASE wo.status WHEN 'aberta' THEN 'Aberta'
+                                   WHEN 'em_andamento' THEN 'Em andamento'
+                                   WHEN 'aguardando_material' THEN 'Aguardando'
+                                   WHEN 'concluida' THEN 'Concluída'
+                                   WHEN 'validada' THEN 'Validada'
+                                   ELSE 'Em andamento' END AS status,
+                    wo.updated_at
+             FROM work_orders wo
+             LEFT JOIN sectors s ON s.id = wo.sector_id
+             LEFT JOIN users u ON u.id = wo.assigned_user_id
+             WHERE wo.company_id = :cid AND wo.deleted_at IS NULL
+             ORDER BY wo.updated_at DESC LIMIT 5)
             UNION ALL
             (SELECT m.id, m.title, 'Reuniões' AS module,
                     COALESCE(m.location, 'Geral') AS area,
@@ -212,11 +221,9 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
         return hit
 
     now = datetime.now()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     week_ago = now - timedelta(days=7)
 
     wo_base = [WorkOrder.company_id == company_id, WorkOrder.deleted_at.is_(None)]
-    occ_base = [Occurrence.company_id == company_id, Occurrence.deleted_at.is_(None)]
     fr_base = [FiscalRequest.company_id == company_id]
 
     # --- Work Orders ---
@@ -235,7 +242,10 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
     wo_by_priority = dict(
         (
             await session.execute(
-                select(WorkOrder.priority, func.count(WorkOrder.id))
+                select(
+                    func.coalesce(WorkOrder.priority, "Sem prioridade"),
+                    func.count(WorkOrder.id),
+                )
                 .where(*wo_base)
                 .group_by(WorkOrder.priority)
             )
@@ -325,69 +335,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
         or 0
     )
 
-    # --- Occurrences ---
-    occ_by_status = {
-        "em_andamento": await session.scalar(
-            select(func.count(Occurrence.id)).where(*occ_base, Occurrence.status == 1)
-        )
-        or 0,
-        "concluido": await session.scalar(
-            select(func.count(Occurrence.id)).where(*occ_base, Occurrence.status == 2)
-        )
-        or 0,
-        "aguardando": await session.scalar(
-            select(func.count(Occurrence.id)).where(*occ_base, Occurrence.status == 3)
-        )
-        or 0,
-    }
-
-    occ_completed_month = (
-        await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                *occ_base,
-                Occurrence.status == 2,
-                Occurrence.updated_at >= month_start,
-            )
-        )
-        or 0
-    )
-    occ_total_month = (
-        await session.scalar(
-            select(func.count(Occurrence.id)).where(*occ_base, Occurrence.created_at >= month_start)
-        )
-        or 0
-    )
-    occ_completion_rate = (
-        round(occ_completed_month / occ_total_month * 100) if occ_total_month > 0 else None
-    )
-
-    occ_by_sector_rows = (
-        await session.execute(
-            select(
-                func.coalesce(Sector.name, "Sem setor"),
-                func.count(Occurrence.id),
-            )
-            .outerjoin(Sector, Sector.id == Occurrence.sector_id)
-            .where(*occ_base, Occurrence.status.in_([1, 3]))
-            .group_by(Sector.name)
-            .order_by(func.count(Occurrence.id).desc())
-            .limit(8)
-        )
-    ).all()
-    occ_by_sector = {name: count for name, count in occ_by_sector_rows}
-
-    occ_overdue = (
-        await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                *occ_base,
-                Occurrence.deadline.isnot(None),
-                Occurrence.deadline < now.date(),
-                Occurrence.status.in_([1, 3]),
-            )
-        )
-        or 0
-    )
-
     # --- Fiscal Requests ---
     fr_by_status = dict(
         (
@@ -463,16 +410,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
             )
             or 0
         )
-        occ_day = (
-            await session.scalar(
-                select(func.count(Occurrence.id)).where(
-                    *occ_base,
-                    Occurrence.created_at >= day_start,
-                    Occurrence.created_at < day_end,
-                )
-            )
-            or 0
-        )
         fr_day = (
             await session.scalar(
                 select(func.count(FiscalRequest.id)).where(
@@ -487,7 +424,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
             {
                 "date": day.isoformat(),
                 "work_orders": wo_day,
-                "occurrences": occ_day,
                 "fiscal_requests": fr_day,
             }
         )
@@ -503,12 +439,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
             "overdue": wo_overdue,
             "created_week": wo_created_week,
             "completed_week": wo_completed_week,
-        },
-        "occurrences": {
-            "by_status": occ_by_status,
-            "completion_rate_pct": occ_completion_rate,
-            "by_sector": occ_by_sector,
-            "overdue": occ_overdue,
         },
         "fiscal_requests": {
             "by_status": fr_by_status,

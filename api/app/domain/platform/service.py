@@ -12,7 +12,6 @@ from app.integrations.asaas import AsaasClient, AsaasError
 from app.models import (
     Company,
     Invoice,
-    Occurrence,
     Plan,
     PlatformAuditLog,
     PlatformSetting,
@@ -21,6 +20,7 @@ from app.models import (
     SupportRequest,
     UsageRecord,
     User,
+    WorkOrder,
 )
 
 
@@ -810,7 +810,7 @@ async def list_usage_records(session: AsyncSession, limit: int = 200) -> list[di
 
 
 async def snapshot_usage(session: AsyncSession) -> int:
-    """Gera um registro de uso do dia corrente por tenant (usuários e ocorrências)."""
+    """Gera um registro de uso do dia corrente por tenant (usuários e ordens de serviço)."""
     today = datetime.now(UTC).date()
     month_start = datetime.combine(today.replace(day=1), datetime.min.time())
     companies = list(
@@ -827,13 +827,16 @@ async def snapshot_usage(session: AsyncSession) -> int:
                 User.active.is_(True),
             )
         )
-        occurrences_count = await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                Occurrence.company_id == company_id,
-                Occurrence.created_at >= month_start,
+        work_orders_count = await session.scalar(
+            select(func.count(WorkOrder.id)).where(
+                WorkOrder.company_id == company_id,
+                WorkOrder.created_at >= month_start,
             )
         )
-        for metric, value in (("users", users_count or 0), ("occurrences", occurrences_count or 0)):
+        for metric, value in (
+            ("users", users_count or 0),
+            ("work_orders", work_orders_count or 0),
+        ):
             session.add(
                 UsageRecord(
                     company_id=company_id,

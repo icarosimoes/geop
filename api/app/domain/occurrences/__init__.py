@@ -1,1 +1,0 @@
-"""Domínio de ocorrências."""

@@ -2,14 +2,14 @@
 
 ## O que e
 
-O **Registro** e um SaaS de gestao operacional hoteleira. Ele centraliza todas as rotinas do dia a dia de um hotel — ocorrencias, solicitacoes fiscais, ordens de servico, manutencao corretiva e preventiva, inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo.
+O **Registro** e um SaaS de gestao operacional hoteleira. Ele centraliza todas as rotinas do dia a dia de um hotel — ordens de servico (ocorrencias e manutencao corretiva/preventiva em uma unica tela, com Kanban e visao em lista), solicitacoes fiscais, inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo.
 
 O sistema substitui um ERP legado (Aero, construido em Laravel/Vue) por uma stack moderna, nascendo multitenant para atender multiplos hoteis com isolamento completo de dados.
 
 ## Para quem serve
 
 - **Gestores hoteleiros** que precisam acompanhar a operacao em tempo real: o que esta pendente, quem e responsavel, qual o prazo.
-- **Equipes operacionais** (recepcao, governanca, manutencao, A&B, seguranca) que registram e tratam ocorrencias, passam turno, executam checklists e abrem ordens de servico.
+- **Equipes operacionais** (recepcao, governanca, manutencao, A&B, seguranca) que abrem e tratam ordens de servico, passam turno e executam checklists.
 - **Financeiro/fiscal** que recebe solicitacoes de notas fiscais da recepcao com SLA controlado.
 - **Operadores da plataforma** (admin SaaS) que gerenciam tenants, planos e assinaturas.
 

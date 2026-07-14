@@ -8,13 +8,6 @@ export default async function TurnosPage() {
     const user = await currentTenantUser();
     return (
       <AppLayout user={user}>
-        <header className="module-heading">
-          <div>
-            <p className="eyebrow">Cadastros</p>
-            <h1>Turnos de trabalho</h1>
-            <p>Defina templates de turnos (Manhã, Tarde, Noite, etc.) para usar na escala.</p>
-          </div>
-        </header>
         <ShiftManager user={user} />
       </AppLayout>
     );

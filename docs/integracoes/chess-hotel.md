@@ -25,7 +25,7 @@ Em produção, `CHESS_HOTEL_INTEGRATION_KEY` deve ser um segredo com pelo menos 
 Chess Hotel (Vue/Vuetify)
   └─ RegistroLauncher.vue (navbar)
        ├─ Solicitação Fiscal → POST /api/v1/fiscal-requests (futuro)
-       └─ Chamado de Manutenção → POST /api/v1/occurrences (futuro)
+       └─ Chamado de Manutenção → POST /api/v1/work-orders (futuro)
 ```
 
 ## Componentes no Chess Hotel

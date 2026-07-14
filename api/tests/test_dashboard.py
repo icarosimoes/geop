@@ -33,7 +33,6 @@ async def test_get_metrics_kpis_structure(client):
     assert r.status_code == 200
     kpis = r.json()["kpis"]
     assert "work_orders" in kpis
-    assert "occurrences" in kpis
     assert "fiscal_requests" in kpis
     assert "trend" in kpis
     assert isinstance(kpis["trend"], list)
@@ -44,11 +43,6 @@ async def test_get_metrics_kpis_structure(client):
     assert "by_status" in wo
     assert "by_priority" in wo
     assert "overdue" in wo
-
-    # Occurrence KPIs
-    occ = kpis["occurrences"]
-    assert "by_status" in occ
-    assert "overdue" in occ
 
     # Fiscal request KPIs
     fr = kpis["fiscal_requests"]

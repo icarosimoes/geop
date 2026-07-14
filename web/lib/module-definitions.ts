@@ -66,6 +66,9 @@ export type ModuleRecord = {
   latitude?: number | null;
   longitude?: number | null;
   geofenceRadiusM?: number | null;
+  unit?: string;
+  comments?: string;
+  participants?: { id: number; name: string }[];
 };
 
 export type ModuleDefinition = {
@@ -96,16 +99,6 @@ const slaIn18h = new Date(Date.now() + 18 * 3_600_000).toISOString();
 const slaExpired = new Date(Date.now() - 4 * 3_600_000).toISOString();
 
 export const moduleDefinitions: Record<string, ModuleDefinition> = {
-  ocorrencias: {
-    slug: "ocorrencias", title: "Ocorrências", singular: "ocorrência", action: "Nova ocorrência",
-    description: "Registre, atribua e acompanhe situações da operação.",
-    records: [
-      { id: 1048, title: "Revisar vistoria do apartamento 302", category: "Governança", owner: "Marina Costa", status: "Em andamento", updatedAt: "há 12 min" },
-      { id: 1047, title: "Anexo pendente no diário de obra", category: "Engenharia", owner: "Rafael Lima", status: "Aguardando", updatedAt: "há 38 min" },
-      { id: 1046, title: "Validar ocorrência do turno da manhã", category: "Operação", owner: "Ana Souza", status: "Em andamento", updatedAt: "há 1 h" },
-      { id: 1045, title: "Ata da reunião semanal", category: "Administração", owner: "Carlos Reis", status: "Concluído", updatedAt: "ontem" },
-    ],
-  },
   reunioes: {
     slug: "reunioes", title: "Reuniões", singular: "reunião", action: "Agendar reunião",
     description: "Organize pautas, participantes, decisões e atas.",
@@ -247,5 +240,5 @@ export const moduleDefinitions: Record<string, ModuleDefinition> = {
 };
 
 export const navigationModules = [
-  "ocorrencias", "ordens-servico", "reunioes", "relatorios-turno", "inspecoes", "preventivas", "estoque", "solicitacoes-fiscais",
+  "ordens-servico", "reunioes", "relatorios-turno", "inspecoes", "preventivas", "estoque", "solicitacoes-fiscais",
 ];

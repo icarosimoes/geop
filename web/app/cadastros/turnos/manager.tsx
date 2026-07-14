@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2 } from "lucide-react";
+import { Plus, Trash2, Edit2, X } from "lucide-react";
 import {
   createShiftAction,
   deleteShiftAction,
@@ -15,19 +15,22 @@ function hasPermission(user: TenantUser, code: string) {
   return user.permissions.includes("*") || user.permissions.includes(code);
 }
 
+const DEFAULT_FORM: Partial<Shift> = {
+  name: "",
+  start_time: "08:00",
+  end_time: "17:00",
+  color: "#2563eb",
+  tolerance_minutes: 10,
+};
+
 export function ShiftManager({ user }: { user: TenantUser }) {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<Partial<Shift>>({
-    name: "",
-    start_time: "08:00",
-    end_time: "17:00",
-    color: "#2563eb",
-    tolerance_minutes: 10,
-  });
+  const [formData, setFormData] = useState<Partial<Shift>>(DEFAULT_FORM);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [toast, setToast] = useState("");
 
   const canManage = hasPermission(user, "shift.manage");
@@ -46,16 +49,11 @@ export function ShiftManager({ user }: { user: TenantUser }) {
     reload();
   }, []);
 
-  function resetForm() {
+  function closeModal() {
     setShowForm(false);
     setEditingId(null);
-    setFormData({
-      name: "",
-      start_time: "08:00",
-      end_time: "17:00",
-      color: "#2563eb",
-      tolerance_minutes: 10,
-    });
+    setFormData(DEFAULT_FORM);
+    setError("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -63,6 +61,7 @@ export function ShiftManager({ user }: { user: TenantUser }) {
     if (!formData.name?.trim() || !formData.start_time || !formData.end_time) return;
 
     setSaving(true);
+    setError("");
     const result = editingId
       ? await updateShiftAction(editingId, formData)
       : await createShiftAction(formData as Parameters<typeof createShiftAction>[0]);
@@ -70,10 +69,10 @@ export function ShiftManager({ user }: { user: TenantUser }) {
 
     if (result.ok) {
       showToast(editingId ? "Turno atualizado." : "Turno criado.");
-      resetForm();
+      closeModal();
       reload();
     } else {
-      showToast(result.error ?? "Erro ao salvar.");
+      setError(result.error ?? "Erro ao salvar.");
     }
   }
 
@@ -95,158 +94,156 @@ export function ShiftManager({ user }: { user: TenantUser }) {
   }
 
   return (
-    <section className="module-panel">
-      {canManage && (
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            gap: "var(--sp-3)",
-            padding: "var(--sp-4) var(--sp-5)",
-            borderBottom: "1px solid var(--field-border)",
-            alignItems: "end",
-          }}
-        >
-          {showForm && (
-            <>
+    <>
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Cadastros</p>
+          <h1>Turnos de trabalho</h1>
+          <p>Defina templates de turnos (Manhã, Tarde, Noite, etc.) para usar na escala.</p>
+        </div>
+        {canManage && (
+          <button className="primary-button" onClick={() => setShowForm(true)}>
+            <Plus size={18} /> Novo turno
+          </button>
+        )}
+      </header>
+
+      <section className="module-panel">
+        {loading ? (
+          <div className="module-state">Carregando turnos...</div>
+        ) : shifts.length === 0 ? (
+          <div className="module-state">
+            <strong>Nenhum turno cadastrado</strong>
+            <span>Crie turnos que serão usados na escala de trabalho.</span>
+          </div>
+        ) : (
+          <div className="module-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Entrada</th>
+                  <th>Saída</th>
+                  <th>Tolerância</th>
+                  <th>Cor</th>
+                  {canManage && <th>Ações</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.map((shift) => (
+                  <tr key={shift.id}>
+                    <td>
+                      <strong>{shift.name}</strong>
+                    </td>
+                    <td>{shift.start_time}</td>
+                    <td>{shift.end_time}</td>
+                    <td>{shift.tolerance_minutes}min</td>
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 24,
+                          height: 24,
+                          backgroundColor: shift.color,
+                          borderRadius: 4,
+                          border: "1px solid var(--field-border)",
+                        }}
+                      />
+                    </td>
+                    {canManage && (
+                      <td>
+                        <div className="row-actions">
+                          <button onClick={() => handleEdit(shift)} aria-label="Editar">
+                            <Edit2 size={16} />
+                          </button>
+                          <button onClick={() => handleDelete(shift)} aria-label="Remover">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <footer className="module-pagination">
+          <span>{shifts.length} turno(s)</span>
+        </footer>
+      </section>
+
+      {showForm && (
+        <div className="modal-layer" role="presentation" onClick={closeModal}>
+          <section className="record-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <header>
               <div>
-                <label>Nome *</label>
+                <span>Cadastros</span>
+                <h2>{editingId ? "Editar turno" : "Novo turno"}</h2>
+              </div>
+              <button className="icon-button" onClick={closeModal}><X /></button>
+            </header>
+            <form onSubmit={handleSubmit}>
+              {error && <div className="kanban-form-error">{error}</div>}
+              <label>Nome *
                 <input
                   type="text"
                   value={formData.name ?? ""}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="ex: Manhã"
                   required
+                  autoFocus
                 />
+              </label>
+              <div className="form-grid">
+                <label>Entrada *
+                  <input
+                    type="time"
+                    value={formData.start_time ?? ""}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>Saída *
+                  <input
+                    type="time"
+                    value={formData.end_time ?? ""}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>Tolerância (min)
+                  <input
+                    type="number"
+                    value={formData.tolerance_minutes ?? 10}
+                    onChange={(e) => setFormData({ ...formData, tolerance_minutes: Number(e.target.value) })}
+                    min="0"
+                    max="60"
+                  />
+                </label>
+                <label>Cor
+                  <input
+                    type="color"
+                    value={formData.color ?? "#2563eb"}
+                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                    style={{ cursor: "pointer", height: "var(--input-height)" }}
+                  />
+                </label>
               </div>
-              <div>
-                <label>Entrada *</label>
-                <input
-                  type="time"
-                  value={formData.start_time ?? ""}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label>Saída *</label>
-                <input
-                  type="time"
-                  value={formData.end_time ?? ""}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label>Tolerância (min)</label>
-                <input
-                  type="number"
-                  value={formData.tolerance_minutes ?? 10}
-                  onChange={(e) => setFormData({ ...formData, tolerance_minutes: Number(e.target.value) })}
-                  min="0"
-                  max="60"
-                />
-              </div>
-              <div>
-                <label>Cor</label>
-                <input
-                  type="color"
-                  value={formData.color ?? "#2563eb"}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                  style={{ cursor: "pointer", height: "40px" }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-                <button className="primary-button" type="submit" disabled={saving}>
-                  {saving ? "Salvando..." : editingId ? "Atualizar" : "Criar"}
-                </button>
-                <button type="button" onClick={resetForm} style={{ backgroundColor: "var(--field-bg)" }}>
-                  Cancelar
-                </button>
-              </div>
-            </>
-          )}
-          {!showForm && (
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => setShowForm(true)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <Plus size={16} /> Novo turno
-            </button>
-          )}
-        </form>
+              <footer>
+                <button type="button" onClick={closeModal}>Cancelar</button>
+                <button type="submit" disabled={saving}>{saving ? "Salvando…" : editingId ? "Salvar" : "Criar turno"}</button>
+              </footer>
+            </form>
+          </section>
+        </div>
       )}
 
-      {loading ? (
-        <div className="module-state">Carregando turnos...</div>
-      ) : shifts.length === 0 ? (
-        <div className="module-state">
-          <strong>Nenhum turno cadastrado</strong>
-          <span>Crie turnos que serão usados na escala de trabalho.</span>
-        </div>
-      ) : (
-        <div className="module-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Entrada</th>
-                <th>Saída</th>
-                <th>Tolerância</th>
-                <th>Cor</th>
-                {canManage && <th>Ações</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {shifts.map((shift) => (
-                <tr key={shift.id}>
-                  <td>
-                    <strong>{shift.name}</strong>
-                  </td>
-                  <td>{shift.start_time}</td>
-                  <td>{shift.end_time}</td>
-                  <td>{shift.tolerance_minutes}min</td>
-                  <td>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 24,
-                        height: 24,
-                        backgroundColor: shift.color,
-                        borderRadius: 4,
-                        border: "1px solid var(--field-border)",
-                      }}
-                    />
-                  </td>
-                  {canManage && (
-                    <td>
-                      <div className="row-actions">
-                        <button onClick={() => handleEdit(shift)} aria-label="Editar">
-                          <Edit2 size={16} />
-                        </button>
-                        <button onClick={() => handleDelete(shift)} aria-label="Remover">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <footer className="module-pagination">
-        <span>{shifts.length} turno(s)</span>
-      </footer>
       {toast && (
         <div className="module-toast" role="status">
           {toast}
         </div>
       )}
-    </section>
+    </>
   );
 }

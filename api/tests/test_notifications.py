@@ -17,7 +17,7 @@ async def _seed_notification(session, user_id=1, company_id=TENANT_A, title="Tes
         title=title,
         body="Corpo da notificação",
         category="info",
-        entity_type="occurrence",
+        entity_type="work_order",
         entity_id=1,
     )
     session.add(n)
@@ -141,13 +141,13 @@ async def test_list_preferences(client):
 @pytest.mark.asyncio
 async def test_update_preference(client):
     r = await client.put(
-        f"{NOTIF_URL}/preferences/occurrences",
+        f"{NOTIF_URL}/preferences/work_orders",
         json={"in_app": True, "email": False},
         headers=HEADERS_A,
     )
     assert r.status_code == 200
     data = r.json()
-    assert data["module"] == "occurrences"
+    assert data["module"] == "work_orders"
     assert data["in_app"] is True
     assert data["email"] is False
 

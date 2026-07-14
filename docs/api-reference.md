@@ -12,13 +12,6 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/auth/refresh` | pública (20/min) | renova tokens via refresh token |
 | `GET` | `/auth/me` | Bearer | perfil revalidado no PostgreSQL |
 | `POST` | `/auth/set-password` | pública (5/min) | define senha via token de convite |
-| `GET` | `/occurrences` | `occurrence.view` | ocorrências paginadas e isoladas por empresa |
-| `GET` | `/occurrences/{id}` | `occurrence.view` | detalhe com participantes |
-| `POST` | `/occurrences` | `occurrence.create` | cria ocorrência |
-| `PATCH` | `/occurrences/{id}` | `occurrence.edit` | atualiza ocorrência |
-| `DELETE` | `/occurrences/{id}` | `occurrence.delete` | soft delete de ocorrência |
-| `POST` | `/occurrences/{id}/clone` | `occurrence.create` | duplica ocorrência com participantes |
-| `GET` | `/occurrences/{id}/pdf` | `occurrence.view` | exporta PDF da ocorrência |
 | `POST` | `/integrations/chess-hotel/users/resolve` | `X-Registro-Key` (30/min) | resolve usuário Chess no Registro por e-mail |
 | `POST` | `/integrations/chess-hotel/tickets` | `X-Registro-Key` (30/min) | cria solicitação fiscal via integração Chess Hotel |
 | `GET` | `/integrations/chess-hotel/tickets` | `X-Registro-Key` | lista solicitações do usuário Chess com tracking |
@@ -140,6 +133,9 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `PATCH` | `/work-orders/{id}` | `work_order.edit` | atualiza ordem de serviço |
 | `POST` | `/work-orders/{id}/transition/{status}` | `work_order.edit` | transição de status com validação de fluxo |
 | `DELETE` | `/work-orders/{id}` | `work_order.delete` | soft delete de ordem de serviço |
+| `GET` | `/work-orders/export` | `work_order.view` | exporta ordens de serviço filtradas em XLSX |
+| `POST` | `/work-orders/{id}/clone` | `work_order.create` | duplica ordem de serviço com participantes |
+| `GET` | `/work-orders/{id}/pdf` | `work_order.view` | exporta PDF da ordem de serviço |
 | `GET` | `/preventive-plans` | `preventive_plan.view` | planos preventivos paginados (filtro por busca, ativos) |
 | `GET` | `/preventive-plans/{id}` | `preventive_plan.view` | detalhe do plano preventivo |
 | `POST` | `/preventive-plans` | `preventive_plan.create` | cria plano preventivo com recorrência |
@@ -256,37 +252,7 @@ Cada domínio possui um `service.py` com a lógica de negócio separada do route
 
 ## Contrato de listas
 
-Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/occurrences`, `/fiscal-requests`, `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports` e `/work-diaries`.
-
-### Ocorrências
-
-O CRUD de ocorrências está operacional. Todas as rotas exigem Tenant Bearer e isolam por `company_id`.
-
-#### `POST /occurrences`
-
-Cria uma ocorrência. O campo `legacy_id` não é enviado — registros criados pelo Registro ficam com `legacy_id` null. Os campos `created_by_user_id` e `updated_by_user_id` são preenchidos automaticamente com o usuário autenticado.
-
-```json
-{
-  "title": "Revisar vistoria do apartamento 302",
-  "description": "Pendência identificada na inspeção de ontem",
-  "status": 1,
-  "sector_id": 1,
-  "location_id": 5,
-  "owner_user_id": 2,
-  "deadline": "2026-06-25"
-}
-```
-
-Campos opcionais: `description`, `unit`, `deadline`, `sector_id`, `location_id`, `owner_user_id`. O `status` é inteiro: `1` = Em andamento, `2` = Concluído, `3` = Aguardando (padrão: `1`). Responde `201` com o registro criado, resolvendo `category` (nome do setor), `owner` (nome do usuário) e `location` (nome do local).
-
-#### `PATCH /occurrences/{id}`
-
-Atualiza campos da ocorrência. Aceita qualquer subconjunto de `title`, `description`, `unit`, `deadline`, `status`, `sector_id`, `location_id` e `owner_user_id`. Registra `updated_by_user_id` automaticamente.
-
-#### `DELETE /occurrences/{id}`
-
-Exclusão lógica — preenche `deleted_at` sem destruir o registro. Responde `204`. Retorna `404` se o registro não existir, já estiver excluído ou pertencer a outro tenant.
+Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/fiscal-requests`, `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports` e `/work-diaries`.
 
 ### Solicitações fiscais
 
@@ -356,7 +322,7 @@ A timeline agrega eventos de auditoria de um registro e os apresenta como thread
 
 Retorna todos os eventos do registro em ordem cronológica. Cada item inclui `id`, `event_type`, `user` (nome), `message` (para comentários e anexos), `changes` (para updates) e `created_at`.
 
-Entity types válidos: `occurrence`, `fiscal_request`, `procedure`, `meeting`, `shift_report`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
+Entity types válidos: `work_order`, `fiscal_request`, `procedure`, `meeting`, `shift_report`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
 
 Tipos de evento renderizados:
 
@@ -371,17 +337,17 @@ Tipos de evento renderizados:
 
 #### `POST /timeline/{entity_type}/{entity_id}/comment`
 
-Adiciona comentário ao registro. Body: `{ "message": "texto" }`. Dispara notificação para o dono e criador do registro (ocorrências e solicitações fiscais). Responde `201` com o comentário criado.
+Adiciona comentário ao registro. Body: `{ "message": "texto" }`. Dispara notificação para o dono e criador do registro (ordens de serviço e solicitações fiscais). Responde `201` com o comentário criado.
 
 ### Auditoria
 
-Toda mutação em ocorrências, solicitações fiscais, procedimentos e anexos gera um `AuditEvent` com `company_id`, `user_id`, `entity_type`, `entity_id`, `event_type` e `diff` JSON. O diff registra campo a campo o valor anterior e o novo, apenas quando há mudança. Eventos de create e delete não possuem diff. A tabela `audit_events` é imutável por design (sem `updated_at`/`deleted_at`, `created_at` com `server_default=func.now()`).
+Toda mutação em ordens de serviço, solicitações fiscais, procedimentos e anexos gera um `AuditEvent` com `company_id`, `user_id`, `entity_type`, `entity_id`, `event_type` e `diff` JSON. O diff registra campo a campo o valor anterior e o novo, apenas quando há mudança. Eventos de create e delete não possuem diff. A tabela `audit_events` é imutável por design (sem `updated_at`/`deleted_at`, `created_at` com `server_default=func.now()`).
 
 | `entity_type` | `event_type` | Quando |
 | --- | --- | --- |
-| `occurrence` | `create` | POST /occurrences |
-| `occurrence` | `update` | PATCH /occurrences/{id}, apenas se houve diff |
-| `occurrence` | `delete` | DELETE /occurrences/{id} |
+| `work_order` | `create` | POST /work-orders |
+| `work_order` | `update` | PATCH /work-orders/{id}, apenas se houve diff |
+| `work_order` | `delete` | DELETE /work-orders/{id} |
 | `fiscal_request` | `create` | POST /fiscal-requests |
 | `fiscal_request` | `create_from_chess` | POST /integrations/chess-hotel/tickets |
 | `fiscal_request` | `update` | PATCH /fiscal-requests/{id}, apenas se houve diff |
@@ -427,12 +393,6 @@ Valores inválidos retornam `422`.
       "created_week": 8,
       "completed_week": 5
     },
-    "occurrences": {
-      "by_status": {"em_andamento": 8, "concluido": 20, "aguardando": 4},
-      "completion_rate_pct": 62,
-      "by_sector": {"Governança": 5, "Operação": 3},
-      "overdue": 1
-    },
     "fiscal_requests": {
       "by_status": {"Em andamento": 3, "Concluído": 10},
       "by_type": {"Nota travada": 5, "Dados incorretos": 3},
@@ -440,7 +400,7 @@ Valores inválidos retornam `422`.
       "overdue": 0
     },
     "trend": [
-      {"date": "2026-06-15", "work_orders": 2, "occurrences": 3, "fiscal_requests": 1}
+      {"date": "2026-06-15", "work_orders": 2, "fiscal_requests": 1}
     ]
   }
 }
@@ -448,17 +408,16 @@ Valores inválidos retornam `422`.
 
 | Campo | Descrição |
 | --- | --- |
-| `open_occurrences` | ocorrências com status 1 (em andamento) ou 3 (aguardando) |
-| `my_occurrences` | subconjunto de `open_occurrences` atribuídas ao usuário logado |
+| `open_occurrences` | ordens de serviço com status diferente de `concluida`/`validada` (nome do campo mantido por compatibilidade após a fusão de Ocorrências em Ordens de Serviço, ver `memoria-projeto.md`) |
+| `my_occurrences` | subconjunto de `open_occurrences` atribuídas (`assigned_user_id`) ao usuário logado |
 | `open_fiscal` | solicitações fiscais com status diferente de "Concluído" |
-| `completed_month` | ocorrências concluídas (status 2) no mês corrente |
+| `completed_month` | ordens de serviço concluídas (`completed_at` no mês corrente) |
 | `active_users` | usuários ativos e não excluídos do tenant |
 | `active_sectors` | setores não excluídos do tenant |
 | `recent` | últimas atividades recentes de todos os módulos |
-| `kpis.work_orders` | KPIs de ordens de serviço: total, distribuição por status/prioridade/categoria, tempo médio de resolução (horas), SLA compliance (%), atrasadas, criadas/concluídas na semana |
-| `kpis.occurrences` | KPIs de ocorrências: distribuição por status, taxa de conclusão mensal (%), distribuição por setor (top 8), atrasadas |
+| `kpis.work_orders` | KPIs de ordens de serviço: total, distribuição por status (inclui o universo antes coberto por Ocorrências)/prioridade/categoria, tempo médio de resolução (horas), SLA compliance (%), atrasadas, criadas/concluídas na semana |
 | `kpis.fiscal_requests` | KPIs de solicitações fiscais: distribuição por status/tipo (top 8), SLA compliance (%), atrasadas |
-| `kpis.trend` | tendência dos últimos 7 dias: contagem diária de OS, ocorrências e fiscais |
+| `kpis.trend` | tendência dos últimos 7 dias: contagem diária de OS e fiscais |
 
 ### Manutenção preventiva
 
@@ -535,7 +494,7 @@ Registro de materiais com movimentações de entrada, saída e ajuste, vinculáv
 #### Modelo
 
 - `stock_items`: name, category, unit (padrão "un"), min_quantity, current_quantity, location_id
-- `stock_movements`: item_id, movement_type (entrada/saida/ajuste), quantity, reason, work_order_id, occurrence_id, user_id
+- `stock_movements`: item_id, movement_type (entrada/saida/ajuste), quantity, reason, work_order_id, user_id
 
 #### `POST /stock/items`
 
@@ -726,7 +685,7 @@ Marca todas as notificações não lidas do usuário como lidas. Responde `204`.
 
 Lista preferências de notificação do usuário autenticado para todos os módulos válidos. Módulos sem preferência salva retornam `in_app: true, email: true` (default). Responde `[{module, in_app, email}]`.
 
-Módulos válidos: `occurrences`, `fiscal_requests`, `meetings`, `shift_reports`, `procedures`, `inspections`, `maintenance`, `modules`.
+Módulos válidos: `work_orders`, `fiscal_requests`, `meetings`, `shift_reports`, `procedures`, `inspections`, `maintenance`, `modules`.
 
 #### `PUT /notifications/preferences/{module}`
 
@@ -763,7 +722,7 @@ Anexos são armazenados no MinIO (S3-compatible) e referenciados na tabela `atta
 
 Upload multipart. Envia o arquivo no campo `file` do form-data. Query params obrigatórios: `entity_type` e `entity_id`.
 
-Entity types válidos: `fiscal_request`, `occurrence`, `procedure`, `module_record`.
+Entity types válidos: `fiscal_request`, `work_order`, `procedure`, `module_record`.
 
 Validações:
 - Tamanho máximo: 10MB (configurável via `ATTACHMENT_MAX_SIZE_MB`)
@@ -793,7 +752,7 @@ O sistema de permissões usa uma factory `require_permission(code)` em `app/core
 
 | Módulo | Códigos |
 | --- | --- |
-| occurrence | `occurrence.view`, `.create`, `.edit`, `.delete` |
+| work_order | `work_order.view`, `.create`, `.edit`, `.delete` |
 | fiscal_request | `fiscal_request.view`, `.create`, `.edit`, `.delete` |
 | user | `user.view`, `.create`, `.edit`, `.delete` |
 | registry | `registry.view`, `.create`, `.edit`, `.delete` |
@@ -824,23 +783,29 @@ Sem a permissão necessária, a API retorna `403 Forbidden` com `{"code": "forbi
 
 CRUD de cargos por tenant. Cada role tem um conjunto de permissões atribuídas via tabela junction `role_permissions`. A exclusão de um role só é permitida se nenhum usuário estiver atribuído a ele (retorna `409 role_has_users`).
 
-### Ocorrências — funcionalidades adicionais
+### Ordens de Serviço — funcionalidades adicionais
 
-#### `GET /occurrences/{id}`
+Desde 2026-07-14, "Ocorrências" foi fundida em Ordens de Serviço (tabela `occurrences` dropada, sem migração de dados de tenants existentes — ver `memoria-projeto.md`). `WorkOrder` ganhou os campos que só existiam em Ocorrência (`sector_id`, `unit`, `comments`, `deadline`, participantes) e os recursos abaixo, portados do domínio removido.
 
-Detalhe de uma ocorrência com participantes. Retorna `OccurrenceDetail` com campos adicionais: `unit`, `participants: [{id, name}]` e `notify_user_ids`.
+#### `GET /work-orders/{id}`
 
-#### `POST /occurrences/{id}/clone`
+Detalhe de uma ordem de serviço com participantes. Retorna `WorkOrderOut` com `sector_id`/`sector_name`, `unit`, `comments`, `deadline` e `participants: [{id, name}]`.
 
-Duplica uma ocorrência. Copia todos os campos, participantes e notificações. O título recebe prefixo "Cópia de ". O status volta para 1 (Em andamento). Timeline e anexos não são copiados. Retorna `201` com a nova ocorrência.
+#### `GET /work-orders/export`
 
-#### `GET /occurrences/{id}/pdf`
+Exporta as ordens de serviço filtradas (mesmos filtros de `GET /work-orders`) em XLSX.
 
-Exporta a ocorrência em PDF (reportlab). Inclui: header com nome da empresa, metadata (status, setor, local, responsável, prazo), descrição, participantes e histórico completo da timeline. Retorna `StreamingResponse` com `Content-Disposition: attachment`.
+#### `POST /work-orders/{id}/clone`
 
-#### Participantes de ocorrências
+Duplica uma ordem de serviço. Copia todos os campos e participantes. O título recebe prefixo "Cópia de ". O status volta para `aberta` e `started_at`/`completed_at`/`validated_at` são zerados. Timeline e anexos não são copiados. Retorna `201` com a nova ordem de serviço.
 
-A criação e atualização de ocorrências agora aceitam `participant_ids: list[int]` para vincular participantes. Os participantes são armazenados na tabela `occurrence_participants` (junction com chave composta `occurrence_id` + `user_id`).
+#### `GET /work-orders/{id}/pdf`
+
+Exporta a ordem de serviço em PDF (reportlab). Inclui: header com nome da empresa, metadata (status, setor, unidade, responsável, prazo), descrição, participantes e histórico completo da timeline. Retorna `StreamingResponse` com `Content-Disposition: attachment`.
+
+#### Participantes de ordens de serviço
+
+A criação e atualização de ordens de serviço aceitam `participant_ids: list[int]` para vincular participantes. Os participantes são armazenados na tabela `work_order_participants` (junction com chave composta `work_order_id` + `user_id`).
 
 ### Reuniões (`/meetings`)
 
@@ -1008,7 +973,7 @@ Frontend: toggle e tabela de "salário-base por cargo" em `/configuracoes` (aba 
 ### Relatórios — ocorrências e SLA de solicitações fiscais (`/reports`) (2026-07-05)
 
 ```
-GET /reports/occurrences         (report.view) ?date_from&date_to → total, por status, por setor, taxa de conclusão, atrasadas, tendência diária
+GET /reports/work-orders         (report.view) ?date_from&date_to → total, por status, por setor, taxa de conclusão, atrasadas, tendência diária
 GET /reports/fiscal-requests-sla (report.view) ?date_from&date_to → total, por status/tipo, sla_compliance_pct, tempo médio de resolução, breakdown por estado de SLA, tendência diária
 ```
 

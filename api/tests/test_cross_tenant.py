@@ -82,7 +82,7 @@ async def test_company_id_cannot_be_spoofed_in_token():
 
 
 ENDPOINTS_GET = [
-    "/api/v1/occurrences",
+    "/api/v1/work-orders",
     "/api/v1/users",
     "/api/v1/registries",
     "/api/v1/fiscal-requests",
@@ -92,7 +92,7 @@ ENDPOINTS_GET = [
 ]
 
 ENDPOINTS_POST = [
-    ("/api/v1/occurrences", {"title": "Cross-tenant test", "status": 1}),
+    ("/api/v1/work-orders", {"title": "Cross-tenant test"}),
     (
         "/api/v1/users",
         {

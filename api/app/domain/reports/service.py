@@ -1,11 +1,11 @@
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.sla import compute_sla_status
-from app.domain.occurrences.service import status_label
-from app.models import FiscalRequest, Occurrence, Sector
+from app.domain.work_orders.service import STATUS_LABELS
+from app.models import FiscalRequest, Sector, WorkOrder
 
 
 def _parse_period(date_from: str | None, date_to: str | None) -> tuple[datetime, datetime]:
@@ -45,7 +45,10 @@ async def _daily_trend(
     return trend
 
 
-async def build_occurrences_report(
+WO_DONE_STATUSES = ("concluida", "validada")
+
+
+async def build_work_orders_report(
     session: AsyncSession,
     company_id: int,
     date_from: str | None,
@@ -53,55 +56,60 @@ async def build_occurrences_report(
 ) -> dict:
     start, end = _parse_period(date_from, date_to)
     base = [
-        Occurrence.company_id == company_id,
-        Occurrence.deleted_at.is_(None),
-        Occurrence.created_at >= start,
-        Occurrence.created_at < end,
+        WorkOrder.company_id == company_id,
+        WorkOrder.deleted_at.is_(None),
+        WorkOrder.created_at >= start,
+        WorkOrder.created_at < end,
     ]
 
-    total = await session.scalar(select(func.count(Occurrence.id)).where(*base)) or 0
+    total = await session.scalar(select(func.count(WorkOrder.id)).where(*base)) or 0
 
     by_status_rows = (
         await session.execute(
-            select(Occurrence.status, func.count(Occurrence.id))
+            select(WorkOrder.status, func.count(WorkOrder.id))
             .where(*base)
-            .group_by(Occurrence.status)
+            .group_by(WorkOrder.status)
         )
     ).all()
-    by_status = {status_label(status): count for status, count in by_status_rows}
+    by_status = {STATUS_LABELS.get(status, status): count for status, count in by_status_rows}
 
     completed = (
-        await session.scalar(select(func.count(Occurrence.id)).where(*base, Occurrence.status == 2))
+        await session.scalar(
+            select(func.count(WorkOrder.id)).where(*base, WorkOrder.status.in_(WO_DONE_STATUSES))
+        )
         or 0
     )
     completion_rate_pct = round(completed / total * 100) if total > 0 else None
 
     by_sector_rows = (
         await session.execute(
-            select(func.coalesce(Sector.name, "Sem setor"), func.count(Occurrence.id))
-            .outerjoin(Sector, Sector.id == Occurrence.sector_id)
+            select(func.coalesce(Sector.name, "Sem setor"), func.count(WorkOrder.id))
+            .outerjoin(Sector, Sector.id == WorkOrder.sector_id)
             .where(*base)
             .group_by(Sector.name)
-            .order_by(func.count(Occurrence.id).desc())
+            .order_by(func.count(WorkOrder.id).desc())
             .limit(8)
         )
     ).all()
     by_sector = {name: count for name, count in by_sector_rows}
 
+    now = datetime.now()
     overdue = (
         await session.scalar(
-            select(func.count(Occurrence.id)).where(
-                Occurrence.company_id == company_id,
-                Occurrence.deleted_at.is_(None),
-                Occurrence.deadline.isnot(None),
-                Occurrence.deadline < date.today(),
-                Occurrence.status.in_([1, 3]),
+            select(func.count(WorkOrder.id)).where(
+                WorkOrder.company_id == company_id,
+                WorkOrder.deleted_at.is_(None),
+                WorkOrder.status.notin_(WO_DONE_STATUSES),
+                or_(
+                    (WorkOrder.deadline.isnot(None)) & (WorkOrder.deadline < date.today()),
+                    (WorkOrder.sla_deadline.isnot(None)) & (WorkOrder.sla_deadline < now),
+                ),
             )
         )
         or 0
     )
 
-    trend = await _daily_trend(session, Occurrence.created_at, Occurrence.id, base, start, end)
+    trend = await _daily_trend(session, WorkOrder.created_at, WorkOrder.id, base, start, end)
 
     return {
         "total": total,

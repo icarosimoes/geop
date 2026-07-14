@@ -44,7 +44,6 @@ Parâmetro: `cursor` (opaco, base64 de `{id, timestamp}`). Primeira chamada sem 
 
 ## Endpoints que suportam cursor
 
-- `GET /occurrences/cursor`
 - `GET /work-orders/cursor`
 - `GET /timeline/{entity_type}/{entity_id}/cursor`
 

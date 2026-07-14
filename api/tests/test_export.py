@@ -20,13 +20,13 @@ def _load_xlsx(content: bytes):
 
 
 # ---------------------------------------------------------------------------
-# Occurrences
+# Work Orders
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_occurrences_export_returns_xlsx(client):
-    r = await client.get(f"{PREFIX}/occurrences/export", headers=auth_header(TENANT_A))
+async def test_work_orders_export_returns_xlsx(client):
+    r = await client.get(f"{PREFIX}/work-orders/export", headers=auth_header(TENANT_A))
     assert r.status_code == 200
     assert XLSX_MIME in r.headers["content-type"]
     wb = _load_xlsx(r.content)
@@ -36,19 +36,19 @@ async def test_occurrences_export_returns_xlsx(client):
 
 
 @pytest.mark.asyncio
-async def test_occurrences_export_forbidden(client):
-    r = await client.get(f"{PREFIX}/occurrences/export", headers=auth_none())
+async def test_work_orders_export_forbidden(client):
+    r = await client.get(f"{PREFIX}/work-orders/export", headers=auth_none())
     assert r.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_occurrences_export_with_data(client):
+async def test_work_orders_export_with_data(client):
     await client.post(
-        f"{PREFIX}/occurrences",
+        f"{PREFIX}/work-orders",
         headers=auth_header(TENANT_A),
         json={"title": "Export test", "category": "general"},
     )
-    r = await client.get(f"{PREFIX}/occurrences/export", headers=auth_header(TENANT_A))
+    r = await client.get(f"{PREFIX}/work-orders/export", headers=auth_header(TENANT_A))
     assert r.status_code == 200
     wb = _load_xlsx(r.content)
     ws = wb.active

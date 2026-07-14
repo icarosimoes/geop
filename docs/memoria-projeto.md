@@ -211,3 +211,59 @@ Motivos:
 Como aplicar: antes de escrever um modal/dropdown/confirmação novo no `admin/`, checar
 `components/ui/` primeiro. Ver revisão completa em
 [registro-trabalho.md](registro-trabalho.md#2026-07-12--revisão-uiux-ponta-a-ponta-do-painel-admin).
+
+## 2026-07-14 — Ocorrências fundida em Ordens de Serviço; padrão de CRUD unificado
+
+Decisão: o domínio "Ocorrências" (tabela `occurrences`) deixou de existir como entidade
+separada — foi fundido em "Ordens de Serviço" (`work_orders`), a pedido explícito do
+usuário ("quero que ocorrencias e ordem de serviços sejam uma tela só"). A tabela
+`occurrences` foi **dropada sem migrar dados de nenhum tenant** (autorização explícita:
+"não se preocupe com dados atuais em nehum dos tenant"). `work_orders` ganhou os campos
+que só existiam em Ocorrência (`sector_id`, `unit`, `comments`, `deadline`) e uma tabela
+`work_order_participants` (M2M), além de absorver export XLSX, export PDF e clone. A tela
+`/ordens-servico` manteve o Kanban como padrão e ganhou um toggle para visão em Lista. O
+rótulo do status `aguardando_material` virou "Aguardando" (cobre qualquer tipo de espera,
+não só material — chave do enum não mudou).
+
+Motivos:
+
+- Os dois domínios resolviam o mesmo problema de negócio (abrir, atribuir e acompanhar uma
+  situação operacional até a resolução) com telas, permissões e integrações
+  (dashboard/relatórios/timeline/anexos/notificações) totalmente duplicadas.
+- `work_orders` foi escolhida como tabela sobrevivente por já ter a máquina de estados de
+  5 status, SLA e o Kanban — mais rica que o status fixo de 3 valores (inteiro) de
+  `Occurrence`.
+
+Consequências e limitações conhecidas (aceitas, não são bugs a corrigir):
+
+- Papéis customizados de tenants que tinham `occurrence.*` concedido explicitamente
+  **não ganharam `work_order.*` automaticamente** na migration — só perderam o acesso
+  antigo (permissões `occurrence.*` foram removidas de `permissions`/`role_permissions`).
+  Ver [usuarios-perfis.md](usuarios-perfis.md#perfis-pré-definidos-seed).
+- `api/app/import_v1.py` (importação do MySQL legado V1) foi deletado — o corte/migração
+  de dados da V1 já havia sido descontinuado por decisão de 2026-07-04 (não migrar mais
+  dados do sistema legado para nenhum tenant), então o script já estava morto (sem
+  nenhum router/startup chamando-o) antes mesmo da fusão; ele só criava `Occurrence`, que
+  não existe mais.
+- Os campos de resposta `open_occurrences`/`my_occurrences` em `GET /dashboard/metrics`
+  **mantiveram o nome** por decisão explícita (reduzir churn no contrato), mas agora são
+  calculados a partir de `WorkOrder`, não de `Occurrence`. Ver
+  [api-reference.md](api-reference.md#dashboard).
+
+Como aplicar: qualquer nova funcionalidade de "ocorrência"/"chamado"/"solicitação de
+manutenção" no vocabulário do usuário deve ser modelada como Ordem de Serviço — não
+recriar um domínio paralelo. Ver detalhamento completo da execução em
+[registro-trabalho.md](registro-trabalho.md#2026-07-14--fusão-de-ocorrências-em-ordens-de-serviço-e-padronização-de-crud).
+
+## 2026-07-04 — Corte V1 descontinuado
+
+Decisão: não migrar mais dados do sistema legado V1 (Laravel/MySQL) para nenhum tenant.
+O corte de dados via `api/app/import_v1.py` deixou de ser um fluxo ativo — o script não é
+chamado por nenhum router, startup ou comando documentado desde então, e ficou excluído do
+coverage de testes (`api/pyproject.toml`). Ele só existia no repositório como referência
+histórica até ser deletado em 2026-07-14 (ver entrada acima), quando passou a depender de
+`Occurrence`, um model removido.
+
+Como aplicar: não reintroduzir rotas ou automações de importação da V1. Novos tenants
+nascem vazios; se um cliente pedir migração de dados do sistema antigo, é uma decisão de
+produto nova, não uma retomada do fluxo antigo.

@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  createFiscalRequestAction, createOccurrenceAction, deleteFiscalRequestAction, deleteOccurrenceAction,
-  updateFiscalRequestAction, updateOccurrenceAction,
+  createFiscalRequestAction, deleteFiscalRequestAction,
+  updateFiscalRequestAction,
   createUserAction, updateUserAction, deleteUserAction, inviteUserAction,
   createRegistryAction, updateRegistryAction, deleteRegistryAction,
   createModuleRecordAction, updateModuleRecordAction, deleteModuleRecordAction,
@@ -135,7 +135,6 @@ function statusClass(status: string) {
 }
 
 const SLUG_TO_ENTITY_TYPE: Record<string, string> = {
-  "ocorrencias": "occurrence",
   "solicitacoes-fiscais": "fiscal_request",
   "procedimentos": "procedure",
   "reunioes": "meeting",
@@ -160,7 +159,6 @@ export function OperationalModule({
   const effectiveBasePath = basePath ?? `/${definition.slug}`;
   const storageKey = `registro:${user.company_id}:${definition.slug}`;
   const isFiscal = definition.slug === "solicitacoes-fiscais";
-  const isOcorrencias = definition.slug === "ocorrencias";
   const isUsers = definition.slug === "usuarios";
   const isCadastros = (definition.slug === "cadastros" || definition.slug.startsWith("cadastros/")) && !definition.slug.includes("procedimentos");
   const cadastroCategory: Record<string, string> = {
@@ -177,7 +175,7 @@ export function OperationalModule({
   function hasPermission(code: string) {
     return user.permissions.includes("*") || user.permissions.includes(code);
   }
-  const permModule = isFiscal ? "fiscal_request" : isOcorrencias ? "occurrence" : isUsers ? "user" : isCadastros ? "registry" : isProcedimentos ? "procedure" : isMeetings ? "meeting" : isShiftReports ? "shift_report" : isGenericModule ? "module" : "module";
+  const permModule = isFiscal ? "fiscal_request" : isUsers ? "user" : isCadastros ? "registry" : isProcedimentos ? "procedure" : isMeetings ? "meeting" : isShiftReports ? "shift_report" : isGenericModule ? "module" : "module";
   const canView = hasPermission(`${permModule}.view`);
   const canCreate = hasPermission(`${permModule}.create`);
   const canEdit = hasPermission(`${permModule}.edit`);
@@ -344,26 +342,7 @@ export function OperationalModule({
       let notifyIds: number[] = [];
       try { notifyIds = JSON.parse(notifyRaw); } catch { /* empty */ }
 
-      if (isOcorrencias) {
-        const statusMap: Record<string, number> = { "Em andamento": 1, "Concluido": 2, "Aguardando": 3 };
-        const ownerRaw = String(formData.get("owner") ?? "");
-        const ownerId = /^\d+$/.test(ownerRaw) ? Number(ownerRaw) : undefined;
-        const deadlineRaw = String(formData.get("deadline") ?? "");
-        const sectorIdRaw = String(formData.get("sector_id") ?? "");
-        const sectorId = sectorIdRaw ? Number(sectorIdRaw) : undefined;
-        const apiBody = {
-          title: fields.title,
-          description: fields.description || undefined,
-          status: statusMap[fields.status] ?? 1,
-          owner_user_id: ownerId,
-          sector_id: sectorId,
-          deadline: deadlineRaw || undefined,
-          notify_user_ids: notifyIds.length ? notifyIds : undefined,
-        };
-        result = current
-          ? await updateOccurrenceAction(current.id, apiBody)
-          : await createOccurrenceAction(apiBody);
-      } else if (isUsers) {
+      if (isUsers) {
         const password = String(formData.get("password") ?? "");
         const phone = String(formData.get("phone") ?? "").replace(/\D/g, "") || undefined;
         const roleId = formData.get("role_id") ? Number(formData.get("role_id")) : undefined;
@@ -597,7 +576,6 @@ export function OperationalModule({
     if (isApiBacked) {
       let result: { ok: boolean; error?: string };
       if (isFiscal) result = await deleteFiscalRequestAction(record.id);
-      else if (isOcorrencias) result = await deleteOccurrenceAction(record.id);
       else if (isUsers) result = await deleteUserAction(record.id);
       else if (isCadastros) result = await deleteRegistryAction(record.id, fixedCategory ?? record.category);
       else if (isProcedimentos) result = await deleteProcedureAction(record.id);
@@ -739,15 +717,10 @@ export function OperationalModule({
       </> : <>
         <label>Título<input name="title" required defaultValue={editing === "new" ? "" : editing.title}/></label>
         <div className="form-grid">
-          {isOcorrencias && definition.extraData?.sectors ? (
-            <label>Local<select name="sector_id" defaultValue={editing === "new" ? "" : String(editing.sectorId ?? "")}><option value="">Sem local</option>{definition.extraData.sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          ) : (
-            <label>Categoria<input name="category" required defaultValue={editing === "new" ? "Geral" : editing.category}/></label>
-          )}
+          <label>Categoria<input name="category" required defaultValue={editing === "new" ? "Geral" : editing.category}/></label>
           <label>Status<select name="status" defaultValue={editing === "new" ? "Em andamento" : editing.status}><option>Em andamento</option><option>Aguardando</option><option>Agendada</option><option>Ativo</option><option>Publicado</option><option>Rascunho</option><option>Concluído</option></select></label>
         </div>
         <label>Responsável<UserAutocomplete name="owner" required defaultValue={editing === "new" ? user.name : editing.owner} placeholder="Buscar responsável..."/></label>
-        {isOcorrencias && <label>Prazo<input name="deadline" type="date" defaultValue={editing !== "new" && editing.deadline ? editing.deadline : ""}/></label>}
         <label>Notificar<UserMultiSelect name="notifyUsers" defaultValues={editing !== "new" && editing.notifyUserObjects ? editing.notifyUserObjects : []}/><small className="field-hint">Pessoas que serão notificadas sobre atualizações.</small></label>
         <label>Descrição<textarea name="description" rows={4} defaultValue={editing === "new" ? "" : editing.description}/></label>
       </>}
@@ -771,8 +744,6 @@ export function OperationalModule({
       <dl>
         <div><dt>Status</dt><dd><span className={statusClass(selected.status)}>{selected.status}</span></dd></div>
         <div><dt>Responsável</dt><dd>{selected.owner}</dd></div>
-        {isOcorrencias && selected.location && <div><dt>Local</dt><dd>{selected.location}</dd></div>}
-        {isOcorrencias && selected.deadline && <div><dt>Prazo</dt><dd>{new Intl.DateTimeFormat("pt-BR").format(new Date(selected.deadline))}</dd></div>}
         {selected.notifyUsers && selected.notifyUsers.length > 0 && <div><dt>Notificar</dt><dd><div className="notify-chips">{selected.notifyUsers.map((name, i) => <span key={i} className="notify-chip">{name}</span>)}</div></dd></div>}
         {isFiscal && selected.slaDeadline && <div><dt>SLA</dt><dd><SlaIndicator deadline={selected.slaDeadline}/></dd></div>}
         {isFiscal && selected.apartment && <div><dt>UH (Apartamento)</dt><dd>{selected.apartment}</dd></div>}
@@ -846,7 +817,7 @@ function SettingsForm({ storageKey, onSaved }: { storageKey: string; onSaved: ()
   return <div className="settings-form">
     <form action={(data) => { localStorage.setItem(`${storageKey}:preferences`, JSON.stringify(Object.fromEntries(data))); onSaved(); }}>
       <section><h2>Notificações</h2><p>Escolha como deseja acompanhar as atualizações.</p><label className="switch-row"><span><strong>Notificações no sistema</strong><small>Alertas de atividades e menções.</small></span><input name="in_app" type="checkbox" defaultChecked/></label><label className="switch-row"><span><strong>Resumo por e-mail</strong><small>Resumo diário das pendências.</small></span><input name="email_digest" type="checkbox" defaultChecked/></label></section>
-      <section><h2>Experiência</h2><p>Preferências aplicadas a este navegador.</p><label>Idioma<select name="language" defaultValue="pt-BR"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select></label><label>Página inicial<select name="home" defaultValue="dashboard"><option value="dashboard">Dashboard</option><option value="ocorrencias">Ocorrências</option></select></label></section>
+      <section><h2>Experiência</h2><p>Preferências aplicadas a este navegador.</p><label>Idioma<select name="language" defaultValue="pt-BR"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select></label><label>Página inicial<select name="home" defaultValue="dashboard"><option value="dashboard">Dashboard</option><option value="ordens-servico">Ordens de Serviço</option></select></label></section>
       <button className="primary-button" type="submit">Salvar alterações</button>
     </form>
     <BrevoSettingsSection/>

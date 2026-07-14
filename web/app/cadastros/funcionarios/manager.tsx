@@ -308,39 +308,40 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <section className="module-panel">
-      <div
-        className="module-toolbar"
-        style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap", alignItems: "center" }}
-      >
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
-          <option value="">Todos os status</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+    <>
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Cadastros</p>
+          <h1>Funcionários</h1>
+          <p>Cadastro de RH dos funcionários do hotel, separado das contas de login do sistema.</p>
+        </div>
         {canManage && (
-          <div style={{ display: "flex", gap: "var(--sp-2)", marginLeft: "auto" }}>
+          <button className="primary-button" type="button" onClick={() => setShowForm(true)}>
+            <Plus size={18} /> Novo funcionário
+          </button>
+        )}
+      </header>
+
+      <section className="module-panel">
+        <div className="module-toolbar">
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+            <option value="">Todos os status</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          {canManage && (
             <button
               type="button"
               onClick={() => { setShowImport((v) => !v); setImportResult(null); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, backgroundColor: "var(--field-bg)" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
               <Upload size={16} /> Importar CSV
             </button>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => setShowForm(true)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <Plus size={16} /> Novo funcionário
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
       {canManage && showImport && (
         <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
@@ -808,6 +809,7 @@ export function EmployeeManager({ user }: { user: TenantUser }) {
           {toast}
         </div>
       )}
-    </section>
+      </section>
+    </>
   );
 }

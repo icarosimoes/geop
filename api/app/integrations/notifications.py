@@ -17,7 +17,7 @@ from app.models import Notification, NotificationPreference, User
 logger = structlog.get_logger()
 
 ENTITY_TO_MODULE: dict[str, str] = {
-    "occurrence": "occurrences",
+    "work_order": "work_orders",
     "fiscal_request": "fiscal_requests",
     "meeting": "meetings",
     "shift_report": "shift_reports",
