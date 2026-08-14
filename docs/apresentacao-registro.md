@@ -1,8 +1,8 @@
-# Registro — Gestao operacional hoteleira
+# GEOP — Gestao operacional hoteleira
 
 ## Uma plataforma. Toda a operacao do seu hotel.
 
-O Registro e o sistema que conecta todos os departamentos do seu hotel em um unico lugar. Recepcao, governanca, manutencao, financeiro, seguranca — todos trabalhando na mesma plataforma, com rastreabilidade completa e visao gerencial em tempo real.
+O GEOP e o sistema que conecta todos os departamentos do seu hotel em um unico lugar. Recepcao, governanca, manutencao, financeiro, seguranca — todos trabalhando na mesma plataforma, com rastreabilidade completa e visao gerencial em tempo real.
 
 ---
 
@@ -22,7 +22,7 @@ O resultado:
 
 ## A solucao
 
-O Registro centraliza toda a operacao em modulos integrados:
+O GEOP centraliza toda a operacao em modulos integrados:
 
 ### Para a equipe operacional
 
@@ -52,7 +52,7 @@ O Registro centraliza toda a operacao em modulos integrados:
 
 ## Diferenciais
 
-| | Registro | Planilhas / WhatsApp | ERPs genericos |
+| | GEOP | Planilhas / WhatsApp | ERPs genericos |
 |---|---|---|---|
 | Feito para hotel | Sim | Nao | Parcialmente |
 | Rastreabilidade completa | Auditoria campo a campo | Nenhuma | Basica |
@@ -87,7 +87,7 @@ Construido com stack moderna e segura:
 
 ## Sobre
 
-O Registro nasceu dentro de um hotel real — o Aero Hotel em Florianopolis — para resolver problemas reais da operacao diaria. Desenvolvido pela **Solid SD**, foi transformado em plataforma SaaS para atender qualquer hotel que queira profissionalizar sua gestao operacional.
+O GEOP nasceu dentro de um hotel real — o Aero Hotel em Florianopolis — para resolver problemas reais da operacao diaria. Desenvolvido pela **Solid SD**, foi transformado em plataforma SaaS para atender qualquer hotel que queira profissionalizar sua gestao operacional.
 
 **Producao ativa** em hoteis reais. Evolucao contínua baseada em feedback operacional.
 

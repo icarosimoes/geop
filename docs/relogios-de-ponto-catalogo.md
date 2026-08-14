@@ -1,10 +1,10 @@
-# Catálogo de relógios de ponto — integração com o Registro
+# Catálogo de relógios de ponto — integração com o GEOP
 
 ## Objetivo
 
 Levantar os relógios de ponto/biométricos mais usados no Brasil e mapear como cada um
 expõe as batidas, para decidir a ordem de suporte no **agente local** (`/agent`, Go) que
-faz a ponte entre o equipamento (rede local) e o backend do Registro
+faz a ponte entre o equipamento (rede local) e o backend do GEOP
 (`POST /integrations/control-id/{webhook_token}/punches`, já implementado em
 `api/app/domain/timeclock/webhook_router.py` — ver [docs/integracao-escala-ponto.md](integracao-escala-ponto.md)).
 

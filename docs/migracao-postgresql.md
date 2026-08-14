@@ -2,7 +2,7 @@
 
 ## Contexto
 
-O Registro nasceu com MySQL 8.4 para manter compatibilidade com o sistema legado Laravel (Chess Hotel V1). Com o codebase estabilizado e os dados do V1 importados, o banco foi migrado para PostgreSQL 17 com Row-Level Security (RLS) para isolamento por tenant.
+O GEOP nasceu com MySQL 8.4 para manter compatibilidade com o sistema legado Laravel (Chess Hotel V1). Com o codebase estabilizado e os dados do V1 importados, o banco foi migrado para PostgreSQL 17 com Row-Level Security (RLS) para isolamento por tenant.
 
 ## O que mudou
 
@@ -98,7 +98,7 @@ docker compose --profile mysql-import stop mysql
 - Importa: ocorrências (375) + comentários + participantes
 - Importa: reuniões (72), relatórios de turno (1165), check suites (4497), auditorias (104)
 - Importa: notificações legadas (3336)
-- Preserva `legacy_id` para rastreabilidade V1 → Registro
+- Preserva `legacy_id` para rastreabilidade V1 → GEOP
 - Gera `LegacyImportRun` com checksum do dump (idempotente — re-rodar com mesmo dump não duplica)
 
 ### Para produção (corte final)
@@ -106,7 +106,7 @@ docker compose --profile mysql-import stop mysql
 2. Seguir o mesmo procedimento acima no ambiente de produção
 3. Validar dados: contagem de registros, login de usuários, integridade de FKs
 4. Desligar o Laravel V1
-5. Apontar DNS para o Registro
+5. Apontar DNS para o GEOP
 
 ## Arquivos modificados na migração
 

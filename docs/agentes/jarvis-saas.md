@@ -1,6 +1,6 @@
 # Jarvis — SaaS e multiempresa
 
-O Registro é preparado para comercialização como SaaS. Empresa cliente, usuário da empresa e operador da plataforma são contextos distintos e nunca compartilham uma sessão implicitamente.
+O GEOP é preparado para comercialização como SaaS. Empresa cliente, usuário da empresa e operador da plataforma são contextos distintos e nunca compartilham uma sessão implicitamente.
 
 ## Banco — PostgreSQL 17 com RLS
 
@@ -54,7 +54,7 @@ trial (14d) → past_due → suspended (7d tolerância) → canceled
 
 - Preços em centavos inteiros (`price_cents`, `value_cents`).
 - Estado de assinatura não é inferido da interface.
-- IDs externos do Asaas são opcionais e únicos quando preenchidos; o Registro mantém suas próprias chaves.
+- IDs externos do Asaas são opcionais e únicos quando preenchidos; o GEOP mantém suas próprias chaves.
 
 ## Critérios obrigatórios
 

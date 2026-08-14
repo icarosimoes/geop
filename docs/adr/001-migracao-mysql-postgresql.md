@@ -6,7 +6,7 @@
 
 ## Contexto
 
-O Registro nasceu com MySQL 8.4 para manter compatibilidade com o sistema legado Laravel (Chess Hotel V1), que usa MySQL em produção. Com o codebase estabilizado e todos os domínios operacionais implementados na nova stack (FastAPI + Next.js), surgiu a oportunidade de migrar para PostgreSQL antes do corte final.
+O GEOP nasceu com MySQL 8.4 para manter compatibilidade com o sistema legado Laravel (Chess Hotel V1), que usa MySQL em produção. Com o codebase estabilizado e todos os domínios operacionais implementados na nova stack (FastAPI + Next.js), surgiu a oportunidade de migrar para PostgreSQL antes do corte final.
 
 ## Decisão
 

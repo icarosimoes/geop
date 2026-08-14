@@ -1,4 +1,4 @@
-# Integração Chess Hotel ↔ Registro
+# Integração Chess Hotel ↔ GEOP
 
 ## Contexto
 
@@ -7,17 +7,17 @@ O Chess Hotel é o PMS (Property Management System) hoteleiro usado pela operaç
 - **Chess Hotel** (front) — recepção, reservas, check-in/out
 - **Chess Gestão** (back) — backoffice financeiro e administrativo
 
-O Registro não substitui nem duplica funcionalidades do Chess. A integração existe para **documentar e rastrear a comunicação entre recepção e financeiro** quando há problemas com emissão de notas fiscais, e para abrir chamados de manutenção.
+O GEOP não substitui nem duplica funcionalidades do Chess. A integração existe para **documentar e rastrear a comunicação entre recepção e financeiro** quando há problemas com emissão de notas fiscais, e para abrir chamados de manutenção.
 
 ## Arquitetura
 
-A integração cria chamados no Registro e permite que o Chess consulte seu andamento. O Registro não modifica dados operacionais do Chess.
+A integração cria chamados no GEOP e permite que o Chess consulte seu andamento. O GEOP não modifica dados operacionais do Chess.
 
 ## Identidade e acompanhamento
 
 O Chess usa seu backend Laravel como proxy e nunca expõe a chave de integração no navegador. Antes de abrir uma solicitação, o Laravel consulta `POST /api/v1/integrations/chess-hotel/users/resolve` com o e-mail do usuário autenticado. A criação só é aceita quando existe um usuário ativo com o mesmo e-mail no tenant configurado.
 
-As solicitações enviam o ID do usuário no Chess, e-mail, hotel, reserva e origem. O acompanhamento usa `GET /api/v1/integrations/chess-hotel/tickets?email=...` ou `GET /api/v1/integrations/chess-hotel/tickets/{protocol}?email=...` e retorna status, responsável, SLA, histórico, conclusão e URL do protocolo no Registro.
+As solicitações enviam o ID do usuário no Chess, e-mail, hotel, reserva e origem. O acompanhamento usa `GET /api/v1/integrations/chess-hotel/tickets?email=...` ou `GET /api/v1/integrations/chess-hotel/tickets/{protocol}?email=...` e retorna status, responsável, SLA, histórico, conclusão e URL do protocolo no GEOP.
 
 Em produção, `CHESS_HOTEL_INTEGRATION_KEY` deve ser um segredo com pelo menos 32 caracteres e compartilhado apenas entre os backends. Também são obrigatórios `CHESS_HOTEL_COMPANY_SLUG` e `REGISTRO_WEB_URL` no Registro, além de `REGISTRO_API_URL`, `REGISTRO_API_KEY`, `REGISTRO_HOTEL_SLUG` e `REGISTRO_WEB_URL` no Laravel do Chess.
 
@@ -59,8 +59,8 @@ Campos comuns: UH/apartamento, observações, anexos.
 
 ## Pendências
 
-- [ ] Criar endpoints no Registro para receber chamados do Chess (autenticação por token de serviço)
+- [ ] Criar endpoints no GEOP para receber chamados do Chess (autenticação por token de serviço)
 - [ ] Configurar `VUE_APP_REGISTRO_API_URL` no ambiente do Chess
 - [ ] Definir autenticação cross-system (SSO, token compartilhado ou login embarcado)
 - [ ] Implementar fila de sincronização para tickets salvos em localStorage quando offline
-- [ ] Testar CORS entre domínios Chess e Registro em produção
+- [ ] Testar CORS entre domínios Chess e GEOP em produção

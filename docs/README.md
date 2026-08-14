@@ -1,11 +1,11 @@
-# Documentação do Registro
+# Documentação do GEOP
 
-Esta pasta é a fonte de verdade técnica, funcional e operacional do Registro. A nova plataforma usa FastAPI, dois frontends Next.js e PostgreSQL 17 com RLS, nasce multitenant e preserva uma rota controlada para importar o dump V1 do MySQL legado.
+Esta pasta é a fonte de verdade técnica, funcional e operacional do GEOP. A nova plataforma usa FastAPI, dois frontends Next.js e PostgreSQL 17 com RLS, nasce multitenant e preserva uma rota controlada para importar o dump V1 do MySQL legado.
 
 ## Comece aqui
 
-- [O que e o Registro (contexto tecnico-funcional)](contexto-registro.md)
-- [Apresentacao do Registro (visao externa)](apresentacao-registro.md)
+- [O que e o GEOP (contexto tecnico-funcional)](contexto-registro.md)
+- [Apresentacao do GEOP (visao externa)](apresentacao-registro.md)
 - [Estado atual e mapa do sistema](mapa.md)
 - [Arquitetura](arquitetura.md)
 - [Modelo de domínio](domain-model.md)

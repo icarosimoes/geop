@@ -6,7 +6,7 @@
 
 ## Contexto
 
-O Registro é um SaaS multitenant. Até a migração para PostgreSQL, o isolamento por empresa dependia exclusivamente de filtros `WHERE company_id = :cid` no ORM (SQLAlchemy). Um bug no service layer ou uma query raw sem filtro poderia expor dados entre tenants.
+O GEOP é um SaaS multitenant. Até a migração para PostgreSQL, o isolamento por empresa dependia exclusivamente de filtros `WHERE company_id = :cid` no ORM (SQLAlchemy). Um bug no service layer ou uma query raw sem filtro poderia expor dados entre tenants.
 
 ## Decisão
 

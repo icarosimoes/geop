@@ -1,6 +1,6 @@
 # Storage — MinIO (S3)
 
-O Registro usa MinIO self-hosted como object storage para anexos de todos os tenants. A API se comunica via protocolo S3 (boto3).
+O GEOP usa MinIO self-hosted como object storage para anexos de todos os tenants. A API se comunica via protocolo S3 (boto3).
 
 ## Arquitetura
 

@@ -308,7 +308,7 @@ O `sla_deadline` é calculado em **dias úteis** (seg-sex, 8h-18h) na timezone d
 
 #### `POST /integrations/chess-hotel/users/resolve`
 
-Verifica se um e-mail do Chess corresponde a um usuário ativo no tenant do Registro. Retorna `{ "exists": true, "id": 1, "name": "...", "email": "..." }` ou `404` se não encontrar.
+Verifica se um e-mail do Chess corresponde a um usuário ativo no tenant do GEOP. Retorna `{ "exists": true, "id": 1, "name": "...", "email": "..." }` ou `404` se não encontrar.
 
 #### `GET /integrations/chess-hotel/tickets?email=...`
 
@@ -1002,7 +1002,7 @@ Endpoint tenant-facing correspondente para abrir um pedido de suporte:
 POST /support/request   (autenticado como usuário do tenant) → { contact_name, contact_whatsapp, message? }
 ```
 
-Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`), visível em todas as páginas autenticadas do tenant. Não há endpoint de criação manual de `usage_records` além do snapshot — não há Celery no Registro, então a geração é sob demanda pelo botão "Gerar snapshot de hoje" no admin.
+Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`), visível em todas as páginas autenticadas do tenant. Não há endpoint de criação manual de `usage_records` além do snapshot — não há Celery no GEOP, então a geração é sob demanda pelo botão "Gerar snapshot de hoje" no admin.
 
 Frontend admin: `/users`, `/support-requests`, `/usage`.
 
@@ -1042,6 +1042,6 @@ Frontend admin: `/settings` (`admin/app/(app)/settings/email-settings-form.tsx`)
 POST /settings/brevo/test  { to: string }  → { status: "sent", message_id }
 ```
 
-Dispara um e-mail real via `app.integrations.brevo.send_email()` usando a config já salva em `company_settings.brevo` (não aceita credenciais no body — sempre usa o que está persistido). `422 not_configured` se a empresa ainda não salvou nenhuma config; `502 send_failed` (com `status` = código HTTP retornado pela Brevo) se a API rejeitar a chave/remetente — cenário mais comum quando o domínio do remetente não está autenticado (SPF/DKIM) na conta Brevo, algo que a API do Registro não verifica nem pode automatizar.
+Dispara um e-mail real via `app.integrations.brevo.send_email()` usando a config já salva em `company_settings.brevo` (não aceita credenciais no body — sempre usa o que está persistido). `422 not_configured` se a empresa ainda não salvou nenhuma config; `502 send_failed` (com `status` = código HTTP retornado pela Brevo) se a API rejeitar a chave/remetente — cenário mais comum quando o domínio do remetente não está autenticado (SPF/DKIM) na conta Brevo, algo que a API do GEOP não verifica nem pode automatizar.
 
 Frontend `web/`: seção "Testar envio" em `/configuracoes?tab=integracoes`, só aparece depois que `has_credentials` é `true` (`BrevoSettingsSection` em `web/components/settings-sections.tsx`).

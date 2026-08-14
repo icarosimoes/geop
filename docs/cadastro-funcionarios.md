@@ -4,7 +4,7 @@
 
 O `Employee` é a entidade de RH que representa quem trabalha no hotel — separada de `User` (conta de login do sistema). Antes desta separação, o módulo de ponto/escala usava `User` como se fosse o "funcionário", misturando dois conceitos distintos:
 
-- **User**: quem tem login e senha no Registro (pode ser um gerente, recepcionista, ou até um usuário de plataforma sem vínculo operacional).
+- **User**: quem tem login e senha no GEOP (pode ser um gerente, recepcionista, ou até um usuário de plataforma sem vínculo operacional).
 - **Employee**: quem trabalha no hotel e é gerenciado pelo RH (nem todo funcionário loga no sistema; nem todo usuário do sistema é necessariamente um funcionário do hotel).
 
 `Employee` é hoje a entidade referenciada por ponto eletrônico e escala de trabalho (`schedule_entries`, `time_clock_enrollments`, `time_punches`), com vínculo **opcional** para um `User`.
@@ -79,7 +79,7 @@ No frontend (`web/app/cadastros/funcionarios/manager.tsx`), o CPF é campo obrig
 
 ### EmployeeExternalId (integrações futuras)
 
-Tabela 1:N para guardar identificadores de sistemas externos (ERP, folha de pagamento), pensando na integração futura do Registro com outros sistemas:
+Tabela 1:N para guardar identificadores de sistemas externos (ERP, folha de pagamento), pensando na integração futura do GEOP com outros sistemas:
 
 ```sql
 CREATE TABLE employee_external_ids (
@@ -95,7 +95,7 @@ CREATE TABLE employee_external_ids (
 );
 ```
 
-**Exemplo de uso**: quando o Registro integrar com um ERP de folha de pagamento, o `employee_id=5` pode ter um `EmployeeExternalId(system="totvs", external_id="00123")` guardando o código do funcionário nesse sistema — sem precisar de uma coluna nova em `employees` a cada integração nova.
+**Exemplo de uso**: quando o GEOP integrar com um ERP de folha de pagamento, o `employee_id=5` pode ter um `EmployeeExternalId(system="totvs", external_id="00123")` guardando o código do funcionário nesse sistema — sem precisar de uma coluna nova em `employees` a cada integração nova.
 
 Essa tabela é independente de `TimeClockEnrollment`, que continua existindo e é específica para vincular um funcionário a uma matrícula no relógio de ponto físico.
 
@@ -251,7 +251,7 @@ A migração `20260704_0046` adicionou `job_title`, `hire_date`, `termination_da
 
 ## Relação com integração de sistemas externos
 
-O Registro planeja se comunicar futuramente com sistemas externos (ERP, folha de pagamento). O cadastro de Funcionários nasce preparado para isso via `EmployeeExternalId` — ao integrar com um novo sistema, basta gravar o par `(system, external_id)` sem alterar o schema de `employees`.
+O GEOP planeja se comunicar futuramente com sistemas externos (ERP, folha de pagamento). O cadastro de Funcionários nasce preparado para isso via `EmployeeExternalId` — ao integrar com um novo sistema, basta gravar o par `(system, external_id)` sem alterar o schema de `employees`.
 
 Isso é análogo ao padrão já usado pela integração do [Chess Hotel](integracao-escala-ponto.md), mas desacoplado: cada sistema externo pode ter seu próprio identificador para o mesmo funcionário, sem conflito.
 

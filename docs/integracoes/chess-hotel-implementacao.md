@@ -1,13 +1,13 @@
-# Integração Chess Hotel → Registro — Guia de implementação em produção
+# Integração Chess Hotel → GEOP — Guia de implementação em produção
 
 ## Objetivo
 
-Permitir que a recepção e outros setores do hotel abram chamados no sistema Registro diretamente de dentro do Chess Hotel (front) e Chess Gestão (back), sem sair do PMS. Os chamados são de dois tipos:
+Permitir que a recepção e outros setores do hotel abram chamados no sistema GEOP diretamente de dentro do Chess Hotel (front) e Chess Gestão (back), sem sair do PMS. Os chamados são de dois tipos:
 
 - **Solicitação Fiscal** — problemas com emissão de notas fiscais (recepção → financeiro)
 - **Chamado de Manutenção** — solicitações corretivas, preventivas ou emergenciais
 
-O Chess Hotel **não é modificado estruturalmente**. A integração consiste em **um componente Vue adicionado ao layout** e **uma variável de ambiente** apontando para a API do Registro.
+O Chess Hotel **não é modificado estruturalmente**. A integração consiste em **um componente Vue adicionado ao layout** e **uma variável de ambiente** apontando para a API do GEOP.
 
 ---
 
@@ -97,7 +97,7 @@ VUE_APP_REGISTRO_API_URL=https://registro-api-hom.dominio.com.br/api/v1/chamados
 VUE_APP_REGISTRO_API_URL=https://registro-api.dominio.com.br/api/v1/chamados
 ```
 
-> Substituir pelos domínios reais quando o Registro estiver em produção. Enquanto a variável não existir ou a URL não responder, o componente automaticamente salva os chamados em `localStorage` (chave `registro_pending_tickets`) para sincronização futura.
+> Substituir pelos domínios reais quando o GEOP estiver em produção. Enquanto a variável não existir ou a URL não responder, o componente automaticamente salva os chamados em `localStorage` (chave `registro_pending_tickets`) para sincronização futura.
 
 ### 4. Rebuild e deploy
 
@@ -159,7 +159,7 @@ Se `VUE_APP_REGISTRO_API_URL` não estiver configurado ou o POST falhar, o chama
 
 ---
 
-## Contrato da API do Registro (implementado)
+## Contrato da API do GEOP (implementado)
 
 O endpoint de solicitações fiscais já está implementado:
 
@@ -220,7 +220,7 @@ O componente exibe o `protocol` no snackbar. Se a resposta não contiver `protoc
 
 ## Autenticação cross-system
 
-O Chess Hotel usa Bearer token (JWT) gerado pelo Laravel, armazenado em `localStorage.accessToken`. O Registro usa seu próprio JWT.
+O Chess Hotel usa Bearer token (JWT) gerado pelo Laravel, armazenado em `localStorage.accessToken`. O GEOP usa seu próprio JWT.
 
 **Opções para autenticação entre os dois sistemas** (escolher uma):
 

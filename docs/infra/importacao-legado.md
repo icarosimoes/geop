@@ -1,6 +1,6 @@
 # Importação de tenants via MySQL (V1)
 
-O importador (`api/app/import_v1.py`) lê um dump MySQL do sistema legado (Chess Hotel / Aero) e carrega os dados no PostgreSQL do Registro como um tenant isolado.
+O importador (`api/app/import_v1.py`) lê um dump MySQL do sistema legado (Chess Hotel / Aero) e carrega os dados no PostgreSQL do GEOP como um tenant isolado.
 
 Cada hotel é um tenant separado identificado por um slug (ex: `aero-hotel`, `hotel-xyz`). O mesmo importador serve para qualquer cliente — basta passar o dump e o slug.
 
@@ -55,7 +55,7 @@ A imagem da API em produção pode não ter o driver MySQL (`asyncmy`). O script
 | Argumento | Posição | Default | Descrição |
 | --- | --- | --- | --- |
 | `dump.sql` | 1 (obrigatório) | — | Caminho local do dump MySQL |
-| `slug` | 2 (opcional) | `aero-hotel` | Slug do tenant no Registro |
+| `slug` | 2 (opcional) | `aero-hotel` | Slug do tenant no GEOP |
 
 ### Variáveis configuráveis
 
@@ -96,7 +96,7 @@ Para nomes com acentos ou formatação específica, passe explicitamente.
 ### O que NÃO é importado
 
 - **Anexos/arquivos físicos** — uploads do Laravel ficam no filesystem do servidor antigo. Requerem migração separada ao MinIO.
-- **Configurações do sistema** — cada tenant começa com configurações padrão do Registro.
+- **Configurações do sistema** — cada tenant começa com configurações padrão do GEOP.
 
 ## Permissões e roles
 
@@ -105,7 +105,7 @@ O importador cria dois roles para cada tenant:
 - **admin** — permissão wildcard `*`, acesso total. Todos os usuários importados recebem este role.
 - **legacy-admin** — preserva as ACLs originais do Laravel (códigos como `legacy.occurrencescontroller.index`). Mantido apenas para referência, não é usado no controle de acesso.
 
-Após a importação, roles adicionais (gerente, recepção, governança, etc.) podem ser criados pela interface de Perfis do Registro.
+Após a importação, roles adicionais (gerente, recepção, governança, etc.) podem ser criados pela interface de Perfis do GEOP.
 
 ## Idempotência e reimportação
 

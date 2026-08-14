@@ -1,6 +1,6 @@
-# Agentes Jarvis do Registro
+# Agentes Jarvis do GEOP
 
-Regras adaptadas da referência Aloji em `/home/icarosimoes/dev/aloji/docs/agentes`. Este diretório é a cópia aplicável e versionada do Registro; prevalece sobre referências externas quando houver diferença de domínio.
+Regras adaptadas da referência Aloji em `/home/icarosimoes/dev/aloji/docs/agentes`. Este diretório é a cópia aplicável e versionada do GEOP; prevalece sobre referências externas quando houver diferença de domínio.
 
 - [Engenharia](jarvis-engenharia.md): arquitetura, qualidade e entrega.
 - [Layout e CRUD](jarvis-layout-crud.md): telas, estados e acessibilidade.

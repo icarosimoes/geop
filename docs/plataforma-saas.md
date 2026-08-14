@@ -6,7 +6,7 @@ O Compose sobe PostgreSQL 17 com RLS, MinIO, API, Web e Admin. Alembic executa m
 
 | Componente | URL local | Responsabilidade |
 | --- | --- | --- |
-| Web do tenant | `http://localhost:3000` | produto Registro |
+| Web do tenant | `http://localhost:3000` | produto GEOP |
 | API | `http://localhost:8000` | regras tenant e plataforma |
 | Painel admin | `http://localhost:3001/login` | operação comercial cross-tenant |
 | PostgreSQL | `localhost:5433` | banco principal com RLS |
@@ -38,7 +38,7 @@ O painel admin foi reescrito no padrão Jarvis/Aloji com Tailwind CSS 4, Lucide 
 - **Planos**: cards com preço formatado em BRL, limites e status ativo/inativo.
 - **Usuários**: CRUD da equipe interna da plataforma (`PlatformUser`), com papéis `super_admin`/`support`/`billing`/`read_only`.
 - **Suporte**: fila de pedidos abertos pelo botão de Ajuda do tenant (`web/`), com filtro por status (pendente/contatado/resolvido).
-- **Uso**: consumo por tenant (usuários ativos, ocorrências do mês), agregado por métrica; snapshot gerado sob demanda (sem Celery no Registro).
+- **Uso**: consumo por tenant (usuários ativos, ocorrências do mês), agregado por métrica; snapshot gerado sob demanda (sem Celery no GEOP).
 - **Configurações**: e-mail transacional (Brevo) usado pela API para convites e avisos do sistema, no mesmo padrão do Aloji — sobrepõe as variáveis de ambiente, sem precisar de redeploy.
 - **Auditoria**: tabela de logs administrativos da plataforma (`platform_audit_logs`).
 - **Auth**: Server Actions + httpOnly cookies.

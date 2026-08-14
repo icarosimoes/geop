@@ -1,6 +1,6 @@
-# Deploy do Registro em novo domínio
+# Deploy do GEOP em novo domínio
 
-Procedimento reproduzível para publicar o Registro em outro domínio ou em outro Swarm. O primeiro deploy validado ocorreu em 22/06/2026; as falhas reais encontradas estão registradas no fim deste documento.
+Procedimento reproduzível para publicar o GEOP em outro domínio ou em outro Swarm. O primeiro deploy validado ocorreu em 22/06/2026; as falhas reais encontradas estão registradas no fim deste documento.
 
 ## Parâmetros do ambiente
 
@@ -36,7 +36,7 @@ docker network inspect traefik-public >/dev/null
 docker service inspect traefik_traefik --format '{{json .Spec.TaskTemplate.ContainerSpec.Args}}'
 ```
 
-O stack do Registro usa o resolver `letsencrypt`. Confirme que o Traefik possui `--certificatesresolvers.letsencrypt...`; o nome precisa ser idêntico nas labels.
+O stack do GEOP usa o resolver `letsencrypt`. Confirme que o Traefik possui `--certificatesresolvers.letsencrypt...`; o nome precisa ser idêntico nas labels.
 
 ## 2. DNS e Cloudflare
 

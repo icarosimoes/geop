@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Validar que o procedimento de restore do Registro funciona **end-to-end**: desde a leitura do dump PostgreSQL e do espelho MinIO ate a verificacao de integridade dos dados e acesso via API. Este teste garante que, em caso de desastre real, a equipe consiga restaurar o sistema dentro do RTO de 1 hora.
+Validar que o procedimento de restore do GEOP funciona **end-to-end**: desde a leitura do dump PostgreSQL e do espelho MinIO ate a verificacao de integridade dos dados e acesso via API. Este teste garante que, em caso de desastre real, a equipe consiga restaurar o sistema dentro do RTO de 1 hora.
 
 ## Frequencia
 
@@ -11,7 +11,7 @@ Validar que o procedimento de restore do Registro funciona **end-to-end**: desde
 ## Pre-requisitos
 
 - [ ] Acesso SSH ao servidor de producao (node manager do Swarm)
-- [ ] Docker funcionando e services do Registro ativos
+- [ ] Docker funcionando e services do GEOP ativos
 - [ ] Pelo menos 1 backup recente disponivel em `/backups/`
 - [ ] `mc` (MinIO Client) instalado ou acessivel no host
 - [ ] Espaco em disco suficiente para subir um container PostgreSQL temporario (~2x o tamanho do dump)

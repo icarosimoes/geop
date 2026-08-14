@@ -1,4 +1,4 @@
-# Arquitetura do Registro
+# Arquitetura do GEOP
 
 ## Objetivo
 

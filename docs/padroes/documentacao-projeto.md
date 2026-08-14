@@ -1,4 +1,4 @@
-# Padrão de documentação do Registro
+# Padrão de documentação do GEOP
 
 Adaptado do padrão Aloji para manter memória e operação junto do código.
 

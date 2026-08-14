@@ -1,7 +1,7 @@
 # Inventário de Anexos Físicos — V1 (Aero Hotel)
 
 Mapeamento completo dos arquivos armazenados no servidor V1 (Laravel `storage/app/`)
-para migração ao MinIO do Registro V2.
+para migração ao MinIO do GEOP V2.
 
 ## Resumo
 

@@ -1,6 +1,6 @@
 # Jarvis — Asaas
 
-O Asaas é o provedor de cobrança da assinatura do Registro. A integração está implementada com sandbox ativo.
+O Asaas é o provedor de cobrança da assinatura do GEOP. A integração está implementada com sandbox ativo.
 
 ## Implementação
 
@@ -13,7 +13,7 @@ O Asaas é o provedor de cobrança da assinatura do Registro. A integração est
 - Credencial da plataforma e eventual credencial de tenant são segredos diferentes.
 - A chave nunca chega ao navegador, log, banco em texto aberto ou imagem Docker.
 - `subscriptions` guarda o vínculo comercial; `invoices` espelha cobranças e eventos externos.
-- IDs externos são referências, não chaves primárias do Registro.
+- IDs externos são referências, não chaves primárias do GEOP.
 - Valores usam centavos inteiros e datas usam UTC.
 
 ## Webhook

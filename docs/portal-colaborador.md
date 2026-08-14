@@ -3,7 +3,7 @@
 PWA separado (`colaborador/`) para o `Employee` (cadastro de RH — ver
 [cadastro-funcionarios.md](cadastro-funcionarios.md)) bater ponto pelo celular com
 validação de geolocalização, consultar sua escala e baixar seu contracheque. Não usa
-conta de login (`User`) nem o menu completo do Registro — é um app instalável dedicado,
+conta de login (`User`) nem o menu completo do GEOP — é um app instalável dedicado,
 paralelo a `web/` e `admin/` na raiz do monorepo.
 
 Complementa a integração de ponto físico já existente (relógio Control iD via webhook,
@@ -114,7 +114,7 @@ estão documentados em [escala-de-trabalho.md](escala-de-trabalho.md#banco-de-ho
 ## Frontend (`colaborador/`)
 
 App Next.js 16 App Router independente (porta 3002 em dev, serviço `colaborador` no
-`docker-compose.yml`), sem menu completo do Registro:
+`docker-compose.yml`), sem menu completo do GEOP:
 
 - `login/page.tsx` — company_slug + matrícula + PIN; `login/trocar-pin/page.tsx` quando
   `must_change_pin` vem `true` na resposta de login.
@@ -162,10 +162,10 @@ o anterior, correção de batida existente vs. batida esquecida, dupla revisão 
 
 ## Importação de contracheque em lote (2026-07-05)
 
-Não existe um ERP de folha fixo entre os clientes do Registro: a folha é normalmente
+Não existe um ERP de folha fixo entre os clientes do GEOP: a folha é normalmente
 terceirizada, e cada hotel usa o sistema do escritório contábil que contratar (Domínio,
 Alterdata, TOTVS, etc.). Nenhum desses sistemas expõe hoje uma API self-service que o
-Registro (SaaS de terceiro) possa chamar em nome do escritório contábil — só o próprio
+GEOP (SaaS de terceiro) possa chamar em nome do escritório contábil — só o próprio
 escritório costuma ter acesso à API/portal do sistema que usa. Construir um conector de API
 contra um ERP específico seria especulativo sem um cliente-alvo real.
 
@@ -199,7 +199,7 @@ quando o CPF vier vazio na linha.
 
 - Contexto seguro (HTTPS) é exigido pelo browser para `navigator.geolocation` fora de
   `localhost` — em produção o PWA precisa estar servido em HTTPS, o que já é o padrão do
-  deploy Swarm do Registro.
+  deploy Swarm do GEOP.
 - PIN numérico curto é uma escolha consciente de UX sobre segurança forte — mitigado por
   lockout e TTL curto do token, não substitui autenticação forte se o caso de uso mudar
   (ex: se o app passar a expor dados mais sensíveis que ponto/escala/contracheque).
