@@ -841,3 +841,40 @@ Antes de aplicar a migration destrutiva, o usuário autorizou pular o backup do 
 - **Migration**: executada exatamente pelo procedimento documentado em `deploy-swarm.md` (rede overlay temporária `registro-migration-temp` conectando o container `registro_db`, `docker run` da imagem atual da API rodando `alembic upgrade head`, rede removida depois). `20260713_0060` → `20260713_0061` sem erros.
 - **Validação pós-deploy**: `SELECT version_num FROM alembic_version` = `20260713_0061`; tabela `occurrences` confirmada inexistente; `work_orders` com `sector_id`/`unit`/`comments`/`deadline`; tabela `work_order_participants` existe. Réplicas convergidas (`registro_api` 2/2, `registro_web` 2/2, `registro_admin` 1/1, `registro_colaborador` 1/1). `/api/v1/health` 200; `/api/v1/health/ready` `database: connected`; `GET /work-orders` sem auth retornou `401` (esperado); `/login` do `web` respondeu `200`.
 - **Achado não relacionado, corrigido a pedido do usuário**: `registro_redis` estava com 0/1 réplicas há 3 dias (`Rejected`/`context canceled`, sem relação com este deploy — `/health/ready` já reportava `cache: unavailable` antes de eu tocar em qualquer coisa). Logs do Redis não mostraram crash, só um shutdown limpo (SIGTERM) e a réplica nunca foi reagendada pelo Swarm depois disso. `docker service update --force registro_redis` trouxe a réplica de volta (1/1), mas `registro_api` continuou reportando `cache: unavailable` — os 2 réplicas da API tinham a conexão Redis presa num estado de falha de quando o cache estava fora. `docker service update --force registro_api` (rolling restart, mesma operação de rotina já usada em deploys anteriores) resolveu; `/health/ready` confirmado com `cache: connected` depois. Registrado em `backlog.md`.
+
+## 2026-08-14 — Troca de domínio para geop.solidsd.com.br e rebranding para GEOP
+
+Pedido do usuário: "vamos trocar o apontamento de dominio de registro.solidsd.com.br para geop.solidsd.com.br". Os registros DNS `api.geop.*`/`colaborador.geop.*` já existiam na Cloudflare quando o pedido chegou; `geop.solidsd.com.br` e `painel.geop.solidsd.com.br` também.
+
+### Achado antes de mexer em produção: proxy Cloudflare quebraria TLS
+
+Os 4 hosts `geop.*` estavam com proxy Cloudflare ativo ("nuvem laranja"). Confirmado com `openssl s_client` que o certificado Universal SSL gratuito da Cloudflare cobre só `solidsd.com.br` + `*.solidsd.com.br` (1 nível) — `api.geop.solidsd.com.br` (2 níveis) já falhava o handshake TLS na hora (`alert number 40`), exatamente a mesma falha já documentada em `deploy-novo-dominio.md` do primeiro deploy. Comparado com `erp.solidsd.com.br` (1 nível, funcionando) para confirmar a causa. Usuário optou por não pagar Advanced Certificate Manager; solução acordada: manter proxy só no host web (`geop.solidsd.com.br`, 1 nível, coberto pelo wildcard grátis) e colocar `api.`/`painel.`/`colaborador.` em DNS-only — mesma configuração que `registro.*` já usava. Na prática o usuário colocou os 4 em DNS-only ("ta tudo cinza"), o que também funciona (Traefik emite Let's Encrypt direto).
+
+### Incidente: usuário apagou o DNS antigo antes do redeploy estar pronto
+
+Enquanto a investigação acima estava em andamento, o usuário excluiu os registros DNS de `registro.solidsd.com.br` (site, api, painel, colaborador) na Cloudflare — confirmado via `getent`/`dig`: os 4 hosts pararam de resolver (NXDOMAIN) de um momento para o outro, com o Swarm em produção ainda apontando `.env.prod` para o domínio antigo. Efeito: o site ficou inacessível por DNS para quem usava o domínio antigo até o redeploy ser concluído (poucos minutos). A troca do `.env.prod`/redeploy já estava em andamento quando o incidente foi percebido; não houve decisão de atraso.
+
+### Correção aplicada
+
+Acesso SSH a `root@95.111.250.4` (bloqueado inicialmente pelo classificador de permissões do ambiente por ser produção; autorizado pelo usuário ao ser perguntado). Na VPS:
+
+- Backup de `/opt/registro/.env.prod` antes de qualquer alteração.
+- `.env.prod` atualizado: `REGISTRO_WEB_HOST`/`REGISTRO_API_HOST`/`REGISTRO_ADMIN_HOST`/`REGISTRO_COLABORADOR_HOST`/`REGISTRO_WEB_ORIGIN` trocados para os hosts `geop.*`.
+- **Achado à parte, corrigido de passagem**: o `IMAGE_TAG` gravado no `.env.prod` (`sha-6f2677d...`) estava desatualizado em relação à imagem realmente rodando no Swarm (`sha-4f59c8fa...`, confirmado via `docker service inspect`). Se o `docker stack deploy` tivesse rodado sem essa correção, teria causado um rollback acidental de versão. Corrigido antes do deploy.
+- `docker stack config` validado, depois `docker stack deploy -c docker-stack.yml --with-registry-auth registro`. Os 9 serviços convergiram (`N/N` saudável).
+- Validação: `geop.solidsd.com.br/login` (200, TLS válido) primeiro (só esse tinha proxy desligado a tempo); `api./painel./colaborador.geop.solidsd.com.br` só validaram depois que o usuário confirmou ter trocado os 4 registros para DNS-only na Cloudflare — `openssl s_client` direto contra `95.111.250.4` confirmou certificado Let's Encrypt válido (`CN` de cada host, issuer `Let's Encrypt`) nos 3; `/api/v1/health` e `/api/v1/health/ready` retornaram `database: connected`/`cache: connected`.
+
+### Documentação atualizada
+
+`docs/mapa.md`, `docs/contexto-registro.md`, `docs/infra/deploy-swarm.md` (variáveis reais da VPS + nota sobre por que os hosts ficam DNS-only), `docs/integracoes/chess-hotel-api.md` e seu `.postman_collection.json` — todos apontando para `geop.solidsd.com.br` agora. Changelog histórico (`backlog.md`, `registro-trabalho.md`) não foi reescrito.
+
+### Rebranding: "Registro" → "GEOP (Gestão Operacional)"
+
+Pedido do usuário, na sequência: "o nome do sistema agora vai ser GEOP Gestão Operacional". Escopo definido em duas etapas:
+
+1. **Marca visível ao usuário** — títulos e metadata (`web`, `admin`, manifest PWA), logos e telas de login (`web`/`admin`/`colaborador`), e-mails transacionais (boas-vindas, teste de envio, notificações), descrição de assinatura enviada ao Asaas (aparece na fatura do cliente), nome do usuário admin seedado, `README.md` e `CLAUDE.md`.
+2. **Documentação técnica** — ~23 arquivos em `/docs` (arquitetura, ADRs, domain model, guias de infra, apresentação externa, catálogo de relógios de ponto, etc.), trocando só menções de marca — preservado o uso genérico da palavra "registro" (record/log, ex. "Registro de execuções", "Registros deletados"), valores técnicos (`REGISTRO_*` env vars, header `X-Registro-Key`, enum `origin="registro"`, domínios `registro.local`/`registro.app`, senhas seed `Registro@123`/`RegistroAdmin@123`) e o changelog histórico datado (`backlog.md`, `registro-trabalho.md`, `memoria-projeto.md`, `auditoria-2026-06-22.md`), que registra fatos do passado e não deve ser reescrito.
+
+**Deliberadamente fora do escopo**, por decisão do usuário ("vamos manter assim sem mudar os nomes das stack"): identificadores técnicos de infraestrutura — nome do banco `registro`, secrets do Docker Swarm, bucket S3 `registro-attachments`, imagens GHCR `registro/api|web|admin|colaborador`, nome do stack `registro` no Swarm. Renomear qualquer um desses exige recriar secrets (reinício de todos os serviços), copiar objetos do MinIO para um bucket novo (S3 não tem rename) e, no caso do nome do stack, risco real de perder acesso aos volumes existentes se feito sem cuidado — fica para uma janela de manutenção dedicada, se algum dia for decidido fazer.
+
+**Integração Chess Hotel**: o usuário informou no meio da sessão que a integração não vai mais existir ("esqueça o Chess Hotel", "não teremos mais integração") — a documentação da integração (`chess-hotel.md`, `chess-hotel-implementacao.md`) recebeu só parte do rebrand de marca antes desse aviso; nada no código (`X-Registro-Key`, endpoints, componente `RegistroLauncher.vue` do lado do Chess) foi tocado, por instrução explícita de parar.
