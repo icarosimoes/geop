@@ -8,7 +8,7 @@
     {
       "key": "base_url",
       "value": "http://localhost:8000/api/v1",
-      "description": "URL base da API. Produção: https://registro.solidsd.com.br/api/v1"
+      "description": "URL base da API. Produção: https://geop.solidsd.com.br/api/v1"
     },
     {
       "key": "integration_key",
@@ -129,7 +129,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"protocol\": \"REG-000042\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n  \"attachments_count\": 0\n}"
+          "body": "{\n  \"protocol\": \"REG-000042\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n  \"attachments_count\": 0\n}"
         },
         {
           "name": "200 — Ticket criado com screenshots",
@@ -138,7 +138,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"protocol\": \"REG-000043\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000043\",\n  \"attachments_count\": 2\n}"
+          "body": "{\n  \"protocol\": \"REG-000043\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000043\",\n  \"attachments_count\": 2\n}"
         },
         {
           "name": "404 — Usuário não encontrado",
@@ -203,7 +203,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"protocol\": \"REG-000044\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000044\",\n  \"attachments_count\": 1\n}"
+          "body": "{\n  \"protocol\": \"REG-000044\",\n  \"status\": \"Em andamento\",\n  \"responsible\": null,\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"url\": \"https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000044\",\n  \"attachments_count\": 1\n}"
         }
       ]
     },
@@ -233,7 +233,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"user\": {\n    \"exists\": true,\n    \"id\": 42,\n    \"name\": \"João Silva\",\n    \"email\": \"joao@hotel.com\"\n  },\n  \"items\": [\n    {\n      \"protocol\": \"REG-000042\",\n      \"request_type\": \"NF-e\",\n      \"status\": \"Em andamento\",\n      \"responsible\": \"Maria Souza\",\n      \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n      \"completed\": false,\n      \"updated_at\": \"2026-06-22T14:30:00Z\",\n      \"url\": \"https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n      \"history\": [\n        {\n          \"event\": \"create_from_chess\",\n          \"user\": \"João Silva\",\n          \"at\": \"2026-06-22T10:00:00Z\",\n          \"changes\": null\n        },\n        {\n          \"event\": \"update\",\n          \"user\": \"Maria Souza\",\n          \"at\": \"2026-06-22T14:30:00Z\",\n          \"changes\": {\n            \"status\": [\"Em andamento\", \"Concluído\"]\n          }\n        }\n      ]\n    }\n  ]\n}"
+          "body": "{\n  \"user\": {\n    \"exists\": true,\n    \"id\": 42,\n    \"name\": \"João Silva\",\n    \"email\": \"joao@hotel.com\"\n  },\n  \"items\": [\n    {\n      \"protocol\": \"REG-000042\",\n      \"request_type\": \"NF-e\",\n      \"status\": \"Em andamento\",\n      \"responsible\": \"Maria Souza\",\n      \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n      \"completed\": false,\n      \"updated_at\": \"2026-06-22T14:30:00Z\",\n      \"url\": \"https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n      \"history\": [\n        {\n          \"event\": \"create_from_chess\",\n          \"user\": \"João Silva\",\n          \"at\": \"2026-06-22T10:00:00Z\",\n          \"changes\": null\n        },\n        {\n          \"event\": \"update\",\n          \"user\": \"Maria Souza\",\n          \"at\": \"2026-06-22T14:30:00Z\",\n          \"changes\": {\n            \"status\": [\"Em andamento\", \"Concluído\"]\n          }\n        }\n      ]\n    }\n  ]\n}"
         }
       ]
     },
@@ -263,7 +263,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"protocol\": \"REG-000042\",\n  \"request_type\": \"NF-e\",\n  \"status\": \"Concluído\",\n  \"responsible\": \"Maria Souza\",\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"completed\": true,\n  \"updated_at\": \"2026-06-23T09:15:00Z\",\n  \"url\": \"https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n  \"history\": [\n    {\n      \"event\": \"create_from_chess\",\n      \"user\": \"João Silva\",\n      \"at\": \"2026-06-22T10:00:00Z\",\n      \"changes\": null\n    },\n    {\n      \"event\": \"update\",\n      \"user\": \"Maria Souza\",\n      \"at\": \"2026-06-23T09:15:00Z\",\n      \"changes\": {\n        \"status\": [\"Em andamento\", \"Concluído\"]\n      }\n    }\n  ]\n}"
+          "body": "{\n  \"protocol\": \"REG-000042\",\n  \"request_type\": \"NF-e\",\n  \"status\": \"Concluído\",\n  \"responsible\": \"Maria Souza\",\n  \"sla_deadline\": \"2026-06-24T18:00:00Z\",\n  \"completed\": true,\n  \"updated_at\": \"2026-06-23T09:15:00Z\",\n  \"url\": \"https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042\",\n  \"history\": [\n    {\n      \"event\": \"create_from_chess\",\n      \"user\": \"João Silva\",\n      \"at\": \"2026-06-22T10:00:00Z\",\n      \"changes\": null\n    },\n    {\n      \"event\": \"update\",\n      \"user\": \"Maria Souza\",\n      \"at\": \"2026-06-23T09:15:00Z\",\n      \"changes\": {\n        \"status\": [\"Em andamento\", \"Concluído\"]\n      }\n    }\n  ]\n}"
         },
         {
           "name": "404 — Ticket não encontrado",

@@ -12,7 +12,7 @@
 | SaaS/Billing | tenants, planos, assinaturas, faturas, lifecycle trial→suspended | Asaas sandbox + webhook idempotente |
 | Asaas | AsaasClient async, webhook autenticado, reconciliação periódica | sandbox configurado |
 | Laravel V1 | 66 tabelas restauradas em staging | dump local (MySQL via profile `mysql-import`) |
-| Swarm | produção ativa em `registro.solidsd.com.br`, `api.registro.solidsd.com.br` e `painel.registro.solidsd.com.br` | GHCR + Traefik + secrets externos |
+| Swarm | produção ativa em `geop.solidsd.com.br`, `api.geop.solidsd.com.br` e `painel.geop.solidsd.com.br` | GHCR + Traefik + secrets externos |
 | Cache | Redis com TTL, invalidação por tenant e readiness | dashboard e permissões |
 | ACL | 35 permissões, roles por empresa, wildcard `*` | seed + CRUD via `/roles` |
 | Solicitações fiscais | CRUD via API + integração Chess Hotel + SLA + anexos MinIO | `fiscal_requests` isolada por tenant |

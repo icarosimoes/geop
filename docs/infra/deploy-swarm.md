@@ -49,15 +49,17 @@ PostgreSQL, Redis e MinIO fazem parte da stack e mantêm volumes locais fixados 
 Arquivo local `/opt/registro/.env.prod`, nunca versionado:
 
 ```env
-REGISTRO_WEB_HOST=registro.solidsd.com.br
-REGISTRO_API_HOST=api.registro.solidsd.com.br
-REGISTRO_ADMIN_HOST=painel.registro.solidsd.com.br
-REGISTRO_COLABORADOR_HOST=colaborador.registro.solidsd.com.br
-REGISTRO_WEB_ORIGIN=https://registro.solidsd.com.br
+REGISTRO_WEB_HOST=geop.solidsd.com.br
+REGISTRO_API_HOST=api.geop.solidsd.com.br
+REGISTRO_ADMIN_HOST=painel.geop.solidsd.com.br
+REGISTRO_COLABORADOR_HOST=colaborador.geop.solidsd.com.br
+REGISTRO_WEB_ORIGIN=https://geop.solidsd.com.br
 IMAGE_TAG=sha-<sha-completo>
 ```
 
-A API é publicada em `api.registro.solidsd.com.br`; seus endpoints permanecem sob `/api/v1`.
+A API é publicada em `api.geop.solidsd.com.br`; seus endpoints permanecem sob `/api/v1`.
+
+> Domínio trocado de `registro.solidsd.com.br` para `geop.solidsd.com.br` em 14/08/2026 (ver seção "Troca futura de domínio" em [deploy-novo-dominio.md](deploy-novo-dominio.md)). Os 4 hosts ficam DNS-only na Cloudflare (sem proxy) — Universal SSL grátis não cobre os subdomínios de 2º nível (`api.`, `painel.`, `colaborador.`), então o Traefik precisa acesso direto para emitir/renovar o certificado Let's Encrypt.
 
 ## Deploy automático (CI/CD)
 

@@ -99,4 +99,4 @@ A decisao de transformar o Registro em SaaS comercial veio da percepcao de que o
 - 25+ tabelas com RLS ativo
 - 35 permissoes granulares
 - 70+ testes automatizados
-- Producao ativa em `registro.solidsd.com.br`
+- Producao ativa em `geop.solidsd.com.br`

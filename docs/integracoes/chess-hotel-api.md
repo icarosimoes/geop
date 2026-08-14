@@ -38,7 +38,7 @@ HTTP 401
 
 | Ambiente        | URL                                          |
 |-----------------|----------------------------------------------|
-| Produção        | `https://registro.solidsd.com.br/api/v1`     |
+| Produção        | `https://geop.solidsd.com.br/api/v1`     |
 | Desenvolvimento | `http://localhost:8000/api/v1`                |
 
 ---
@@ -166,7 +166,7 @@ Screenshots inválidos (formato não suportado, base64 malformado) são ignorado
   "status": "Em andamento",
   "responsible": null,
   "sla_deadline": "2026-06-24T18:00:00Z",
-  "url": "https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
+  "url": "https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
   "attachments_count": 2
 }
 ```
@@ -214,7 +214,7 @@ X-Registro-Key: <chave>
       "sla_deadline": "2026-06-24T18:00:00Z",
       "completed": false,
       "updated_at": "2026-06-22T14:30:00Z",
-      "url": "https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
+      "url": "https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
       "history": [
         {
           "event": "create_from_chess",
@@ -264,7 +264,7 @@ X-Registro-Key: <chave>
   "sla_deadline": "2026-06-24T18:00:00Z",
   "completed": true,
   "updated_at": "2026-06-23T09:15:00Z",
-  "url": "https://registro.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
+  "url": "https://geop.solidsd.com.br/solicitacoes-fiscais?protocol=REG-000042",
   "history": [
     {
       "event": "create_from_chess",
@@ -300,7 +300,7 @@ Para conectar o Chess Hotel ao Registro, o desenvolvedor precisa configurar:
 
 | Configuração | Valor |
 |-------------|-------|
-| **URL da API** | `https://registro.solidsd.com.br/api/v1` |
+| **URL da API** | `https://geop.solidsd.com.br/api/v1` |
 | **Header de autenticação** | `X-Registro-Key` |
 | **Chave de integração** | Será fornecida (string com 32+ caracteres) |
 | **Slug do hotel** | `"aero-hotel"` |
@@ -341,7 +341,7 @@ Para conectar o Chess Hotel ao Registro, o desenvolvedor precisa configurar:
 ### Criar ticket
 
 ```bash
-curl -X POST https://registro.solidsd.com.br/api/v1/integrations/chess-hotel/tickets \
+curl -X POST https://geop.solidsd.com.br/api/v1/integrations/chess-hotel/tickets \
   -H "Content-Type: application/json" \
   -H "X-Registro-Key: sua-chave-de-integracao-aqui" \
   -d '{
@@ -359,14 +359,14 @@ curl -X POST https://registro.solidsd.com.br/api/v1/integrations/chess-hotel/tic
 ### Consultar tickets do usuário
 
 ```bash
-curl "https://registro.solidsd.com.br/api/v1/integrations/chess-hotel/tickets?email=joao@hotel.com" \
+curl "https://geop.solidsd.com.br/api/v1/integrations/chess-hotel/tickets?email=joao@hotel.com" \
   -H "X-Registro-Key: sua-chave-de-integracao-aqui"
 ```
 
 ### Consultar ticket específico
 
 ```bash
-curl "https://registro.solidsd.com.br/api/v1/integrations/chess-hotel/tickets/REG-000042?email=joao@hotel.com" \
+curl "https://geop.solidsd.com.br/api/v1/integrations/chess-hotel/tickets/REG-000042?email=joao@hotel.com" \
   -H "X-Registro-Key: sua-chave-de-integracao-aqui"
 ```
 
