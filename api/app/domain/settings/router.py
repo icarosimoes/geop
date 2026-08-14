@@ -207,9 +207,9 @@ async def brevo_test_send(
         from_address=value["from_address"],
         from_name=value["from_name"],
         to_email=body.to,
-        subject="Teste de envio — Registro",
+        subject="Teste de envio — GEOP",
         html="<p>Este é um e-mail de teste enviado a partir das configurações de e-mail "
-        "transacional do Registro. Se você recebeu esta mensagem, a integração com o "
+        "transacional do GEOP. Se você recebeu esta mensagem, a integração com o "
         "Brevo está funcionando corretamente.</p>",
     )
     if result.get("error"):

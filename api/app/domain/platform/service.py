@@ -462,7 +462,7 @@ async def provision_asaas_subscription(
         customer_id=company.asaas_customer_id,
         value=plan.price_cents / 100,
         cycle="MONTHLY" if plan.billing_period == "monthly" else "YEARLY",
-        description=f"Registro — {plan.name}",
+        description=f"GEOP — {plan.name}",
         external_reference=str(sub.id),
     )
     sub.billing_provider_subscription_id = result["id"]

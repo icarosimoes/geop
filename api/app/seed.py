@@ -81,7 +81,7 @@ async def seed() -> None:
         session.add(
             PlatformUser(
                 email="admin@registro.local",
-                name="Administrador Registro",
+                name="Administrador GEOP",
                 password_hash=password_hash(platform_password),
                 role="super_admin",
                 active=True,

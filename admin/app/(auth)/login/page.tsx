@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     >
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
-          <span className="text-white font-extrabold text-3xl tracking-wide">Registro</span>
+          <span className="text-white font-extrabold text-3xl tracking-wide">GEOP</span>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-5">
@@ -58,7 +58,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
 
         <p className="text-center text-xs text-white/30 mt-6">
-          © {new Date().getFullYear()} Registro · Acesso restrito a administradores da plataforma.
+          © {new Date().getFullYear()} GEOP · Acesso restrito a administradores da plataforma.
         </p>
       </div>
     </main>

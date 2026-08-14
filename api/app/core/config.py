@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "Registro API"
+    app_name: str = "GEOP API"
     environment: str = "development"
     api_prefix: str = "/api/v1"
     web_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     brevo_api_key: str = ""
     mail_from_address: str = "noreply@registro.app"
-    mail_from_name: str = "Registro"
+    mail_from_name: str = "GEOP"
     asaas_api_key: str = ""
     asaas_api_key_file: str | None = None
     asaas_api_url: str = "https://sandbox.asaas.com/api/v3"

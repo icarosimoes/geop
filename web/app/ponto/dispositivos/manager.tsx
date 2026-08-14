@@ -97,7 +97,7 @@ export function DeviceManager() {
         {newToken && (
           <div style={{ padding: "var(--sp-4) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}>
             <strong>Dispositivo criado.</strong> Configure no relógio a URL completa da API do
-            Registro (ex.: <code>https://api.SEU-DOMINIO.com.br</code>) seguida do caminho abaixo:
+            GEOP (ex.: <code>https://api.SEU-DOMINIO.com.br</code>) seguida do caminho abaixo:
             <div style={{ marginTop: 8 }}>
               <code>{WEBHOOK_PATH(newToken)}</code>
             </div>

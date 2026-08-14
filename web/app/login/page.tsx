@@ -41,8 +41,8 @@ export default function LoginPage() {
   return (
     <main className="tenant-login-page">
       <div className="tenant-login-brand">
-        <span className="tenant-login-logo">R</span>
-        <strong>Registro</strong>
+        <span className="tenant-login-logo">G</span>
+        <strong>GEOP</strong>
         <span>Gestão operacional hoteleira</span>
       </div>
 

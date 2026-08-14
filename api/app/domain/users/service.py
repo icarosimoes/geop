@@ -296,9 +296,9 @@ async def invite_user(
         from_name=from_name,
         to_email=record.email,
         to_name=record.name,
-        subject="Bem-vindo ao Registro — Defina sua senha",
+        subject="Bem-vindo ao GEOP — Defina sua senha",
         html=(
-            f"<h2>Bem-vindo ao Registro</h2>"
+            f"<h2>Bem-vindo ao GEOP</h2>"
             f"<p>Olá {record.name},</p>"
             f"<p>Você foi convidado para acessar o sistema. "
             f"Clique no link abaixo para definir sua senha:</p>"

@@ -76,7 +76,7 @@ export function EnrollmentManager() {
         <div>
           <p className="eyebrow">Ponto</p>
           <h1>Vínculos</h1>
-          <p>Associe a matrícula cadastrada no relógio a um funcionário do Registro.</p>
+          <p>Associe a matrícula cadastrada no relógio a um funcionário do GEOP.</p>
         </div>
         <button className="primary-button" onClick={() => setShowForm(true)}>
           <Plus size={18} /> Novo vínculo

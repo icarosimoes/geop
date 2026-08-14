@@ -20,7 +20,7 @@ export function SidebarWrapper({ name, email }: { name: string; email: string })
           </div>
         ) : (
           <div className="flex-1 min-w-0 py-3">
-            <span className="text-white font-extrabold text-lg tracking-wide">Registro</span>
+            <span className="text-white font-extrabold text-lg tracking-wide">GEOP</span>
           </div>
         )}
         <button

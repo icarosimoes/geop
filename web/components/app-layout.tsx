@@ -78,8 +78,8 @@ export function AppLayout({ user, children }: { user: TenantUser; children: Reac
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileMenu ? "is-open" : ""}`} aria-label="Navegação principal">
         <div className="brand-row">
-          <div className="brand-mark" aria-hidden="true">R</div>
-          {!collapsed && <div><strong>Registro</strong><span>Gestão operacional</span></div>}
+          <div className="brand-mark" aria-hidden="true">G</div>
+          {!collapsed && <div><strong>GEOP</strong><span>Gestão Operacional</span></div>}
           <button className="icon-button collapse-button" onClick={() => setCollapsed((v) => !v)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}>
             {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>

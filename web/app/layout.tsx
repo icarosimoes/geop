@@ -4,13 +4,13 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Registro — Gestão operacional",
+  title: "GEOP — Gestão Operacional",
   description: "Sistema de gestão operacional hoteleira",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Registro",
+    title: "GEOP",
     startupImage: "/icons/icon-512.svg",
   },
   other: {

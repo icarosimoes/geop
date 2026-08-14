@@ -246,7 +246,7 @@ export function BrevoSettingsSection() {
         {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
         <div className="form-grid">
           <label>E-mail remetente<input name="brevo_from_address" type="email" required placeholder="noreply@suaempresa.com" defaultValue={config?.from_address ?? ""}/></label>
-          <label>Nome remetente<input name="brevo_from_name" type="text" required placeholder="Registro" defaultValue={config?.from_name ?? ""}/></label>
+          <label>Nome remetente<input name="brevo_from_name" type="text" required placeholder="GEOP" defaultValue={config?.from_name ?? ""}/></label>
         </div>
         <label>API Key<input name="brevo_api_key" type="password" required placeholder={config?.has_credentials ? "Configurada — preencha para trocar" : "xkeysib-..."}/><small className="field-hint">Brevo → SMTP & API → API Keys</small></label>
       </section>

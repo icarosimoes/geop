@@ -1,4 +1,4 @@
-# Registro — Contexto para o Claude
+# GEOP (Gestão Operacional) — Contexto para o Claude
 
 ## O que é
 

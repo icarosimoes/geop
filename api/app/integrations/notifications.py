@@ -87,7 +87,7 @@ def _build_html(action: str, title: str, module: str, actor: str, detail: str | 
     return f"""
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#1e3a5f;padding:20px;border-radius:8px 8px 0 0">
-        <h2 style="color:white;margin:0">Registro</h2>
+        <h2 style="color:white;margin:0">GEOP</h2>
       </div>
       <div style="padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <p style="color:#1e3a5f;font-weight:700;margin:0 0 8px">{action}</p>
@@ -216,9 +216,9 @@ async def prepare_notifications(
     email_tasks: list[_EmailTask] = []
     if api_key:
         from_address = from_address or "noreply@registro.app"
-        from_name = from_name or "Registro"
+        from_name = from_name or "GEOP"
         html = _build_html(action_label, title, module, actor_name, detail)
-        subject = f"[Registro] {action_label}: {title}"
+        subject = f"[GEOP] {action_label}: {title}"
 
         for r in recipients:
             if r["email"] == actor_email:

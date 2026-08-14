@@ -1,4 +1,4 @@
-# Registro
+# GEOP
 
 Sistema de gestão operacional SaaS em modernização para FastAPI + Next.js, com isolamento multitenant desde a fundação.
 

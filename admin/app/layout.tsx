@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Registro Admin",
-  description: "Administração SaaS do Registro",
+  title: "GEOP Admin",
+  description: "Administração SaaS do GEOP",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

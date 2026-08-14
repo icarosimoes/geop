@@ -22,7 +22,7 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Visão geral da plataforma Registro." />
+      <PageHeader title="Dashboard" description="Visão geral da plataforma GEOP." />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

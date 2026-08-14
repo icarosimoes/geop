@@ -98,7 +98,7 @@ export function EmailSettingsForm({ initialConfig }: { initialConfig: EmailConfi
                 <Input
                   value={form.email_from_name}
                   onChange={(e) => setForm((f) => ({ ...f, email_from_name: e.target.value }))}
-                  placeholder="Registro"
+                  placeholder="GEOP"
                 />
               </div>
             </div>

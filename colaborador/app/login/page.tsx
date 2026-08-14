@@ -33,7 +33,7 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <div className="login-card">
-        <div className="logo">R</div>
+        <div className="logo">G</div>
         <h1>Portal do Colaborador</h1>
         <p className="subtitle">Ponto, escala e contracheque</p>
 
@@ -51,7 +51,7 @@ export default function LoginPage() {
               autoComplete="organization"
               autoCapitalize="none"
             />
-            <span className="field-hint">Nome da sua empresa no Registro (ex.: aero-hotel)</span>
+            <span className="field-hint">Nome da sua empresa no GEOP (ex.: aero-hotel)</span>
           </label>
           <label>
             Matrícula
