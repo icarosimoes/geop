@@ -28,8 +28,9 @@ export const config = {
      * - favicon.ico, sitemap.xml, robots.txt
      * - API routes
      * - /impersonate (troca de ticket de impersonação, controla seus próprios redirects)
+     * - /sso (troca de token de SSO vindo do erpsolid, controla seus próprios redirects)
      * - Public assets (images, svgs, etc.)
      */
-    "/((?!_next/static|_next/image|favicon\\.ico|sitemap\\.xml|robots\\.txt|api/|impersonate|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|sitemap\\.xml|robots\\.txt|api/|impersonate|sso|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

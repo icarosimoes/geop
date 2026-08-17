@@ -65,6 +65,31 @@ export async function loginAction(
   return { ok: true };
 }
 
+interface SsoExchangeResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function ssoExchangeAction(token: string): Promise<SsoExchangeResult> {
+  const response = await fetch(`${apiUrl}/auth/sso/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: "Link expirado, peça pra abrir o GEOP de novo a partir do ERP.",
+    };
+  }
+
+  const data = safeParse(TokenResponseSchema, await response.json());
+  await setTokenCookies(data);
+  return { ok: true };
+}
+
 export async function logoutAction() {
   const jar = await cookies();
   jar.delete("tenant_token");

@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     chess_hotel_integration_key: str = "chess-hotel-development"
     chess_hotel_integration_key_file: str | None = None
     chess_hotel_company_slug: str = "aero-hotel"
+    # Integração server-to-server com o Solid ERP (produto irmão, multi-tenant —
+    # muitos tenants erpsolid conversam com muitas empresas GEOP diferentes).
+    erpsolid_integration_key: str | None = None
+    erpsolid_integration_key_file: str | None = None
+    # Segredo SEPARADO do jwt_secret: assina só o handoff de SSO erpsolid -> GEOP,
+    # nunca deve ser reaproveitado para tokens internos (access/refresh/etc).
+    erpsolid_sso_shared_secret: str | None = None
+    erpsolid_sso_shared_secret_file: str | None = None
     registro_web_url: str = "http://localhost:3000"
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = "registro"
@@ -70,6 +78,14 @@ def get_settings() -> Settings:
         settings.chess_hotel_integration_key = (
             Path(settings.chess_hotel_integration_key_file).read_text(encoding="utf-8").strip()
         )
+    if settings.erpsolid_integration_key_file:
+        settings.erpsolid_integration_key = (
+            Path(settings.erpsolid_integration_key_file).read_text(encoding="utf-8").strip()
+        )
+    if settings.erpsolid_sso_shared_secret_file:
+        settings.erpsolid_sso_shared_secret = (
+            Path(settings.erpsolid_sso_shared_secret_file).read_text(encoding="utf-8").strip()
+        )
     if settings.s3_access_key_file:
         settings.s3_access_key = (
             Path(settings.s3_access_key_file).read_text(encoding="utf-8").strip()
@@ -100,4 +116,19 @@ def get_settings() -> Settings:
         )
     if settings.environment == "production" and "*" in settings.web_origins:
         raise RuntimeError("WEB_ORIGINS não pode conter '*' em produção")
+    # Guarda só quando o segredo já foi configurado: diferente de jwt_secret (sempre
+    # obrigatório), a integração erpsolid é opt-in por enquanto — não travar o boot
+    # de produção enquanto o SSO ainda não foi habilitado para nenhum tenant.
+    if (
+        settings.environment == "production"
+        and settings.erpsolid_sso_shared_secret
+        and (
+            settings.erpsolid_sso_shared_secret == settings.jwt_secret
+            or len(settings.erpsolid_sso_shared_secret) < 32
+        )
+    ):
+        raise RuntimeError(
+            "ERPSOLID_SSO_SHARED_SECRET de produção deve ter pelo menos 32 caracteres "
+            "e ser diferente do JWT_SECRET"
+        )
     return settings
