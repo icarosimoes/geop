@@ -1,3 +1,5 @@
+import re
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,10 +15,12 @@ from app.integrations.asaas import AsaasClient, AsaasError
 from app.models import (
     Company,
     Invoice,
+    Permission,
     Plan,
     PlatformAuditLog,
     PlatformSetting,
     PlatformUser,
+    Role,
     Subscription,
     SupportRequest,
     UsageRecord,
@@ -141,6 +145,94 @@ async def create_tenant(
         target_id=company.id,
         payload={"name": name, "slug": slug, "plan_id": plan_id, "trial_days": trial_days},
     )
+    await session.commit()
+    await session.refresh(company)
+    return company
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug or "empresa"
+
+
+async def _unique_slug(session: AsyncSession, base: str) -> str:
+    slug = _slugify(base)
+    candidate = slug
+    suffix = 1
+    while await session.scalar(select(Company.id).where(Company.slug == candidate)):
+        suffix += 1
+        candidate = f"{slug}-{suffix}"
+    return candidate
+
+
+async def provision_tenant_with_admin(
+    session: AsyncSession,
+    *,
+    name: str,
+    document: str | None,
+    email: str,
+    trial_days: int = 365,
+) -> Company:
+    """Provisiona um tenant GEOP do zero (Company + Subscription + role admin +
+    primeiro usuário) numa chamada só — usado pela integração server-to-server
+    com o erpsolid (`POST /integrations/erpsolid/provision-tenant`), que precisa
+    de um GEOP funcional pra um tenant que acabou de comprar o módulo, sem
+    passar pelo fluxo manual do painel de plataforma.
+
+    Combina `create_tenant()` com o bloco de bootstrap de role/admin usado em
+    `scripts/seed_demo_hotel_exemplo.py:105-157`."""
+    if document:
+        existing = await session.scalar(
+            select(Company.id).where(Company.document == document, Company.deleted_at.is_(None))
+        )
+        if existing is not None:
+            raise ValueError("company_already_exists")
+
+    plan_id = await session.scalar(select(Plan.id).where(Plan.code == "professional"))
+    if plan_id is None:
+        plan_id = await session.scalar(select(Plan.id).order_by(Plan.id).limit(1))
+    if plan_id is None:
+        raise ValueError("no_plan_available")
+
+    platform_user_id = await session.scalar(
+        select(PlatformUser.id).order_by(PlatformUser.id).limit(1)
+    )
+    if platform_user_id is None:
+        raise ValueError("no_platform_user_available")
+
+    slug = await _unique_slug(session, name)
+    company = await create_tenant(
+        session,
+        name=name,
+        slug=slug,
+        email=email,
+        document=document,
+        timezone="America/Sao_Paulo",
+        plan_id=plan_id,
+        trial_days=trial_days,
+        actor_id=platform_user_id,
+    )
+
+    # Bootstrap: role admin (permissão wildcard) + primeiro usuário, criados via
+    # ORM direto e sem record_event — igual ao seed script, já que ainda não
+    # existe nenhum User no tenant pra ser o "actor" do evento de auditoria.
+    wildcard = await session.scalar(select(Permission).where(Permission.code == "*"))
+    role = Role(company_id=company.id, code="admin", name="Administrador")
+    role.permissions = [wildcard] if wildcard else []
+    session.add(role)
+    await session.flush()
+
+    unusable_password = bcrypt.hashpw(secrets.token_urlsafe(32).encode(), bcrypt.gensalt()).decode()
+    admin = User(
+        company_id=company.id,
+        role_id=role.id,
+        name=name,
+        email=email.lower(),
+        password=unusable_password,
+        active=True,
+        email_verified_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    session.add(admin)
     await session.commit()
     await session.refresh(company)
     return company

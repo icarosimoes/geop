@@ -29,6 +29,7 @@ from app.domain.fiscal_requests.router import router as fiscal_requests_router
 from app.domain.handoffs.router import router as handoffs_router
 from app.domain.health.router import router as health_router
 from app.domain.inspection_suites.router import router as inspection_suites_router
+from app.domain.integrations_erpsolid.router import router as integrations_erpsolid_router
 from app.domain.maintenance.router import router as maintenance_router
 from app.domain.meetings.router import router as meetings_router
 from app.domain.modules.router import router as modules_router
@@ -168,5 +169,6 @@ v1_router.include_router(timeclock_router)
 v1_router.include_router(timeclock_mobile_router)
 v1_router.include_router(timeclock_webhook_router)
 v1_router.include_router(asaas_webhook_router)
+v1_router.include_router(integrations_erpsolid_router)
 v1_router.include_router(support_router)
 app.include_router(v1_router)

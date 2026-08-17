@@ -877,4 +877,49 @@ Pedido do usuário, na sequência: "o nome do sistema agora vai ser GEOP Gestão
 
 **Deliberadamente fora do escopo**, por decisão do usuário ("vamos manter assim sem mudar os nomes das stack"): identificadores técnicos de infraestrutura — nome do banco `registro`, secrets do Docker Swarm, bucket S3 `registro-attachments`, imagens GHCR `registro/api|web|admin|colaborador`, nome do stack `registro` no Swarm. Renomear qualquer um desses exige recriar secrets (reinício de todos os serviços), copiar objetos do MinIO para um bucket novo (S3 não tem rename) e, no caso do nome do stack, risco real de perder acesso aos volumes existentes se feito sem cuidado — fica para uma janela de manutenção dedicada, se algum dia for decidido fazer.
 
+## 2026-08-17 — SSO e integração server-to-server com o Solid ERP
+
+Pedido do usuário: transformar o GEOP em módulo comprável no Solid ERP (repo separado
+`~/dev/erpsolid`), acessível via SSO, com sync de Contract/Supplier/CostCenter e
+EmployeePayslip pro ERP — mantendo os dois repositórios separados (decisão explícita,
+descartado monorepo depois de eu recomendar contra). Trabalho feito por um agente em
+background nesta sessão, revisado e mergeado por mim. Detalhes completos da arquitetura
+do lado erpsolid ficam em `docs/planos/geop-integracao.md` **naquele** repo — aqui só o
+que aconteceu deste lado.
+
+- `core/security.py`: novo par `create_erpsolid_sso_token`/`decode_erpsolid_sso_token`,
+  assinado com `erpsolid_sso_shared_secret` (segredo dedicado, nunca o `jwt_secret`
+  interno).
+- `POST /auth/sso/exchange` (público): troca o token de handoff por sessão real via
+  `create_access_token`/`create_refresh_token` (mesmo mecanismo de `/auth/impersonate`),
+  auto-provisiona `User` (role `colaborador`, sem permissão) se ainda não existir na
+  primeira vez.
+- `platform/service.py::provision_tenant_with_admin`: cria `Company` + role admin +
+  primeiro `User` numa chamada só (antes só existia espalhado no script de seed).
+- `domain/integrations_erpsolid/`: `POST /integrations/erpsolid/provision-tenant`,
+  `GET .../contracts`, `GET .../employee-payslips` — autenticados por header
+  `X-Erpsolid-Key` com `hmac.compare_digest` (mais correto que o `!=` usado no
+  precedente do Chess Hotel, `fiscal_requests/router.py`).
+- Migration nova (`20260817_0062`): `EmployeePayslip` ganha valores estruturados
+  (`gross_amount`/`net_amount`/`inss_amount`/`irrf_amount`/`fgts_amount`) — antes só
+  guardava anexo em PDF por funcionário/mês, não dava pra refletir financeiramente no
+  ERP.
+- `web/app/sso/page.tsx`: troca o token e redireciona pro dashboard.
+- `docker-stack.yml`: secrets novos `erpsolid_integration_key`/`erpsolid_sso_shared_secret`.
+
+**CI quebrado no PR (`#8`), corrigido**: `API — mypy` falhou —
+`app/domain/integrations_erpsolid/service.py` reusava a mesma variável `rows` pra dois
+`ScalarResult` de tipo diferente (`Supplier` depois `CostCenter`) dentro da mesma função,
+mypy não estreita o tipo na reatribuição. Corrigido renomeando pra `supplier_rows`/
+`cost_center_rows` (duas variáveis, não reaproveitar uma só entre os dois blocos).
+
+**Achado incidental**: `docker compose run --rm api` local deu conflito de porta (6379,
+Redis) contra o stack do erpsolid rodando ao mesmo tempo na mesma máquina — os dois
+projetos publicam a porta padrão do Redis no host. Não é bug de nenhum dos dois lados,
+só os dois dev stacks não sobem simultâneos sem ajustar a porta publicada de um deles
+(mesma categoria do que já aconteceu com o MinIO, ver `project_minio_port_conflict_local`
+na memória do erpsolid).
+
+PR aberta: `icarosimoes/registro#8` → `main`, par de `icarosimoes/erpsolid#30`.
+
 **Integração Chess Hotel**: o usuário informou no meio da sessão que a integração não vai mais existir ("esqueça o Chess Hotel", "não teremos mais integração") — a documentação da integração (`chess-hotel.md`, `chess-hotel-implementacao.md`) recebeu só parte do rebrand de marca antes desse aviso; nada no código (`X-Registro-Key`, endpoints, componente `RegistroLauncher.vue` do lado do Chess) foi tocado, por instrução explícita de parar.

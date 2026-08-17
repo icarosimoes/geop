@@ -10,6 +10,8 @@ from app.core.security import create_access_token
 from app.models.base import Base
 
 JWT_SECRET = "test-secret-with-at-least-32-characters-here"
+ERPSOLID_INTEGRATION_KEY = "erpsolid-test-integration-key"
+ERPSOLID_SSO_SHARED_SECRET = "erpsolid-test-sso-shared-secret-32-chars-min"
 TENANT_A = 1
 TENANT_B = 2
 
@@ -151,6 +153,8 @@ def app(test_session_factory):
     test_settings = Settings(
         jwt_secret=JWT_SECRET,
         database_url=_TEST_DB_URL or "sqlite+aiosqlite:///:memory:",
+        erpsolid_integration_key=ERPSOLID_INTEGRATION_KEY,
+        erpsolid_sso_shared_secret=ERPSOLID_SSO_SHARED_SECRET,
     )
 
     async def _test_session():

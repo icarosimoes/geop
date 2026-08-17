@@ -16,6 +16,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_access_token,
+    decode_erpsolid_sso_token,
     decode_impersonation_token,
     decode_invite_token,
     decode_refresh_token,
@@ -27,7 +28,14 @@ from app.domain.auth.schemas import (
     UserResponse,
     validate_password_strength,
 )
-from app.domain.auth.service import MultiTenantResult, authenticate, to_response
+from app.domain.auth.service import (
+    MultiTenantResult,
+    SsoCompanyNotFoundError,
+    SsoUserInactiveError,
+    authenticate,
+    resolve_or_provision_sso_user,
+    to_response,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -165,6 +173,77 @@ async def impersonate(
             status_code=401,
             detail={"code": "inactive_user", "message": "Usuário indisponível"},
         )
+    access = create_access_token(
+        subject=user.id,
+        company_id=user.company_id,
+        role_id=user.role_id,
+        permissions=user.permissions,
+        secret=settings.jwt_secret,
+        minutes=settings.access_token_minutes,
+    )
+    refresh_tok = create_refresh_token(
+        subject=user.id,
+        company_id=user.company_id,
+        secret=settings.jwt_secret,
+        days=settings.refresh_token_days,
+    )
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh_tok,
+        expires_in=settings.access_token_minutes * 60,
+        user=to_response(user),
+    )
+
+
+class SsoExchangeRequest(BaseModel):
+    token: str
+
+
+@router.post("/sso/exchange")
+@limiter.limit("20/minute")
+async def sso_exchange(
+    request: Request,
+    body: SsoExchangeRequest,
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TokenResponse:
+    """Troca o token de handoff assinado pelo erpsolid (ver `create_erpsolid_sso_token`
+    lá) por uma sessão real do GEOP. Público de propósito — o próprio token, assinado
+    com um segredo que só os dois lados conhecem, é a credencial."""
+    if not settings.erpsolid_sso_shared_secret:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "sso_not_configured", "message": "SSO com o ERP não está habilitado"},
+        )
+    try:
+        claims = decode_erpsolid_sso_token(body.token, settings.erpsolid_sso_shared_secret)
+        company_id = int(claims["company_id"])
+        email = str(claims["email"])
+        name = str(claims["name"])
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "invalid_sso_token",
+                "message": "Link expirado, peça pra abrir o GEOP de novo a partir do ERP",
+            },
+        ) from exc
+
+    try:
+        user = await resolve_or_provision_sso_user(
+            session, company_id=company_id, email=email, name=name
+        )
+    except SsoCompanyNotFoundError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "company_not_found", "message": "Empresa não encontrada no GEOP"},
+        ) from exc
+    except SsoUserInactiveError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "inactive_user", "message": "Usuário indisponível"},
+        ) from exc
+
     access = create_access_token(
         subject=user.id,
         company_id=user.company_id,

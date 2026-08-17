@@ -139,5 +139,13 @@ class EmployeePayslip(Base, TenantMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Valores estruturados (opcionais): permitem que integrações (ex.: sync com o
+    # módulo de Folha do ERP Solid) alimentem a reflexão financeira sem depender
+    # de OCR no PDF anexado. Upload manual antigo continua funcionando sem eles.
+    gross_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    net_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    inss_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    irrf_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    fgts_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, server_default=sa.func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)

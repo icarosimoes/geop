@@ -180,6 +180,40 @@ def decode_impersonation_token(token: str, secret: str) -> dict[str, Any]:
     return payload
 
 
+def create_erpsolid_sso_token(
+    *,
+    company_id: int,
+    email: str,
+    name: str,
+    secret: str,
+    seconds: int = 60,
+) -> str:
+    """Handoff de SSO erpsolid -> GEOP: o erpsolid assina este token (com
+    `erpsolid_sso_shared_secret`, nunca com o `jwt_secret` interno de nenhum dos
+    dois lados) e o usuário chega no GEOP com ele na URL. TTL curto de propósito
+    — é um token de troca única, não uma sessão."""
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "company_id": company_id,
+            "email": email,
+            "name": name,
+            "type": "erpsolid_sso",
+            "iat": now,
+            "exp": now + timedelta(seconds=seconds),
+        },
+        secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_erpsolid_sso_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "erpsolid_sso":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload
+
+
 def create_employee_session_token(
     *,
     employee_id: int,
