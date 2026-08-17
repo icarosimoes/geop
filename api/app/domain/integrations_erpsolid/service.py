@@ -30,17 +30,17 @@ async def list_contracts_for_erpsolid(
 
     suppliers: dict[int, Supplier] = {}
     if supplier_ids:
-        rows = (
+        supplier_rows = (
             await session.execute(select(Supplier).where(Supplier.id.in_(supplier_ids)))
         ).scalars()
-        suppliers = {s.id: s for s in rows}
+        suppliers = {s.id: s for s in supplier_rows}
 
     cost_centers: dict[int, CostCenter] = {}
     if cost_center_ids:
-        rows = (
+        cost_center_rows = (
             await session.execute(select(CostCenter).where(CostCenter.id.in_(cost_center_ids)))
         ).scalars()
-        cost_centers = {cc.id: cc for cc in rows}
+        cost_centers = {cc.id: cc for cc in cost_center_rows}
 
     return [
         (
