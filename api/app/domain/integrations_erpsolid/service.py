@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,18 @@ PayslipRow = tuple[EmployeePayslip, Employee]
 ERPSOLID_IMPORT_SOURCE = "erpsolid"
 
 
+def _naive_utc(value: datetime | None) -> datetime | None:
+    """`since` chega com timezone (o `TenantIntegration.last_synced_at` do erpsolid é
+    `DateTime(timezone=True)`), mas `Contract.updated_at`/`EmployeePayslip.created_at`
+    aqui são `DateTime` sem timezone (naive, sempre gravados em UTC pelo `func.now()`
+    do Postgres). Comparar aware com naive faz o asyncpg recusar o parâmetro
+    ("can't subtract offset-naive and offset-aware datetimes") — só aparece a partir
+    do 2º sync em diante, quando `since` deixa de ser `None`."""
+    if value is not None and value.tzinfo is not None:
+        return value.astimezone(UTC).replace(tzinfo=None)
+    return value
+
+
 async def list_contracts_for_erpsolid(
     session: AsyncSession,
     company_id: int,
@@ -26,6 +38,7 @@ async def list_contracts_for_erpsolid(
     nesse codebase — segue o mesmo padrão de join manual do resto do domínio
     `contracts` (ver `contracts/service.py::get_contract`)."""
     query = select(Contract).where(Contract.company_id == company_id, Contract.deleted_at.is_(None))
+    since = _naive_utc(since)
     if since is not None:
         query = query.where(Contract.updated_at >= since)
     contracts = list((await session.execute(query.order_by(Contract.id))).scalars().all())
@@ -70,6 +83,7 @@ async def list_employee_payslips_for_erpsolid(
     query = select(EmployeePayslip).where(
         EmployeePayslip.company_id == company_id, EmployeePayslip.deleted_at.is_(None)
     )
+    since = _naive_utc(since)
     if since is not None:
         query = query.where(EmployeePayslip.created_at >= since)
     payslips = list((await session.execute(query.order_by(EmployeePayslip.id))).scalars().all())

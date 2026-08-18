@@ -1,5 +1,6 @@
 """Testes da integração server-to-server com o Solid ERP (`/integrations/erpsolid/*`)."""
 
+import uuid
 from datetime import date
 
 import pytest
@@ -233,6 +234,20 @@ class TestListContracts:
         assert r.status_code == 200
         assert r.json() == []
 
+    @pytest.mark.asyncio
+    async def test_list_contracts_with_timezone_aware_since(self, client, contract_with_relations):
+        """Regressão: `since` chega com timezone (erpsolid usa `DateTime(timezone=True)`
+        pra `last_synced_at`), mas `Contract.updated_at` aqui é naive — a partir do 2º
+        sync (quando `since` deixa de ser None) isso derrubava o endpoint com 500 em
+        produção (asyncpg recusa comparar aware com naive)."""
+        r = await client.get(
+            f"{BASE}/contracts",
+            params={"company_id": TENANT_A, "since": "2020-01-01T00:00:00+00:00"},
+            headers=erpsolid_headers(),
+        )
+        assert r.status_code == 200
+        assert any(i["id"] == contract_with_relations.id for i in r.json())
+
 
 # ---------------------------------------------------------------------------
 # GET /employee-payslips
@@ -251,7 +266,7 @@ async def payslip_with_amounts(session: AsyncSession) -> EmployeePayslip:
         filename="holerite.pdf",
         content_type="application/pdf",
         size_bytes=10,
-        storage_key="test/holerite-erpsolid.pdf",
+        storage_key=f"test/holerite-erpsolid-{uuid.uuid4().hex}.pdf",
         uploaded_by_user_id=employee.user_id,
     )
     session.add(attachment)
@@ -288,6 +303,18 @@ class TestListEmployeePayslips:
         assert item["gross_amount"] == "5000.00"
         assert item["net_amount"] == "4200.00"
         assert item["employee"]["id"] == payslip_with_amounts.employee_id
+
+        # Regressão (mesma de `TestListContracts.test_list_contracts_with_timezone_aware_since`,
+        # aqui pra `EmployeePayslip.created_at`): reaproveita o mesmo `payslip_with_amounts`
+        # em vez de outra invocação da fixture — `uq_employee_payslips_month` (employee_id +
+        # reference_month) não permite um segundo registro pro mesmo mês.
+        r = await client.get(
+            f"{BASE}/employee-payslips",
+            params={"company_id": TENANT_A, "since": "2020-01-01T00:00:00+00:00"},
+            headers=erpsolid_headers(),
+        )
+        assert r.status_code == 200
+        assert any(i["id"] == payslip_with_amounts.id for i in r.json())
 
 
 # ---------------------------------------------------------------------------
