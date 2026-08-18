@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import compute_diff, record_event
 from app.core.cache import invalidate_dashboard
 from app.core.sla import calculate_business_deadline, pause_sla, resume_sla
-from app.models import Company, FiscalRequest, User
+from app.models import Company, FiscalRequest
 
 
 async def _get_company_timezone(session: AsyncSession, company_id: int) -> str:
