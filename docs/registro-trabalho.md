@@ -989,3 +989,23 @@ de 08-14).
   seção foi adicionada em `backlog.md` fechando o item pendente).
 
 **Integração Chess Hotel**: o usuário informou no meio da sessão que a integração não vai mais existir ("esqueça o Chess Hotel", "não teremos mais integração") — a documentação da integração (`chess-hotel.md`, `chess-hotel-implementacao.md`) recebeu só parte do rebrand de marca antes desse aviso; nada no código (`X-Registro-Key`, endpoints, componente `RegistroLauncher.vue` do lado do Chess) foi tocado, por instrução explícita de parar.
+
+## 2026-08-18 — `/integrations/erpsolid/*` derrubando 500 em produção: migration pendente + bug de timezone
+
+Usuário reportou (via widget de status do módulo GEOP no erpsolid) `Erro na API do GEOP (500) em /integrations/erpsolid/contracts: Internal Server Error` ao clicar em "Sincronizar agora". Dois bugs distintos, descobertos e corrigidos em sequência na mesma sessão.
+
+### Bug 1 — migration `20260818_0063` não rodou em produção
+
+A feature de sync de cadastros erpsolid → GEOP (PR `registro#10`, mergeada mais cedo no mesmo dia) adicionou `import_source`/`external_id` a `Supplier`/`CostCenter` via migration `20260818_0063`. Como já documentado no runbook de produção, o deploy do Swarm (`publish.yml`) só troca a imagem dos serviços — nunca roda Alembic. `alembic current` no container confirmou o banco travado em `20260817_0062`, uma revisão atrás do head: qualquer `SELECT` em `Supplier`/`CostCenter` (inclusive o join que `/contracts` faz) quebrava com coluna inexistente.
+
+- **Corrigido**: `alembic upgrade head` via SSH no container `registro_api` (achado à parte: as tasks desse serviço estavam rodando no node worker do Swarm, `178.238.230.9`, não no manager `95.111.250.4` de onde os runbooks assumem que tudo roda — `docker service ps <service>` é o jeito certo de achar onde a task está antes de `docker exec`).
+- **Este é o terceiro incidente idêntico** (mesmo padrão já tinha acontecido em 2026-07-13 com `platform_settings` e em 2026-08-17 com `employee_payslips`) — vale considerar automatizar `alembic upgrade head` no entrypoint/healthcheck do container `api` em vez de depender do passo manual a cada deploy com migration nova.
+
+### Bug 2 — `since` timezone-aware comparado com coluna naive (esse era o real, sobrevivia à migration em dia)
+
+Depois da migration aplicada, o usuário reportou "ainda continua com erro". `docker logs registro_api` mostrou o traceback real: `TypeError: can't subtract offset-naive and offset-aware datetimes` → `asyncpg.exceptions.DataError` na query de `list_contracts_for_erpsolid`. Causa: o erpsolid manda `since` (a partir do 2º sync, quando `TenantIntegration.last_synced_at` deixa de ser `None`) como datetime **com timezone** (`DateTime(timezone=True)` do lado erpsolid), mas `Contract.updated_at`/`EmployeePayslip.created_at` aqui usam `DateTime` **naive** (`TimestampMixin`, sem `timezone=True`) — asyncpg recusa o parâmetro. Só aparece quando `since != None`, por isso nunca tinha sido pego: nem no 1º sync (sempre `since=None`), nem na CI (que roda contra Postgres real, mas nunca tinha um teste passando `since` com timezone pros dois endpoints incrementais).
+
+- **Corrigido**: `_naive_utc()` em `domain/integrations_erpsolid/service.py`, normaliza `since` pra naive UTC antes de montar as duas queries (`list_contracts_for_erpsolid`, `list_employee_payslips_for_erpsolid`). Commit `e21f68cf`, direto na `main` (autorizado explicitamente pelo usuário, deploy automático).
+- **Validação**: reproduzido o erro exato contra Postgres real local (`docker compose up -d postgres`, porta 5433 — não usar SQLite, que não acusa esse tipo de erro) antes do fix, confirmado que sumiu depois. 2 testes de regressão novos cobrindo `since` timezone-aware nos dois endpoints. Suíte completa (579 testes) verde contra Postgres. Pós-deploy, repetida a mesma request que dava 500 direto no container de produção (`200` agora) e o usuário confirmou sync real bem-sucedido pela UI.
+
+Como aplicar: quando um sync incremental (`since`/`updated_at`) começa a falhar só depois do primeiro sucesso — não a partir da primeira vez — suspeitar de mismatch timezone-aware vs. naive entre quem manda o filtro e a coluna que recebe, não só de migration pendente. E: testes que só rodam com `since=None` não cobrem o caminho incremental — qualquer endpoint novo com filtro `since`/`updated_at` precisa de um teste passando um valor não-nulo, de preferência com timezone, contra Postgres real.

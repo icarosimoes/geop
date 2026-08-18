@@ -292,3 +292,22 @@ reintroduzir a integração Chess Hotel (endpoints `/integrations/chess-hotel/*`
 `X-Registro-Key` para esse fim) sem uma decisão de produto nova — os dados históricos que
 ela deixou (`fiscal_requests.origin = "chess-hotel"`, `chess_user_id`) foram preservados
 de propósito e não precisam de migration para continuar existindo.
+
+## 2026-08-18 — `since` em endpoints incrementais precisa ser naive UTC, nunca timezone-aware direto da query
+
+`/integrations/erpsolid/contracts` e `/employee-payslips` derrubavam 500 em produção a
+partir do 2º sync: o parâmetro `since` chega com timezone (o lado que manda, hoje o
+erpsolid, usa `DateTime(timezone=True)` pra guardar o timestamp da última sincronização),
+mas as colunas que filtramos aqui (`Contract.updated_at`, `EmployeePayslip.created_at`)
+são `DateTime` naive (`TimestampMixin`, todo o resto do schema é assim) — asyncpg recusa
+comparar aware com naive e derruba a query inteira. Corrigido normalizando `since` pra
+naive UTC antes de montar a query (`_naive_utc()` em
+`domain/integrations_erpsolid/service.py`). Detalhamento completo em
+[registro-trabalho.md](registro-trabalho.md#2026-08-18--integrationserpsolid-derrubando-500-em-produção-migration-pendente--bug-de-timezone).
+
+Como aplicar: qualquer endpoint novo (aqui ou em integração futura) que aceite um filtro
+`since`/`updated_at` como `Query()` de um datetime tem que normalizar pra naive UTC antes
+de comparar com uma coluna `DateTime` sem `timezone=True` — não dá pra confiar que quem
+chama vai mandar naive. E: cobertura de teste desse tipo de filtro só vale alguma coisa
+rodando contra Postgres real (`TEST_DATABASE_URL`/`DATABASE_URL` apontando pra Postgres) —
+a suíte cai pra SQLite por padrão sem isso, e SQLite não acusa esse tipo de erro de tipo.
