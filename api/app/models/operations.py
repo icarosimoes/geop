@@ -748,7 +748,9 @@ class Supplier(Base, TenantMixin, TimestampMixin):
         Index("ix_suppliers_company_active", "company_id", "active"),
         Index(
             "ix_suppliers_external_id_unique",
-            "company_id", "import_source", "external_id",
+            "company_id",
+            "import_source",
+            "external_id",
             unique=True,
             postgresql_where="external_id IS NOT NULL",
         ),
@@ -802,7 +804,9 @@ class CostCenter(Base, TenantMixin, TimestampMixin):
         Index("ix_cost_centers_company_active", "company_id", "active"),
         Index(
             "ix_cost_centers_external_id_unique",
-            "company_id", "import_source", "external_id",
+            "company_id",
+            "import_source",
+            "external_id",
             unique=True,
             postgresql_where="external_id IS NOT NULL",
         ),

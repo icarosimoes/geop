@@ -298,9 +298,7 @@ class TestListEmployeePayslips:
 class TestPushSuppliers:
     @pytest.mark.asyncio
     async def test_missing_key_returns_401(self, client):
-        r = await client.post(
-            f"{BASE}/suppliers", params={"company_id": TENANT_A}, json=[]
-        )
+        r = await client.post(f"{BASE}/suppliers", params={"company_id": TENANT_A}, json=[])
         assert r.status_code == 401
 
     @pytest.mark.asyncio
@@ -332,32 +330,38 @@ class TestPushSuppliers:
         assert record.name == "Fornecedor do ERP"
 
     @pytest.mark.asyncio
-    async def test_push_twice_updates_instead_of_duplicating(
-        self, client, session: AsyncSession
-    ):
+    async def test_push_twice_updates_instead_of_duplicating(self, client, session: AsyncSession):
         payload = [{"external_id": "sup-2", "name": "Nome Antigo"}]
         r1 = await client.post(
-            f"{BASE}/suppliers", params={"company_id": TENANT_A}, json=payload,
+            f"{BASE}/suppliers",
+            params={"company_id": TENANT_A},
+            json=payload,
             headers=erpsolid_headers(),
         )
         assert r1.status_code == 200
 
         payload[0]["name"] = "Nome Novo"
         r2 = await client.post(
-            f"{BASE}/suppliers", params={"company_id": TENANT_A}, json=payload,
+            f"{BASE}/suppliers",
+            params={"company_id": TENANT_A},
+            json=payload,
             headers=erpsolid_headers(),
         )
         assert r2.status_code == 200
 
         rows = (
-            await session.execute(
-                select(Supplier).where(
-                    Supplier.company_id == TENANT_A,
-                    Supplier.import_source == "erpsolid",
-                    Supplier.external_id == "sup-2",
+            (
+                await session.execute(
+                    select(Supplier).where(
+                        Supplier.company_id == TENANT_A,
+                        Supplier.import_source == "erpsolid",
+                        Supplier.external_id == "sup-2",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(rows) == 1
         assert rows[0].name == "Nome Novo"
 
@@ -387,9 +391,7 @@ class TestPushCostCenters:
 
 class TestPushEmployees:
     @pytest.mark.asyncio
-    async def test_push_creates_employee_and_external_id_link(
-        self, client, session: AsyncSession
-    ):
+    async def test_push_creates_employee_and_external_id_link(self, client, session: AsyncSession):
         r = await client.post(
             f"{BASE}/employees",
             params={"company_id": TENANT_A},
@@ -422,24 +424,32 @@ class TestPushEmployees:
     async def test_push_twice_updates_same_employee(self, client, session: AsyncSession):
         payload = [{"external_id": "emp-2", "name": "Nome Antigo", "status": "active"}]
         await client.post(
-            f"{BASE}/employees", params={"company_id": TENANT_A}, json=payload,
+            f"{BASE}/employees",
+            params={"company_id": TENANT_A},
+            json=payload,
             headers=erpsolid_headers(),
         )
         payload[0]["name"] = "Nome Novo"
         await client.post(
-            f"{BASE}/employees", params={"company_id": TENANT_A}, json=payload,
+            f"{BASE}/employees",
+            params={"company_id": TENANT_A},
+            json=payload,
             headers=erpsolid_headers(),
         )
 
         links = (
-            await session.execute(
-                select(EmployeeExternalId).where(
-                    EmployeeExternalId.company_id == TENANT_A,
-                    EmployeeExternalId.system == "erpsolid",
-                    EmployeeExternalId.external_id == "emp-2",
+            (
+                await session.execute(
+                    select(EmployeeExternalId).where(
+                        EmployeeExternalId.company_id == TENANT_A,
+                        EmployeeExternalId.system == "erpsolid",
+                        EmployeeExternalId.external_id == "emp-2",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(links) == 1
         employee = await session.get(Employee, links[0].employee_id)
         assert employee.name == "Nome Novo"
