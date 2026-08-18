@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import bcrypt
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -14,7 +14,7 @@ from app.domain.auth.repository import (
     find_active_users_by_email,
 )
 from app.domain.auth.schemas import TenantOption, TokenResponse, UserResponse
-from app.models import Company, Role, User
+from app.models import Company, Permission, Role, User
 
 
 def to_response(user: AuthenticatedUser) -> UserResponse:
@@ -45,6 +45,7 @@ class SsoUserInactiveError(Exception):
 
 
 DEFAULT_SSO_ROLE_CODE = "colaborador"
+ADMIN_SSO_ROLE_CODE = "admin"
 
 
 async def _ensure_default_sso_role(session: AsyncSession, company_id: int) -> int:
@@ -63,16 +64,43 @@ async def _ensure_default_sso_role(session: AsyncSession, company_id: int) -> in
     return role.id
 
 
+async def _ensure_admin_sso_role(session: AsyncSession, company_id: int) -> int:
+    """Role `admin` (permissão wildcard) pra quem chega via SSO já sendo admin do
+    tenant no erpsolid — tratamos o erpsolid como backoffice: quem manda no tenant
+    lá manda no GEOP também. Normalmente já existe (criada em
+    `provision_tenant_with_admin`), mas cria sob demanda se não existir (tenant
+    antigo, por exemplo) — mesmo bootstrap de lá, sem duplicar `code="admin"`."""
+    role_id = await session.scalar(
+        select(Role.id).where(Role.company_id == company_id, Role.code == ADMIN_SSO_ROLE_CODE)
+    )
+    if role_id is not None:
+        return role_id
+    wildcard = await session.scalar(select(Permission).where(Permission.code == "*"))
+    role = Role(company_id=company_id, code=ADMIN_SSO_ROLE_CODE, name="Administrador")
+    if wildcard is not None:
+        role.permissions = [wildcard]
+    session.add(role)
+    await session.flush()
+    return role.id
+
+
 async def resolve_or_provision_sso_user(
     session: AsyncSession,
     *,
     company_id: int,
     email: str,
     name: str,
+    erpsolid_role: str | None = None,
 ) -> AuthenticatedUser:
     """Resolve o User do handoff de SSO erpsolid -> GEOP, provisionando na hora
     se for o primeiro acesso desse e-mail nesse tenant (o usuário já chegou
-    autenticado pelo ERP, então confiamos no e-mail do claim)."""
+    autenticado pelo ERP, então confiamos no e-mail do claim).
+
+    `erpsolid_role` é o `CompanyUser.role` de lá — se for "admin", garante que o
+    usuário tenha (ou ganhe, se acabou de chegar como "colaborador" de uma sessão
+    SSO anterior a essa mudança) a role `admin` aqui também. Nunca rebaixa: um
+    usuário que já tenha uma role escolhida manualmente no GEOP não perde acesso
+    só porque não é admin no erpsolid."""
     company = await session.scalar(
         select(Company).where(
             Company.id == company_id,
@@ -94,9 +122,23 @@ async def resolve_or_provision_sso_user(
         user = await find_active_user_by_id(session, existing_id, company_id)
         if user is None:
             raise SsoUserInactiveError()
+        if erpsolid_role == "admin" and user.role_id is not None:
+            role_code = await session.scalar(select(Role.code).where(Role.id == user.role_id))
+            if role_code != ADMIN_SSO_ROLE_CODE:
+                admin_role_id = await _ensure_admin_sso_role(session, company_id)
+                await session.execute(
+                    update(User).where(User.id == existing_id).values(role_id=admin_role_id)
+                )
+                await session.commit()
+                user = await find_active_user_by_id(session, existing_id, company_id)
+                assert user is not None
         return user
 
-    role_id = await _ensure_default_sso_role(session, company_id)
+    role_id = (
+        await _ensure_admin_sso_role(session, company_id)
+        if erpsolid_role == "admin"
+        else await _ensure_default_sso_role(session, company_id)
+    )
     unusable_password = bcrypt.hashpw(secrets.token_urlsafe(32).encode(), bcrypt.gensalt()).decode()
     record = User(
         company_id=company_id,

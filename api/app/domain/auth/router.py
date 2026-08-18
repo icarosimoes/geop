@@ -220,6 +220,10 @@ async def sso_exchange(
         company_id = int(claims["company_id"])
         email = str(claims["email"])
         name = str(claims["name"])
+        # Opcional: tokens emitidos antes desse claim existir (janela de deploy,
+        # TTL de 60s) não tem "role" — trata como não-admin, comportamento igual
+        # ao de antes dessa mudança.
+        erpsolid_role = claims.get("role")
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
@@ -231,7 +235,7 @@ async def sso_exchange(
 
     try:
         user = await resolve_or_provision_sso_user(
-            session, company_id=company_id, email=email, name=name
+            session, company_id=company_id, email=email, name=name, erpsolid_role=erpsolid_role
         )
     except SsoCompanyNotFoundError as exc:
         raise HTTPException(

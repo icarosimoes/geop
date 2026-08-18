@@ -186,25 +186,27 @@ def create_erpsolid_sso_token(
     email: str,
     name: str,
     secret: str,
+    role: str | None = None,
     seconds: int = 60,
 ) -> str:
     """Handoff de SSO erpsolid -> GEOP: o erpsolid assina este token (com
     `erpsolid_sso_shared_secret`, nunca com o `jwt_secret` interno de nenhum dos
     dois lados) e o usuário chega no GEOP com ele na URL. TTL curto de propósito
-    — é um token de troca única, não uma sessão."""
+    — é um token de troca única, não uma sessão. `role` é o `CompanyUser.role` de
+    lá ("admin" promove o usuário a admin no GEOP também, ver
+    `resolve_or_provision_sso_user`)."""
     now = datetime.now(UTC)
-    return jwt.encode(
-        {
-            "company_id": company_id,
-            "email": email,
-            "name": name,
-            "type": "erpsolid_sso",
-            "iat": now,
-            "exp": now + timedelta(seconds=seconds),
-        },
-        secret,
-        algorithm=ALGORITHM,
-    )
+    payload: dict = {
+        "company_id": company_id,
+        "email": email,
+        "name": name,
+        "type": "erpsolid_sso",
+        "iat": now,
+        "exp": now + timedelta(seconds=seconds),
+    }
+    if role is not None:
+        payload["role"] = role
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
 
 
 def decode_erpsolid_sso_token(token: str, secret: str) -> dict[str, Any]:
