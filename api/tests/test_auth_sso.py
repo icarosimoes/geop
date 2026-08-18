@@ -17,10 +17,11 @@ def sso_token(
     email: str = "novo.usuario@erp.com.br",
     name: str = "Novo Usuário",
     secret: str = ERPSOLID_SSO_SHARED_SECRET,
+    role: str | None = None,
     seconds: int = 60,
 ) -> str:
     return create_erpsolid_sso_token(
-        company_id=company_id, email=email, name=name, secret=secret, seconds=seconds
+        company_id=company_id, email=email, name=name, secret=secret, role=role, seconds=seconds
     )
 
 
@@ -107,3 +108,88 @@ class TestSsoExchange:
         r = await client.post(URL, json={"token": token})
         assert r.status_code == 401
         assert r.json()["detail"]["code"] == "inactive_user"
+
+
+class TestSsoAdminPromotion:
+    """Erpsolid tratado como backoffice do GEOP: quem é admin do tenant lá chega
+    como admin aqui também, tanto no primeiro acesso quanto em logins seguintes."""
+
+    @pytest.mark.asyncio
+    async def test_new_user_with_admin_role_gets_admin_role_in_geop(
+        self, client, session: AsyncSession
+    ):
+        token = sso_token(email="admin.novo@erp.com.br", name="Admin Novo", role="admin")
+        r = await client.post(URL, json={"token": token})
+        assert r.status_code == 200
+
+        from app.models import Role
+
+        record = await session.scalar(
+            select(User).where(User.company_id == TENANT_A, User.email == "admin.novo@erp.com.br")
+        )
+        assert record is not None
+        role_code = await session.scalar(select(Role.code).where(Role.id == record.role_id))
+        assert role_code == "admin"
+
+    @pytest.mark.asyncio
+    async def test_new_user_without_admin_role_keeps_default_colaborador(
+        self, client, session: AsyncSession
+    ):
+        token = sso_token(email="colaborador.novo@erp.com.br", name="Colaborador Novo")
+        r = await client.post(URL, json={"token": token})
+        assert r.status_code == 200
+
+        from app.models import Role
+
+        record = await session.scalar(
+            select(User).where(
+                User.company_id == TENANT_A, User.email == "colaborador.novo@erp.com.br"
+            )
+        )
+        assert record is not None
+        role_code = await session.scalar(select(Role.code).where(Role.id == record.role_id))
+        assert role_code == "colaborador"
+
+    @pytest.mark.asyncio
+    async def test_existing_colaborador_is_upgraded_when_erpsolid_says_admin(
+        self, client, session: AsyncSession
+    ):
+        from app.models import Role
+
+        colaborador_role_id = await session.scalar(
+            select(Role.id).where(Role.company_id == TENANT_A, Role.code == "colaborador")
+        )
+        if colaborador_role_id is None:
+            role = Role(company_id=TENANT_A, code="colaborador", name="Colaborador")
+            session.add(role)
+            await session.flush()
+            colaborador_role_id = role.id
+
+        existing = User(
+            company_id=TENANT_A,
+            role_id=colaborador_role_id,
+            name="Já Provisionado",
+            email="ja.provisionado@erp.com.br",
+            password="$2b$12$LJ3m4ys3Lf5UXOAZ3dDkheNPZ8XNfMsZFHmH7.KGZv6JqRiW8gzAi",
+            active=True,
+        )
+        session.add(existing)
+        await session.commit()
+
+        token = sso_token(email="ja.provisionado@erp.com.br", role="admin")
+        r = await client.post(URL, json={"token": token})
+        assert r.status_code == 200
+
+        await session.refresh(existing)
+        role_code = await session.scalar(select(Role.code).where(Role.id == existing.role_id))
+        assert role_code == "admin"
+
+    @pytest.mark.asyncio
+    async def test_existing_admin_is_not_downgraded_without_admin_claim(
+        self, client, session: AsyncSession
+    ):
+        # a@test.com (id=1) já é admin no seed — sem claim "role", não deve mexer.
+        token = sso_token(email="a@test.com")
+        r = await client.post(URL, json={"token": token})
+        assert r.status_code == 200
+        assert r.json()["user"]["id"] == 1
