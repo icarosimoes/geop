@@ -79,3 +79,53 @@ class ErpsolidEmployeePayslipOut(BaseModel):
     fgts_amount: Decimal | None
     employee: ErpsolidEmployeeOut
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# push de cadastros erpsolid -> GEOP (erpsolid manda: espelho read-only aqui,
+# nunca editado na tela do GEOP — ver `docs/planos/geop-integracao.md`)
+# ---------------------------------------------------------------------------
+
+
+class ErpsolidSupplierPush(BaseModel):
+    external_id: str
+    name: str
+    document: str | None = None
+    document_type: str | None = None
+    category: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_neighborhood: str | None = None
+    address_city: str | None = None
+    address_state: str | None = None
+    address_zip: str | None = None
+    active: bool = True
+    notes: str | None = None
+
+
+class ErpsolidCostCenterPush(BaseModel):
+    external_id: str
+    name: str
+    code: str | None = None
+    active: bool = True
+
+
+class ErpsolidEmployeePush(BaseModel):
+    external_id: str
+    name: str
+    cpf: str | None = None
+    rg: str | None = None
+    birth_date: date | None = None
+    phone: str | None = None
+    email: str | None = None
+    job_title: str | None = None
+    hire_date: date | None = None
+    termination_date: date | None = None
+    status: str = "active"  # active | inactive | terminated
+
+
+class RegistriesPushResponse(BaseModel):
+    upserted: int

@@ -744,7 +744,17 @@ class ChecklistExecutionItem(Base):
 
 class Supplier(Base, TenantMixin, TimestampMixin):
     __tablename__ = "suppliers"
-    __table_args__ = (Index("ix_suppliers_company_active", "company_id", "active"),)
+    __table_args__ = (
+        Index("ix_suppliers_company_active", "company_id", "active"),
+        Index(
+            "ix_suppliers_external_id_unique",
+            "company_id",
+            "import_source",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))
@@ -764,6 +774,12 @@ class Supplier(Base, TenantMixin, TimestampMixin):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Preenchidos quando este Supplier é um espelho de um Supplier do erpsolid
+    # (sync erpsolid -> GEOP, `POST /integrations/erpsolid/suppliers`) — NULL pra
+    # fornecedor criado localmente no GEOP. Mesmo padrão de dedup já usado do lado
+    # erpsolid pra tudo que chega do GEOP (Supplier/CostCenter/Employee lá).
+    import_source: Mapped[str | None] = mapped_column(String(30))
+    external_id: Mapped[str | None] = mapped_column(String(120))
 
 
 class SupplierContact(Base, TenantMixin, TimestampMixin):
@@ -784,7 +800,17 @@ class SupplierContact(Base, TenantMixin, TimestampMixin):
 
 class CostCenter(Base, TenantMixin, TimestampMixin):
     __tablename__ = "cost_centers"
-    __table_args__ = (Index("ix_cost_centers_company_active", "company_id", "active"),)
+    __table_args__ = (
+        Index("ix_cost_centers_company_active", "company_id", "active"),
+        Index(
+            "ix_cost_centers_external_id_unique",
+            "company_id",
+            "import_source",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))
@@ -794,6 +820,9 @@ class CostCenter(Base, TenantMixin, TimestampMixin):
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Ver Supplier.import_source/external_id acima — mesmo propósito.
+    import_source: Mapped[str | None] = mapped_column(String(30))
+    external_id: Mapped[str | None] = mapped_column(String(120))
 
 
 CONTRACT_STATUSES = (

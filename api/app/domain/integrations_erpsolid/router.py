@@ -11,15 +11,22 @@ from app.core.rate_limit import limiter
 from app.domain.integrations_erpsolid.schemas import (
     ErpsolidContractOut,
     ErpsolidCostCenterOut,
+    ErpsolidCostCenterPush,
     ErpsolidEmployeeOut,
     ErpsolidEmployeePayslipOut,
+    ErpsolidEmployeePush,
     ErpsolidSupplierOut,
+    ErpsolidSupplierPush,
     ProvisionTenantRequest,
     ProvisionTenantResponse,
+    RegistriesPushResponse,
 )
 from app.domain.integrations_erpsolid.service import (
     list_contracts_for_erpsolid,
     list_employee_payslips_for_erpsolid,
+    upsert_cost_centers_from_erpsolid,
+    upsert_employees_from_erpsolid,
+    upsert_suppliers_from_erpsolid,
 )
 from app.domain.platform.service import provision_tenant_with_admin
 
@@ -130,3 +137,57 @@ async def list_employee_payslips(
         )
         for payslip, employee in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# push de cadastros erpsolid -> GEOP (embutido no mesmo `POST /geop/sync` que já
+# existe do lado erpsolid — ver `services/geop/registries_push.py` de lá)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/suppliers", response_model=RegistriesPushResponse)
+async def push_suppliers(
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    company_id: Annotated[int, Query()],
+    items: list[ErpsolidSupplierPush],
+    integration_key: Annotated[str | None, Header(alias="X-Erpsolid-Key")] = None,
+) -> RegistriesPushResponse:
+    _require_integration_key(integration_key, settings)
+    upserted = await upsert_suppliers_from_erpsolid(
+        session, company_id, [item.model_dump() for item in items]
+    )
+    await session.commit()
+    return RegistriesPushResponse(upserted=upserted)
+
+
+@router.post("/cost-centers", response_model=RegistriesPushResponse)
+async def push_cost_centers(
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    company_id: Annotated[int, Query()],
+    items: list[ErpsolidCostCenterPush],
+    integration_key: Annotated[str | None, Header(alias="X-Erpsolid-Key")] = None,
+) -> RegistriesPushResponse:
+    _require_integration_key(integration_key, settings)
+    upserted = await upsert_cost_centers_from_erpsolid(
+        session, company_id, [item.model_dump() for item in items]
+    )
+    await session.commit()
+    return RegistriesPushResponse(upserted=upserted)
+
+
+@router.post("/employees", response_model=RegistriesPushResponse)
+async def push_employees(
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    company_id: Annotated[int, Query()],
+    items: list[ErpsolidEmployeePush],
+    integration_key: Annotated[str | None, Header(alias="X-Erpsolid-Key")] = None,
+) -> RegistriesPushResponse:
+    _require_integration_key(integration_key, settings)
+    upserted = await upsert_employees_from_erpsolid(
+        session, company_id, [item.model_dump() for item in items]
+    )
+    await session.commit()
+    return RegistriesPushResponse(upserted=upserted)
