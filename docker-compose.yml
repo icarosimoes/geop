@@ -74,8 +74,6 @@ services:
       APP_NAME: Registro API
       ENVIRONMENT: development
       WEB_ORIGINS: http://localhost:3000,http://localhost:3001
-      CHESS_HOTEL_INTEGRATION_KEY: ${CHESS_HOTEL_INTEGRATION_KEY:-chess-hotel-development}
-      CHESS_HOTEL_COMPANY_SLUG: ${CHESS_HOTEL_COMPANY_SLUG:-aero-hotel}
       REGISTRO_WEB_URL: ${REGISTRO_WEB_URL:-http://localhost:3000}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://registro:registro@postgres:5432/registro}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}

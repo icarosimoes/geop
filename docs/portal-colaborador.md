@@ -189,7 +189,7 @@ quando o CPF vier vazio na linha.
 - Frontend: `web/app/ponto/contracheques/` — dois inputs de arquivo (manifesto + ZIP), botão
   "baixar modelo de manifesto" e tabela de resultado por linha (criado/atualizado/erro).
 - **Extensão futura para API real**: `EmployeeExternalId.system` (`models/employees.py`) já é
-  genérico (`"totvs"`, `"chess-hotel"`, etc.). Se um cliente concreto precisar de integração
+  genérico (`"totvs"`, `"senior"`, etc.). Se um cliente concreto precisar de integração
   via API (candidato mais provável: TOTVS RM, que tem REST API documentada), o ponto de
   extensão é um adapter novo em `api/app/domain/timeclock/payroll_providers/` que busca os
   PDFs na API e alimenta o mesmo `import_employee_payslips` — não construído agora por falta

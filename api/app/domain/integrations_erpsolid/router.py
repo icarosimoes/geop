@@ -34,8 +34,7 @@ router = APIRouter(prefix="/integrations/erpsolid", tags=["integrations-erpsolid
 
 
 def _require_integration_key(integration_key: str | None, settings: Settings) -> None:
-    # hmac.compare_digest em vez do `!=` usado no precedente do Chess Hotel
-    # (fiscal_requests/router.py) — mesmo padrão já usado no webhook do Asaas.
+    # hmac.compare_digest em vez do `!=` — mesmo padrão já usado no webhook do Asaas.
     if not settings.erpsolid_integration_key or not hmac.compare_digest(
         integration_key or "", settings.erpsolid_integration_key
     ):

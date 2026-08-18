@@ -1637,9 +1637,8 @@ async def authenticate_employee(
     registration_number: str,
     pin: str,
 ) -> tuple[Employee | None, str | None]:
-    """Resolve company_id pelo slug (mesmo mecanismo já usado pela integração
-    Chess Hotel em app/domain/fiscal_requests/service.py), autentica o funcionário
-    pelo registration_number + PIN, aplicando lockout por tentativas."""
+    """Resolve company_id pelo slug, autentica o funcionário pelo registration_number
+    + PIN, aplicando lockout por tentativas."""
     company = await session.scalar(
         select(Company).where(Company.slug == company_slug, Company.deleted_at.is_(None))
     )

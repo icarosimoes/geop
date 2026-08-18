@@ -116,18 +116,16 @@ Execute uma única vez. Se algum nome já existir, audite antes de reutilizar ou
 ```bash
 db_password="$(openssl rand -hex 32)"
 jwt_secret="$(openssl rand -hex 48)"
-chess_key="$(openssl rand -hex 48)"
 s3_secret="$(openssl rand -hex 32)"
 
 printf '%s' "$db_password" | docker secret create registro_postgres_password -
 printf '%s' "postgresql+asyncpg://registro:${db_password}@db:5432/registro" \
   | docker secret create registro_database_url -
 printf '%s' "$jwt_secret" | docker secret create registro_jwt_secret -
-printf '%s' "$chess_key" | docker secret create chess_hotel_integration_key -
 printf '%s' 'registro' | docker secret create registro_s3_access_key -
 printf '%s' "$s3_secret" | docker secret create registro_s3_secret_key -
 
-unset db_password jwt_secret chess_key s3_secret
+unset db_password jwt_secret s3_secret
 ```
 
 O mesmo `db_password` deve alimentar `registro_postgres_password` e `registro_database_url`. Nunca execute dois `openssl rand` independentes para esses valores.
@@ -223,7 +221,7 @@ Para mover uma instalação existente:
 3. renderize `docker stack config`;
 4. aplique `docker stack deploy` com a mesma tag imutável, se não houver mudança de código;
 5. aguarde o DNS challenge e valide os certificados;
-6. atualize a URL usada pelo Chess Hotel e outras integrações externas;
+6. atualize a URL usada por integrações externas ativas (ex: erpsolid);
 7. mantenha os hosts antigos apenas durante a janela de transição, se isso tiver sido planejado.
 
 Troca de domínio não exige migration nem nova imagem, salvo quando contratos ou configurações embutidas no build mudarem.

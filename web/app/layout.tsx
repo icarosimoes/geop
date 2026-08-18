@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "GEOP — Gestão Operacional",
-  description: "Sistema de gestão operacional hoteleira",
+  description: "Sistema de gestão operacional",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

@@ -2,7 +2,7 @@
 
 ## O que é
 
-SaaS multitenant de gestão operacional hoteleira. Substitui um sistema legado Laravel/Vue (Chess Hotel) por uma stack moderna: **FastAPI + SQLAlchemy async (PostgreSQL)** no backend, **Next.js 16 (App Router, Server Actions)** no frontend.
+SaaS multitenant de gestão operacional. Atende hotelaria e outros segmentos operacionais — não é um sistema exclusivo de hotel. Substitui um sistema legado Laravel/Vue por uma stack moderna: **FastAPI + SQLAlchemy async (PostgreSQL)** no backend, **Next.js 16 (App Router, Server Actions)** no frontend.
 
 ## Stack
 
@@ -42,7 +42,7 @@ docs/          → documentação técnica (fonte de verdade)
 - **Soft delete**: `deleted_at` — registros apagados não aparecem em listagens.
 - **Paginação**: todas as listas retornam `{items, total, page, page_size}`.
 - **Auth**: JWT HS256. Access token (30min, type=access) + Refresh token (7d, type=refresh). Frontend guarda ambos em cookies httpOnly.
-- **Rate limiting**: slowapi nos endpoints sensíveis (login, refresh, integração Chess).
+- **Rate limiting**: slowapi nos endpoints sensíveis (login, refresh).
 - **Testes**: pytest + pytest-asyncio. Rodar com `.venv/bin/python -m pytest tests/ -v`.
 - **Linter**: ruff (line-length=100). Rodar com `.venv/bin/python -m ruff check app/`.
 - **Commit messages**: em português, descritivos. Co-authored-by Claude quando aplicável.
@@ -59,10 +59,6 @@ docker logs registro-api-1 --tail 30  # debug
 
 - API: `localhost:8000` | Web: `localhost:3000` | Admin: `localhost:3001` | PostgreSQL: `localhost:5433`
 - A API roda migrations e seed automaticamente no startup do container.
-
-## Integração Chess Hotel
-
-O Chess Hotel (Laravel) envia solicitações fiscais para o Registro via `POST /integrations/chess-hotel/tickets` autenticado por header `X-Registro-Key`. O Registro resolve o usuário por e-mail e cria o ticket com SLA de 24h.
 
 ## Domínios implementados
 

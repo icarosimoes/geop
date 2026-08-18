@@ -210,7 +210,7 @@ Solicitações fiscais possuem CRUD completo via API (`POST`, `GET`, `PATCH`, `D
 
 Campos específicos do tipo de solicitação (tomador, reserva, nota, CPF/CNPJ, correção, cancelamento, etc.) são enviados no campo `payload` como JSON.
 
-A integração Chess Hotel cria solicitações via `POST /integrations/chess-hotel/tickets` autenticado por header `X-Registro-Key`.
+A integração Chess Hotel, que antes criava solicitações via `POST /integrations/chess-hotel/tickets`, foi descontinuada — hoje toda solicitação é criada pela própria interface do GEOP.
 
 ### Limitações remanescentes
 

@@ -1,5 +1,8 @@
 # Integração Chess Hotel ↔ GEOP
 
+> **[DESCONTINUADA em 2026-08-17]** Esta integração foi removida do código (endpoints, config, testes). Documento preservado como histórico de implementação; nada aqui reflete o comportamento atual do sistema.
+
+
 ## Contexto
 
 O Chess Hotel é o PMS (Property Management System) hoteleiro usado pela operação. Possui dois módulos:

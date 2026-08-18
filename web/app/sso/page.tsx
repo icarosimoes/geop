@@ -29,7 +29,7 @@ function SsoExchangeScreen() {
       <div className="tenant-login-brand">
         <span className="tenant-login-logo">G</span>
         <strong>GEOP</strong>
-        <span>Gestão operacional hoteleira</span>
+        <span>Gestão operacional</span>
       </div>
 
       <div className="tenant-login-card">

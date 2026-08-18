@@ -1,5 +1,8 @@
 # Integração Chess Hotel → Registro
 
+> **[DESCONTINUADA em 2026-08-17]** Esta integração foi removida do código (endpoints, config, testes). Documento preservado como histórico de implementação; nada aqui reflete o comportamento atual do sistema.
+
+
 Documentação para o desenvolvedor do Chess Hotel implementar a abertura de solicitações fiscais no Registro.
 
 ---

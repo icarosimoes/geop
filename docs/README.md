@@ -22,6 +22,7 @@ Esta pasta é a fonte de verdade técnica, funcional e operacional do GEOP. A no
 ## Migração e legado
 
 - [Inventário da V1 Laravel](legado/inventario-v1.md)
+- [Integração Chess Hotel (descontinuada)](legado/integracao-chess-hotel/chess-hotel.md)
 - [Estratégia FastAPI + Next.js](infra/migracao-fastapi-nextjs.md)
 - [Plano original MySQL → PostgreSQL](infra/migracao-banco.md)
 - [Guia de migração PostgreSQL (atual)](migracao-postgresql.md)

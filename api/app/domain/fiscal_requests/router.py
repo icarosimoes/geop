@@ -1,65 +1,29 @@
-import base64
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
-from app.core.rate_limit import limiter
 from app.core.sla import compute_sla_status
-from app.domain.attachments.service import create_attachment
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.fiscal_requests.schemas import (
-    ChessUserResolve,
-    ChessUserResolved,
-    FiscalHistoryEntry,
-    FiscalRequestCreate,
-    FiscalRequestCreated,
     FiscalRequestListResponse,
     FiscalRequestSummary,
-    FiscalRequestTracking,
-    FiscalRequestTrackingList,
     FiscalRequestUpdate,
     FiscalRequestUserCreate,
 )
 from app.domain.fiscal_requests.service import (
-    build_tracking_item,
     create_fiscal_request,
-    create_from_chess,
     delete_fiscal_request,
-    get_chess_ticket,
-    get_integration_company_id,
-    list_chess_tickets,
     list_fiscal_requests,
-    resolve_chess_user,
     update_fiscal_request,
 )
 
 logger = structlog.get_logger()
 
 router = APIRouter(tags=["fiscal-requests"])
-
-
-def _require_integration_key(integration_key: str | None, settings: Settings) -> None:
-    if integration_key != settings.chess_hotel_integration_key:
-        raise HTTPException(status_code=401, detail={"code": "invalid_integration_key"})
-
-
-async def _require_company(session: AsyncSession, settings: Settings) -> int:
-    company_id = await get_integration_company_id(session, settings)
-    if company_id is None:
-        raise HTTPException(status_code=503, detail={"code": "integration_company_not_found"})
-    return company_id
-
-
-async def _require_chess_user(session: AsyncSession, company_id: int, email: str):
-    user = await resolve_chess_user(session, company_id, email)
-    if user is None:
-        raise HTTPException(status_code=404, detail={"code": "registro_user_not_found"})
-    return user
 
 
 def _to_summary(record) -> FiscalRequestSummary:
@@ -81,151 +45,6 @@ def _to_summary(record) -> FiscalRequestSummary:
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
-
-
-def _to_tracking(data: dict) -> FiscalRequestTracking:
-    return FiscalRequestTracking(
-        protocol=data["protocol"],
-        request_type=data["request_type"],
-        status=data["status"],
-        responsible=data["responsible"],
-        sla_deadline=data["sla_deadline"],
-        completed=data["completed"],
-        updated_at=data["updated_at"],
-        url=data["url"],
-        history=[
-            FiscalHistoryEntry(event=h["event"], user=h["user"], at=h["at"], changes=h["changes"])
-            for h in data["history"]
-        ],
-    )
-
-
-@router.post("/integrations/chess-hotel/users/resolve", response_model=ChessUserResolved)
-@limiter.limit("30/minute")
-async def resolve_user_from_chess_hotel(
-    request: Request,
-    body: ChessUserResolve,
-    session: Annotated[AsyncSession, Depends(require_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    integration_key: Annotated[str | None, Header(alias="X-Registro-Key")] = None,
-) -> ChessUserResolved:
-    _require_integration_key(integration_key, settings)
-    company_id = await _require_company(session, settings)
-    user = await _require_chess_user(session, company_id, body.email)
-    return ChessUserResolved(exists=True, id=user.id, name=user.name, email=user.email)
-
-
-@router.post("/integrations/chess-hotel/tickets", response_model=FiscalRequestCreated)
-@limiter.limit("30/minute")
-async def create_from_chess_hotel(
-    request: Request,
-    body: FiscalRequestCreate,
-    session: Annotated[AsyncSession, Depends(require_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    integration_key: Annotated[str | None, Header(alias="X-Registro-Key")] = None,
-) -> FiscalRequestCreated:
-    _require_integration_key(integration_key, settings)
-    if body.module != "solicitacoes-fiscais":
-        raise HTTPException(status_code=422, detail={"code": "unsupported_module"})
-    if body.hotel != settings.chess_hotel_company_slug:
-        raise HTTPException(status_code=422, detail={"code": "invalid_hotel"})
-
-    company_id = await _require_company(session, settings)
-    registro_user = await _require_chess_user(session, company_id, body.requester_email)
-
-    payload = body.model_dump(by_alias=True, exclude_none=True, exclude={"screenshots"})
-    record = await create_from_chess(
-        session,
-        settings,
-        company_id=company_id,
-        registro_user=registro_user,
-        request_type=body.request_type,
-        apartment=body.apartment,
-        requester=body.requester,
-        chess_user_id=body.chess_user_id,
-        reservation_number=body.reservation_number,
-        origin=body.origin,
-        payload=payload,
-    )
-
-    attachments_count = 0
-    for i, screenshot_b64 in enumerate(body.screenshots, 1):
-        try:
-            data = base64.b64decode(screenshot_b64, validate=True)
-        except Exception:
-            logger.warning("screenshot_decode_failed", index=i, protocol=record.protocol)
-            continue
-
-        if data[:4] == b"\x89PNG":
-            ext, ct = "png", "image/png"
-        elif data[:3] == b"\xff\xd8\xff":
-            ext, ct = "jpg", "image/jpeg"
-        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-            ext, ct = "webp", "image/webp"
-        else:
-            logger.warning("screenshot_unsupported_format", index=i, protocol=record.protocol)
-            continue
-
-        result = await create_attachment(
-            session,
-            company_id,
-            registro_user.id,
-            entity_type="fiscal_request",
-            entity_id=record.id,
-            filename=f"screenshot-{i}.{ext}",
-            content_type=ct,
-            data=data,
-            skip_audit=True,
-        )
-        if isinstance(result, str):
-            logger.warning(
-                "screenshot_save_failed", index=i, error=result, protocol=record.protocol
-            )
-        else:
-            attachments_count += 1
-
-    return FiscalRequestCreated(
-        protocol=record.protocol,
-        status=record.status,
-        responsible=None,
-        sla_deadline=record.sla_deadline,
-        url=f"{settings.registro_web_url.rstrip('/')}/solicitacoes-fiscais?protocol={record.protocol}",
-        attachments_count=attachments_count,
-    )
-
-
-@router.get("/integrations/chess-hotel/tickets", response_model=FiscalRequestTrackingList)
-async def track_chess_hotel_tickets(
-    email: str,
-    session: Annotated[AsyncSession, Depends(require_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    integration_key: Annotated[str | None, Header(alias="X-Registro-Key")] = None,
-) -> FiscalRequestTrackingList:
-    _require_integration_key(integration_key, settings)
-    company_id = await _require_company(session, settings)
-    user = await _require_chess_user(session, company_id, email)
-    records = await list_chess_tickets(session, company_id, user.id)
-    return FiscalRequestTrackingList(
-        user=ChessUserResolved(exists=True, id=user.id, name=user.name, email=user.email),
-        items=[_to_tracking(await build_tracking_item(session, r, settings)) for r in records],
-    )
-
-
-@router.get("/integrations/chess-hotel/tickets/{protocol}", response_model=FiscalRequestTracking)
-async def track_chess_hotel_ticket(
-    protocol: str,
-    email: str,
-    session: Annotated[AsyncSession, Depends(require_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    integration_key: Annotated[str | None, Header(alias="X-Registro-Key")] = None,
-) -> FiscalRequestTracking:
-    _require_integration_key(integration_key, settings)
-    company_id = await _require_company(session, settings)
-    user = await _require_chess_user(session, company_id, email)
-    record = await get_chess_ticket(session, company_id, protocol, user.id)
-    if record is None:
-        raise HTTPException(status_code=404, detail={"code": "ticket_not_found"})
-    return _to_tracking(await build_tracking_item(session, record, settings))
 
 
 @router.get("/fiscal-requests", response_model=FiscalRequestListResponse)

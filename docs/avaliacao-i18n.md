@@ -5,7 +5,7 @@ Referente ao item **[L3]** de `docs/backlog.md` (auditoria 2026-06-22).
 ## Situação atual
 
 - Todo texto de UI (`web/` e `admin/`) está hardcoded em português, direto nos componentes.
-- Domínio de negócio é hotelaria operacional no Brasil (ver contexto do produto em `docs/contexto-registro.md`): ocorrências, solicitações fiscais brasileiras (CPF/CNPJ), integração com Chess Hotel (ERP hoteleiro brasileiro).
+- Domínio de negócio é gestão operacional no Brasil, hoje usado majoritariamente por hotéis (ver contexto do produto em `docs/contexto-registro.md`): ocorrências, solicitações fiscais brasileiras (CPF/CNPJ).
 - Não há indício, no backlog ou na documentação do produto, de plano de expansão para operação fora do Brasil ou para tenants que exijam outro idioma.
 - Conceitos centrais do domínio são específicos do mercado brasileiro (CPF/CNPJ, CEP, regras fiscais de solicitações) — internacionalizar a UI sem internacionalizar essas regras de negócio teria valor limitado.
 

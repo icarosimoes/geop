@@ -125,8 +125,6 @@ services:
       WEB_ORIGINS: ${REGISTRO_WEB_ORIGIN}
       DATABASE_URL_FILE: /run/secrets/registro_database_url
       JWT_SECRET_FILE: /run/secrets/registro_jwt_secret
-      CHESS_HOTEL_INTEGRATION_KEY_FILE: /run/secrets/chess_hotel_integration_key
-      CHESS_HOTEL_COMPANY_SLUG: ${CHESS_HOTEL_COMPANY_SLUG:-aero-hotel}
       ERPSOLID_INTEGRATION_KEY_FILE: /run/secrets/erpsolid_integration_key
       ERPSOLID_SSO_SHARED_SECRET_FILE: /run/secrets/erpsolid_sso_shared_secret
       REGISTRO_WEB_URL: https://${REGISTRO_WEB_HOST}
@@ -139,7 +137,6 @@ services:
     secrets:
       - registro_database_url
       - registro_jwt_secret
-      - chess_hotel_integration_key
       - erpsolid_integration_key
       - erpsolid_sso_shared_secret
       - registro_s3_access_key
@@ -293,8 +290,6 @@ secrets:
   registro_database_url:
     external: true
   registro_jwt_secret:
-    external: true
-  chess_hotel_integration_key:
     external: true
   erpsolid_integration_key:
     external: true

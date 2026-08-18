@@ -1,21 +1,21 @@
-# Contexto do Registro
+# Contexto do GEOP
 
 ## O que e
 
-O **Registro** e um SaaS de gestao operacional hoteleira. Ele centraliza todas as rotinas do dia a dia de um hotel — ordens de servico (ocorrencias e manutencao corretiva/preventiva em uma unica tela, com Kanban e visao em lista), solicitacoes fiscais, inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo.
+O **GEOP** (Gestao Operacional) e um SaaS de gestao operacional multitenant. Ele centraliza as rotinas do dia a dia de uma operacao com equipes e turnos — ordens de servico (ocorrencias e manutencao corretiva/preventiva em uma unica tela, com Kanban e visao em lista), solicitacoes fiscais, inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo. Hoje e usado principalmente por hoteis, mas nao e um sistema exclusivo de hotelaria — o modelo serve qualquer operacao organizada por setores e turnos.
 
-O sistema substitui um ERP legado (Aero, construido em Laravel/Vue) por uma stack moderna, nascendo multitenant para atender multiplos hoteis com isolamento completo de dados.
+O sistema substitui um ERP legado (Laravel/Vue) por uma stack moderna, nascendo multitenant para atender multiplos clientes com isolamento completo de dados.
 
 ## Para quem serve
 
-- **Gestores hoteleiros** que precisam acompanhar a operacao em tempo real: o que esta pendente, quem e responsavel, qual o prazo.
-- **Equipes operacionais** (recepcao, governanca, manutencao, A&B, seguranca) que abrem e tratam ordens de servico, passam turno e executam checklists.
-- **Financeiro/fiscal** que recebe solicitacoes de notas fiscais da recepcao com SLA controlado.
+- **Gestores operacionais** que precisam acompanhar a operacao em tempo real: o que esta pendente, quem e responsavel, qual o prazo.
+- **Equipes operacionais** (recepcao, governanca, manutencao, A&B, seguranca, ou equivalentes de outros segmentos) que abrem e tratam ordens de servico, passam turno e executam checklists.
+- **Financeiro/fiscal** que recebe solicitacoes de notas fiscais com SLA controlado.
 - **Operadores da plataforma** (admin SaaS) que gerenciam tenants, planos e assinaturas.
 
 ## Problema que resolve
 
-Hoteis tipicamente operam com processos fragmentados — planilhas, cadernos, WhatsApp, sistemas isolados por departamento. Isso gera:
+Operacoes com equipes por turno tipicamente convivem com processos fragmentados — planilhas, cadernos, WhatsApp, sistemas isolados por departamento. Isso gera:
 
 - Perda de informacao entre turnos
 - Falta de rastreabilidade (quem fez o que, quando)
@@ -23,7 +23,7 @@ Hoteis tipicamente operam com processos fragmentados — planilhas, cadernos, Wh
 - Dificuldade de visao gerencial consolidada
 - Retrabalho e comunicacao ineficiente
 
-O Registro unifica tudo em um sistema unico com auditoria completa, notificacoes multicanal (in-app, e-mail, WhatsApp) e controle de acesso granular.
+O GEOP unifica tudo em um sistema unico com auditoria completa, notificacoes multicanal (in-app, e-mail, WhatsApp) e controle de acesso granular.
 
 ## O que o sistema faz
 
@@ -59,7 +59,6 @@ O Registro unifica tudo em um sistema unico com auditoria completa, notificacoes
 - **Timeline/tratativa**: historico de conversa em estilo ticket em todos os registros
 - **Controle de acesso**: 35 permissoes, perfis por empresa, wildcard para admin
 - **Exportacao**: CSV em todos os modulos
-- **Integracao Chess Hotel**: solicitacoes fiscais recebidas automaticamente do ERP legado
 
 ### Plataforma SaaS
 
@@ -89,9 +88,9 @@ O Registro unifica tudo em um sistema unico com auditoria completa, notificacoes
 
 ## Origem e contexto
 
-O Registro nasceu como sistema interno do **Aero Hotel** (Florianopolis/SC), operado pela Solid SD. O sistema legado (Chess Hotel) e um ERP hoteleiro em Laravel/Vue que continua em operacao durante a migracao gradual (estrategia strangler). O Chess Hotel se conecta ao Registro via integracao de API para enviar solicitacoes fiscais.
+O GEOP nasceu como sistema interno do **Aero Hotel** (Florianopolis/SC), operado pela Solid SD, substituindo um ERP legado (Chess Hotel) em Laravel/Vue. A integracao com o Chess Hotel foi descontinuada — o GEOP nao depende mais dele nem de nenhum outro sistema legado para operar.
 
-A decisao de transformar o Registro em SaaS comercial veio da percepcao de que outros hoteis enfrentam os mesmos problemas operacionais e nao possuem ferramentas adequadas.
+A decisao de transformar o GEOP em SaaS comercial veio da percepcao de que outras operacoes (hoteleiras e nao hoteleiras) enfrentam os mesmos problemas operacionais e nao possuem ferramentas adequadas.
 
 ## Numeros atuais
 

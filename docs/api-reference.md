@@ -12,9 +12,6 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/auth/refresh` | pública (20/min) | renova tokens via refresh token |
 | `GET` | `/auth/me` | Bearer | perfil revalidado no PostgreSQL |
 | `POST` | `/auth/set-password` | pública (5/min) | define senha via token de convite |
-| `POST` | `/integrations/chess-hotel/users/resolve` | `X-Registro-Key` (30/min) | resolve usuário Chess no Registro por e-mail |
-| `POST` | `/integrations/chess-hotel/tickets` | `X-Registro-Key` (30/min) | cria solicitação fiscal via integração Chess Hotel |
-| `GET` | `/integrations/chess-hotel/tickets` | `X-Registro-Key` | lista solicitações do usuário Chess com tracking |
 | `GET` | `/fiscal-requests` | `fiscal_request.view` | solicitações fiscais paginadas do tenant |
 | `POST` | `/fiscal-requests` | `fiscal_request.create` | cria solicitação fiscal |
 | `PATCH` | `/fiscal-requests/{id}` | `fiscal_request.edit` | atualiza solicitação fiscal |
@@ -222,15 +219,13 @@ Endpoints sensíveis possuem rate limiting por IP via slowapi:
 | --- | --- |
 | `POST /auth/login` | 10 req/min |
 | `POST /auth/refresh` | 20 req/min |
-| `POST /integrations/chess-hotel/users/resolve` | 30 req/min |
-| `POST /integrations/chess-hotel/tickets` | 30 req/min |
 | `POST /integrations/asaas/webhook` | 60 req/min |
 
 Exceder o limite retorna `429 Too Many Requests`.
 
 ### Arquitetura: service layer
 
-Cada domínio possui um `service.py` com a lógica de negócio separada do router. Os routers lidam apenas com parsing HTTP, validação de input e mapeamento de resposta. Os services recebem session e parâmetros tipados, facilitando reuso (ex: `fiscal_requests.service.create_from_chess()` pode ser chamado por qualquer integração) e testes unitários sem dependência de FastAPI.
+Cada domínio possui um `service.py` com a lógica de negócio separada do router. Os routers lidam apenas com parsing HTTP, validação de input e mapeamento de resposta. Os services recebem session e parâmetros tipados, facilitando reuso (ex: `fiscal_requests.service.create_fiscal_request()`) e testes unitários sem dependência de FastAPI.
 
 ### Erros estruturados
 
@@ -284,11 +279,7 @@ Atualiza campos da solicitação. Aceita qualquer subconjunto de `request_type`,
 
 Exclui a solicitação. Responde `204` sem corpo. Retorna `404` se o registro não existir ou pertencer a outro tenant.
 
-#### `POST /integrations/chess-hotel/tickets`
-
-Endpoint de integração para o Chess Hotel. Autenticado por header `X-Registro-Key` (variável `CHESS_HOTEL_INTEGRATION_KEY`). Resolve o tenant pelo slug configurado em `CHESS_HOTEL_COMPANY_SLUG` e o usuário Registro pelo e-mail do solicitante. Calcula `sla_deadline` (24h corridas) e vincula `requester_user_id`. Retorna protocolo, status, responsável, SLA e URL de acompanhamento.
-
-O payload do Chess Hotel agora inclui `solicitanteEmail`, `chessUserId` e `hotel` além dos campos originais. O campo `reservationNumber` é promovido a coluna própria.
+> A integração Chess Hotel (`/integrations/chess-hotel/*`) foi descontinuada e removida do código. Os registros históricos criados por ela permanecem em `fiscal_requests` (`origin = "chess-hotel"`), mas nenhum endpoint de integração externa existe mais para solicitações fiscais.
 
 #### SLA inteligente
 
@@ -305,14 +296,6 @@ O `sla_deadline` é calculado em **dias úteis** (seg-sex, 8h-18h) na timezone d
 **Pausa**: quando o status muda para "Em espera", o SLA é congelado. Ao retomar (qualquer outro status), os segundos pausados são acumulados e descontados do deadline efetivo. Múltiplas pausas são somadas.
 
 **Feriados**: `calculate_business_deadline()` aceita um set de datas (`YYYY-MM-DD`) como feriados. Integração com `CompanySetting` para configuração por tenant está preparada.
-
-#### `POST /integrations/chess-hotel/users/resolve`
-
-Verifica se um e-mail do Chess corresponde a um usuário ativo no tenant do GEOP. Retorna `{ "exists": true, "id": 1, "name": "...", "email": "..." }` ou `404` se não encontrar.
-
-#### `GET /integrations/chess-hotel/tickets?email=...`
-
-Lista as últimas 50 solicitações do usuário (por `requester_user_id`) com histórico de auditoria e status de tracking. Retorna o perfil do usuário e array de `FiscalRequestTracking` com protocolo, status, responsável, SLA, flag de conclusão, URL e histórico de eventos.
 
 ### Timeline
 
@@ -349,7 +332,6 @@ Toda mutação em ordens de serviço, solicitações fiscais, procedimentos e an
 | `work_order` | `update` | PATCH /work-orders/{id}, apenas se houve diff |
 | `work_order` | `delete` | DELETE /work-orders/{id} |
 | `fiscal_request` | `create` | POST /fiscal-requests |
-| `fiscal_request` | `create_from_chess` | POST /integrations/chess-hotel/tickets |
 | `fiscal_request` | `update` | PATCH /fiscal-requests/{id}, apenas se houve diff |
 | `fiscal_request` | `delete` | DELETE /fiscal-requests/{id} |
 | `{entity_type}` | `attachment_add` | POST /attachments — registra filename, content_type e size_bytes |

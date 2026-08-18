@@ -20,9 +20,6 @@ class Settings(BaseSettings):
     jwt_secret_file: str | None = None
     access_token_minutes: int = 30
     refresh_token_days: int = 7
-    chess_hotel_integration_key: str = "chess-hotel-development"
-    chess_hotel_integration_key_file: str | None = None
-    chess_hotel_company_slug: str = "aero-hotel"
     # Integração server-to-server com o Solid ERP (produto irmão, multi-tenant —
     # muitos tenants erpsolid conversam com muitas empresas GEOP diferentes).
     erpsolid_integration_key: str | None = None
@@ -74,10 +71,6 @@ def get_settings() -> Settings:
         settings.database_url = Path(settings.database_url_file).read_text(encoding="utf-8").strip()
     if settings.jwt_secret_file:
         settings.jwt_secret = Path(settings.jwt_secret_file).read_text(encoding="utf-8").strip()
-    if settings.chess_hotel_integration_key_file:
-        settings.chess_hotel_integration_key = (
-            Path(settings.chess_hotel_integration_key_file).read_text(encoding="utf-8").strip()
-        )
     if settings.erpsolid_integration_key_file:
         settings.erpsolid_integration_key = (
             Path(settings.erpsolid_integration_key_file).read_text(encoding="utf-8").strip()
@@ -107,13 +100,6 @@ def get_settings() -> Settings:
         settings.jwt_secret == insecure_default or len(settings.jwt_secret) < 32
     ):
         raise RuntimeError("JWT_SECRET de produção deve ter pelo menos 32 caracteres")
-    if settings.environment == "production" and (
-        settings.chess_hotel_integration_key == "chess-hotel-development"
-        or len(settings.chess_hotel_integration_key) < 32
-    ):
-        raise RuntimeError(
-            "CHESS_HOTEL_INTEGRATION_KEY de produção deve ter pelo menos 32 caracteres"
-        )
     if settings.environment == "production" and "*" in settings.web_origins:
         raise RuntimeError("WEB_ORIGINS não pode conter '*' em produção")
     # Guarda só quando o segredo já foi configurado: diferente de jwt_secret (sempre

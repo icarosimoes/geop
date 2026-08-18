@@ -1,4 +1,4 @@
-# Deploy Docker Swarm — Registro
+# Deploy Docker Swarm — GEOP
 
 ## Decisão operacional
 
@@ -42,7 +42,7 @@ unset db_password jwt_secret
 mkdir -p /opt/registro
 ```
 
-PostgreSQL, Redis e MinIO fazem parte da stack e mantêm volumes locais fixados no manager. Um serviço gera backups diários em formato custom do PostgreSQL, com SHA-256 e retenção de 14 dias. A URL do banco, JWT, integração Chess e credenciais MinIO usam secrets independentes.
+PostgreSQL, Redis e MinIO fazem parte da stack e mantêm volumes locais fixados no manager. Um serviço gera backups diários em formato custom do PostgreSQL, com SHA-256 e retenção de 14 dias. A URL do banco, JWT e credenciais MinIO usam secrets independentes.
 
 ## Variáveis da VPS
 
@@ -144,7 +144,6 @@ docker run --rm \
   --network registro-migration-temp \
   -e "DATABASE_URL=$DB_URL" \
   -e "JWT_SECRET=$(openssl rand -hex 48)" \
-  -e "CHESS_HOTEL_INTEGRATION_KEY=$(openssl rand -hex 48)" \
   -e "WEB_ORIGINS=https://localhost" \
   -e "ENVIRONMENT=production" \
   -e "REDIS_URL=redis://localhost:6379/0" \

@@ -51,7 +51,7 @@ export default function LoginPage() {
               autoComplete="organization"
               autoCapitalize="none"
             />
-            <span className="field-hint">Nome da sua empresa no GEOP (ex.: aero-hotel)</span>
+            <span className="field-hint">Nome da sua empresa no GEOP (ex.: minha-empresa)</span>
           </label>
           <label>
             Matrícula

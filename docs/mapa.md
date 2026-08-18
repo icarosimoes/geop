@@ -15,8 +15,7 @@
 | Swarm | produção ativa em `geop.solidsd.com.br`, `api.geop.solidsd.com.br` e `painel.geop.solidsd.com.br` | GHCR + Traefik + secrets externos |
 | Cache | Redis com TTL, invalidação por tenant e readiness | dashboard e permissões |
 | ACL | 35 permissões, roles por empresa, wildcard `*` | seed + CRUD via `/roles` |
-| Solicitações fiscais | CRUD via API + integração Chess Hotel + SLA + anexos MinIO | `fiscal_requests` isolada por tenant |
-| Integração Chess Hotel | launcher no navbar do Chess enviando para API do Registro | `POST /integrations/chess-hotel/tickets` |
+| Solicitações fiscais | CRUD via API + SLA + anexos MinIO | `fiscal_requests` isolada por tenant |
 | Inspeções/Obra | check suites, inspection suites, vistorias V2, auditorias, diário de obra | tabelas dedicadas com RLS |
 | Reuniões | tabela dedicada com participantes, pautas e ata PDF | `meetings` + filhas |
 | Relatórios de turno | tabela dedicada com filtro por data e turno | `shift_reports` |
@@ -37,8 +36,8 @@
 | testes API | `api/tests/` |
 | Web | `web/app/`, `web/components/` (`app-layout.tsx` é o shell unificado; `dashboard-shell.tsx` e `operational-module.tsx` renderizam apenas conteúdo) |
 | Admin SaaS | `admin/app/`, `admin/lib/` |
-| Portal do Colaborador (PWA) | `colaborador/app/`, `colaborador/lib/` — app Next.js independente, sem menu do Registro |
-| Agente Go de ponto (relógio físico) | `agent/` — ponte local entre o relógio Control iD (LAN) e o webhook do Registro |
+| Portal do Colaborador (PWA) | `colaborador/app/`, `colaborador/lib/` — app Next.js independente, sem menu do GEOP |
+| Agente Go de ponto (relógio físico) | `agent/` — ponte local entre o relógio Control iD (LAN) e o webhook do GEOP |
 | Compose | `docker-compose.yml` |
 | Swarm | `docker-stack.yml` |
 | legado local | `docs/v1/` |
@@ -109,6 +108,6 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - Auditorias noturnas (104 registros) permanecem em `module_records` com slug `manutencao` — são dados legados, não manutenção real
 - Manutenção real usa tabela dedicada `maintenance_records` (endpoint `/maintenance`); mural usa `bulletin_posts` (endpoint `/bulletin`)
 - Diário de obra sem dados V1 (tabela vazia)
-- Solicitações fiscais sem dados V1 (apenas criáveis manualmente ou via integração Chess)
+- Solicitações fiscais sem dados V1 (apenas criáveis manualmente)
 - Suíte de testes (`api/tests/`) roda contra o mesmo banco de desenvolvimento (sem `TEST_DATABASE_URL` isolado) — acumula dados a cada execução e colide com o seed fictício de ponto em datas hardcoded (ver [escala-de-trabalho.md](escala-de-trabalho.md#abono-de-ponto-espelho-de-ponto-e-notificações-2026-07-06))
 - Espelho de ponto: HE 100% não considera feriados (sem calendário integrado); adicional noturno é um adicional simples de 20%, sem a "hora noturna reduzida" da CLT; filtro por um colaborador por vez (sem Equipe/Departamento/Todos)

@@ -1,5 +1,8 @@
 # Integração Chess Hotel → GEOP — Guia de implementação em produção
 
+> **[DESCONTINUADA em 2026-08-17]** Esta integração foi removida do código (endpoints, config, testes). Documento preservado como histórico de implementação; nada aqui reflete o comportamento atual do sistema.
+
+
 ## Objetivo
 
 Permitir que a recepção e outros setores do hotel abram chamados no sistema GEOP diretamente de dentro do Chess Hotel (front) e Chess Gestão (back), sem sair do PMS. Os chamados são de dois tipos:

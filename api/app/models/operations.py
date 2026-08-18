@@ -87,13 +87,15 @@ class FiscalRequest(Base, TenantMixin, TimestampMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
         index=True,
     )
+    # Legado da integração Chess Hotel (descontinuada) — mantido só para preservar
+    # o histórico de solicitações já criadas por ela; nada novo grava este campo.
     chess_user_id: Mapped[str | None] = mapped_column(String(80))
     reservation_number: Mapped[str | None] = mapped_column(String(80))
     sla_deadline: Mapped[datetime | None] = mapped_column(DateTime)
     sla_paused_at: Mapped[datetime | None] = mapped_column(DateTime)
     sla_paused_seconds: Mapped[int] = mapped_column(Integer, default=0)
     description: Mapped[str | None] = mapped_column(Text)
-    origin: Mapped[str] = mapped_column(String(80), default="chess-hotel")
+    origin: Mapped[str] = mapped_column(String(80), default="registro")
     status: Mapped[str] = mapped_column(String(40), default="Em andamento", index=True)
     payload: Mapped[dict] = mapped_column(JSON)
 

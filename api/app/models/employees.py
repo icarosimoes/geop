@@ -88,7 +88,7 @@ class EmployeeExternalId(Base, TenantMixin):
         ForeignKey("employees.id", ondelete="CASCADE"),
         index=True,
     )
-    system: Mapped[str] = mapped_column(String(40))  # "totvs", "senior", "chess-hotel", etc
+    system: Mapped[str] = mapped_column(String(40))  # "totvs", "senior", etc
     external_id: Mapped[str] = mapped_column(String(120))  # ID no sistema externo
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -267,3 +267,28 @@ histórica até ser deletado em 2026-07-14 (ver entrada acima), quando passou a 
 Como aplicar: não reintroduzir rotas ou automações de importação da V1. Novos tenants
 nascem vazios; se um cliente pedir migração de dados do sistema antigo, é uma decisão de
 produto nova, não uma retomada do fluxo antigo.
+
+## 2026-08-17 — GEOP não é mais um sistema exclusivo de hotelaria; integração Chess Hotel removida
+
+Decisão: o produto, batizado "Aero" e depois renomeado "Registro" (ver
+[Nome e arquivamento da V1](#2026-06-19--nome-e-arquivamento-da-v1)), teve sua marca
+trocada para **GEOP (Gestão Operacional)** — o rebrand de UI/e-mails/docs começou em
+2026-08-14 (junto da troca de domínio para `geop.solidsd.com.br`, ver
+`registro-trabalho.md`) e foi completado em 08-17. Junto com o rebrand, o posicionamento
+deixou de ser "sistema de gestão hoteleira" para "sistema de gestão operacional que atende
+hotelaria e outras operações organizadas por turno" — a hotelaria continua sendo o
+principal perfil de cliente hoje (é onde o produto nasceu, no Aero Hotel), mas deixou de
+ser tratada como o único caso de uso no código, na documentação e nos textos de produto.
+
+Na mesma decisão, a integração com o Chess Hotel (o PMS legado que o GEOP substitui) foi
+descontinuada e removida do código: endpoints, chave de integração, funções de service e
+schemas específicos. Documentação de implementação da integração foi arquivada em
+`docs/legado/integracao-chess-hotel/`, não apagada.
+
+Como aplicar: não reintroduzir textos, exemplos ou nomenclatura que tratem o GEOP como
+exclusivo de hotel (ex: "gestão hoteleira" como descrição principal do produto) — use
+"gestão operacional", citando hotelaria como exemplo de uso, não como definição. Não
+reintroduzir a integração Chess Hotel (endpoints `/integrations/chess-hotel/*`, header
+`X-Registro-Key` para esse fim) sem uma decisão de produto nova — os dados históricos que
+ela deixou (`fiscal_requests.origin = "chess-hotel"`, `chess_user_id`) foram preservados
+de propósito e não precisam de migration para continuar existindo.

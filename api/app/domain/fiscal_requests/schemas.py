@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.core.validators import validate_cpf_cnpj, validate_email_basic
 
@@ -12,82 +12,6 @@ def _validate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if (email := payload.get("taxpayerEmail")) and isinstance(email, str) and email.strip():
         payload["taxpayerEmail"] = validate_email_basic(email)
     return payload
-
-
-class FiscalRequestCreate(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    module: str
-    request_type: str = Field(alias="requestType")
-    apartment: str | None = None
-    requester: str = Field(alias="solicitante")
-    requester_email: str = Field(alias="solicitanteEmail")
-    chess_user_id: str = Field(alias="chessUserId")
-    hotel: str
-    reservation_number: str | None = Field(default=None, alias="reservationNumber")
-    origin: str = Field(default="chess-hotel", alias="origem")
-    screenshots: list[str] = Field(default_factory=list)
-
-    @field_validator("requester_email")
-    @classmethod
-    def normalize_requester_email(cls, value: str) -> str:
-        return validate_email_basic(value)
-
-    @field_validator("screenshots")
-    @classmethod
-    def limit_screenshots(cls, value: list[str]) -> list[str]:
-        if len(value) > 5:
-            raise ValueError("Máximo de 5 screenshots por chamado")
-        return value
-
-
-class FiscalRequestCreated(BaseModel):
-    protocol: str
-    status: str
-    responsible: str | None
-    sla_deadline: datetime
-    url: str
-    attachments_count: int = 0
-
-
-class ChessUserResolve(BaseModel):
-    email: str
-
-    @field_validator("email")
-    @classmethod
-    def normalize_email(cls, value: str) -> str:
-        return validate_email_basic(value)
-
-
-class ChessUserResolved(BaseModel):
-    exists: bool
-    id: int | None = None
-    name: str | None = None
-    email: str
-
-
-class FiscalHistoryEntry(BaseModel):
-    event: str
-    user: str
-    at: datetime
-    changes: dict[str, Any] | None = None
-
-
-class FiscalRequestTracking(BaseModel):
-    protocol: str
-    request_type: str
-    status: str
-    responsible: str | None
-    sla_deadline: datetime | None
-    completed: bool
-    updated_at: datetime
-    url: str
-    history: list[FiscalHistoryEntry] = Field(default_factory=list)
-
-
-class FiscalRequestTrackingList(BaseModel):
-    user: ChessUserResolved
-    items: list[FiscalRequestTracking]
 
 
 class FiscalRequestUserCreate(BaseModel):

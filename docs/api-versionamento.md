@@ -38,7 +38,7 @@ Criar nova versão **apenas** quando houver breaking change:
 
 ## Regras de coexistência
 
-1. **v1 permanece estável** enquanto houver clients ativos (Chess Hotel, frontend).
+1. **v1 permanece estável** enquanto houver clients ativos (frontend web, admin, colaborador).
 2. **v2 pode importar do v1** — endpoints não alterados podem ser re-exportados.
 3. **Deprecação**: quando v2 estiver completa, v1 recebe header `Deprecation: true` e `Sunset: <data>` nas respostas. Prazo mínimo de 90 dias.
 4. **Remoção**: v1 só é removida quando não houver tráfego ativo.
@@ -60,7 +60,3 @@ v2_router.include_router(work_orders_v2_router)
 app.include_router(v1_router)
 app.include_router(v2_router)
 ```
-
-## Integração Chess Hotel
-
-O Chess Hotel consome `/api/v1/integrations/chess-hotel/tickets`. Qualquer alteração breaking nesse contrato **deve** ser coordenada com o time do Chess e exige nova versão.

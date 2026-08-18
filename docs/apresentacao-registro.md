@@ -1,14 +1,14 @@
-# GEOP — Gestao operacional hoteleira
+# GEOP — Gestao Operacional
 
-## Uma plataforma. Toda a operacao do seu hotel.
+## Uma plataforma. Toda a sua operacao.
 
-O GEOP e o sistema que conecta todos os departamentos do seu hotel em um unico lugar. Recepcao, governanca, manutencao, financeiro, seguranca — todos trabalhando na mesma plataforma, com rastreabilidade completa e visao gerencial em tempo real.
+O GEOP e o sistema que conecta todos os departamentos da sua operacao em um unico lugar. Recepcao, governanca, manutencao, financeiro, seguranca — todos trabalhando na mesma plataforma, com rastreabilidade completa e visao gerencial em tempo real. Nasceu na hotelaria e hoje atende qualquer operacao organizada por setores e turnos.
 
 ---
 
 ## O problema
 
-Hoteis operam com dezenas de processos diarios que dependem de comunicacao entre equipes e turnos. Na pratica, essa comunicacao acontece em planilhas, cadernos, grupos de WhatsApp e sistemas desconectados.
+Operacoes com equipes por turno lidam com dezenas de processos diarios que dependem de comunicacao entre equipes e turnos. Na pratica, essa comunicacao acontece em planilhas, cadernos, grupos de WhatsApp e sistemas desconectados.
 
 O resultado:
 
@@ -34,7 +34,7 @@ O GEOP centraliza toda a operacao em modulos integrados:
 
 ### Para o financeiro
 
-- **Solicitacoes fiscais**: a recepcao pede, o financeiro resolve — com SLA em horario comercial e integracao com o ERP
+- **Solicitacoes fiscais**: a ponta pede, o financeiro resolve — com SLA em horario comercial
 
 ### Para a manutencao
 
@@ -54,19 +54,19 @@ O GEOP centraliza toda a operacao em modulos integrados:
 
 | | GEOP | Planilhas / WhatsApp | ERPs genericos |
 |---|---|---|---|
-| Feito para hotel | Sim | Nao | Parcialmente |
+| Feito para operacao por turnos | Sim | Nao | Parcialmente |
 | Rastreabilidade completa | Auditoria campo a campo | Nenhuma | Basica |
 | Comunicacao entre turnos | Estruturada com confirmacao | Informal | Nao existe |
 | SLA controlado | Horario comercial, pausas | Manual | Raramente |
 | Notificacao multicanal | App + e-mail + WhatsApp | So WhatsApp | E-mail |
 | Mobile-ready | PWA responsivo | N/A | Depende |
-| Multitenant | Isolamento total por hotel | N/A | Nem sempre |
+| Multitenant | Isolamento total por tenant | N/A | Nem sempre |
 
 ---
 
 ## Como funciona
 
-1. **Cada hotel tem seu espaco isolado** — dados, usuarios, configuracoes e permissoes completamente separados
+1. **Cada cliente tem seu espaco isolado** — dados, usuarios, configuracoes e permissoes completamente separados
 2. **A equipe acessa pelo navegador** — funciona em qualquer dispositivo, sem instalacao
 3. **Cada departamento usa os modulos que precisa** — o admin configura perfis com permissoes granulares
 4. **Tudo e rastreado automaticamente** — auditoria, timeline e notificacoes sem esforco manual
@@ -80,16 +80,16 @@ Construido com stack moderna e segura:
 
 - **Isolamento de dados no banco** (Row-Level Security) — protecao alem da aplicacao
 - **Infraestrutura propria** — sem dependencia de nuvem publica, deploy controlado
-- **API aberta** — integravel com ERPs, PMSs e sistemas hoteleiros existentes
+- **API aberta** — integravel com ERPs, PMSs e outros sistemas existentes
 - **Atualizacoes continuas** — sem parada, sem migracao manual
 
 ---
 
 ## Sobre
 
-O GEOP nasceu dentro de um hotel real — o Aero Hotel em Florianopolis — para resolver problemas reais da operacao diaria. Desenvolvido pela **Solid SD**, foi transformado em plataforma SaaS para atender qualquer hotel que queira profissionalizar sua gestao operacional.
+O GEOP nasceu dentro de um hotel real — o Aero Hotel em Florianopolis — para resolver problemas reais da operacao diaria. Desenvolvido pela **Solid SD**, foi transformado em plataforma SaaS para atender qualquer operacao que queira profissionalizar sua gestao — hoteleira ou nao.
 
-**Producao ativa** em hoteis reais. Evolucao contínua baseada em feedback operacional.
+**Producao ativa** em clientes reais. Evolucao contínua baseada em feedback operacional.
 
 ---
 

@@ -86,7 +86,7 @@ CREATE TABLE employee_external_ids (
   id INTEGER PRIMARY KEY,
   company_id INTEGER NOT NULL,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  system VARCHAR(40) NOT NULL,      -- ex: 'totvs', 'senior', 'chess-hotel'
+  system VARCHAR(40) NOT NULL,      -- ex: 'totvs', 'senior'
   external_id VARCHAR(120) NOT NULL,
   created_at TIMESTAMP DEFAULT now(),
   updated_at TIMESTAMP DEFAULT now(),
@@ -251,9 +251,7 @@ A migração `20260704_0046` adicionou `job_title`, `hire_date`, `termination_da
 
 ## Relação com integração de sistemas externos
 
-O GEOP planeja se comunicar futuramente com sistemas externos (ERP, folha de pagamento). O cadastro de Funcionários nasce preparado para isso via `EmployeeExternalId` — ao integrar com um novo sistema, basta gravar o par `(system, external_id)` sem alterar o schema de `employees`.
-
-Isso é análogo ao padrão já usado pela integração do [Chess Hotel](integracao-escala-ponto.md), mas desacoplado: cada sistema externo pode ter seu próprio identificador para o mesmo funcionário, sem conflito.
+O GEOP planeja se comunicar futuramente com sistemas externos (ERP, folha de pagamento). O cadastro de Funcionários nasce preparado para isso via `EmployeeExternalId` — ao integrar com um novo sistema, basta gravar o par `(system, external_id)` sem alterar o schema de `employees`, com cada sistema externo tendo seu próprio identificador para o mesmo funcionário, sem conflito.
 
 ## Correções pós-implementação (2026-07-04)
 

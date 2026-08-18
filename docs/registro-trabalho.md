@@ -922,4 +922,70 @@ na memória do erpsolid).
 
 PR aberta: `icarosimoes/registro#8` → `main`, par de `icarosimoes/erpsolid#30`.
 
+## 2026-08-17 (continuação) — Remoção da integração Chess Hotel e finalização do rebrand GEOP
+
+Pedido do usuário: "o sistema não é mais Aero agora é GEOP Gestão Operacional e tira a
+associação de sistema de hotelaria tb, ele é tb pra hotelaria, e tb ele n terá mais
+conexão com o Chess Hotel". Confirmado com o usuário antes de mexer: (1) derrubar os
+endpoints Chess Hotel no código mesmo sabendo que o Chess Hotel (Laravel) ainda podia
+estar chamando em produção — assumindo que já foi desligado do lado de lá; (2) manter a
+coluna `chess_user_id` e os registros históricos (`origin = "chess-hotel"`) como estão,
+sem migration; (3) "GEOP" substitui "Registro" também em texto/branding, não só "Aero"
+(não mexe em identificadores técnicos de infra — mesma decisão já registrada no rebrand
+de 08-14).
+
+**Código (`api/`)**:
+
+- `domain/fiscal_requests/router.py`: removidos os 4 endpoints
+  (`/integrations/chess-hotel/users/resolve`, `/integrations/chess-hotel/tickets` POST/GET,
+  `/integrations/chess-hotel/tickets/{protocol}`) e os helpers que só existiam pra eles
+  (`_require_integration_key`, `_require_company`, `_require_chess_user`, `_to_tracking`).
+- `domain/fiscal_requests/service.py`: removidos `create_from_chess`, `resolve_chess_user`,
+  `get_integration_company_id`, `list_chess_tickets`, `get_chess_ticket`,
+  `build_tracking_item` (só eram usados pelos endpoints removidos).
+- `domain/fiscal_requests/schemas.py`: removidos `FiscalRequestCreate` (payload do webhook
+  Chess), `ChessUserResolve(d)`, `FiscalHistoryEntry`, `FiscalRequestTracking(List)`.
+- `core/config.py`: removidos `chess_hotel_integration_key(_file)`,
+  `chess_hotel_company_slug` e a validação de produção correspondente.
+- `models/operations.py`: `FiscalRequest.origin` — default trocado de `"chess-hotel"` para
+  `"registro"` (não tem mais nenhum código que crie registro com origin chess-hotel;
+  `chess_user_id` ganhou comentário explicando que é legado, mantido só por histórico).
+- `docker-compose.yml`/`docker-stack.yml`: removidas as env vars `CHESS_HOTEL_*` e o
+  secret `chess_hotel_integration_key` do Swarm (o secret externo correspondente na VPS
+  fica órfão — não removido por esta sessão, é infra fora do repo).
+- `tests/test_chess_integration.py` apagado (22 testes).
+- Comentários que citavam Chess Hotel como precedente/exemplo em
+  `domain/integrations_erpsolid/router.py`, `domain/timeclock/service.py` e
+  `models/employees.py` (lista de sistemas externos de exemplo) atualizados.
+- **Suite de testes não rodou nesta sessão**: mesmo conflito de porta 6379 do item
+  anterior (stack do erpsolid ocupando o Redis). Validação feita manualmente — grep
+  exaustivo por qualquer referência solta a Chess/schemas/functions removidos (zero
+  resultados) + `py_compile` em todos os arquivos tocados. Rodar
+  `.venv/bin/python -m pytest tests/ -v` antes do próximo deploy.
+
+**Documentação**:
+
+- `chess-hotel.md`, `chess-hotel-api.md`, `chess-hotel-implementacao.md` e a Postman
+  collection movidos de `docs/integracoes/` para `docs/legado/integracao-chess-hotel/`
+  com aviso de descontinuação no topo — preservados como histórico, não fazem mais parte
+  da doc ativa.
+- `api-reference.md`, `domain-model.md`, `mapa.md`, `web-rotas-ui.md`, `CLAUDE.md`:
+  removidas as referências aos endpoints/rate limits/exemplos de código do Chess Hotel.
+- Fechada a lacuna que o rebrand de 08-14 tinha deixado: `contexto-registro.md` e
+  `apresentacao-registro.md` ainda descreviam o GEOP como sistema exclusivo de hotel —
+  reescritos para "atende hotelaria e outras operações por turno". Textos de UI
+  (`web/app/layout.tsx`, `web/app/login/page.tsx`, `web/app/sso/page.tsx`) trocaram
+  "Gestão operacional hoteleira" por "Gestão operacional". `mapa.md`, `domain-model.md`,
+  `api-reference.md`, `web-rotas-ui.md`, `relogios-de-ponto-catalogo.md` e o título de
+  `deploy-swarm.md` (que o rebrand de 08-14 também não tinha alcançado) tiveram menções
+  de marca "Registro" trocadas por "GEOP". Placeholders residuais de "aero" em UI
+  (`colaborador/app/login/page.tsx`, `web/components/settings-sections.tsx`) trocados por
+  exemplos genéricos.
+- Preservado, como no rebrand de 08-14: uso genérico da palavra "registro" (substantivo
+  comum), identificadores técnicos de infra (containers `registro-*`, env vars, bucket
+  S3, nome do stack), credenciais/seeds reais (`demo@aerohotel.local`, `Registro@123`,
+  tenant real `Aero Hotel`/`aero-hotel`) e todo o changelog histórico deste arquivo e de
+  `memoria-projeto.md`/`backlog.md` (entradas passadas não foram reescritas, só uma nova
+  seção foi adicionada em `backlog.md` fechando o item pendente).
+
 **Integração Chess Hotel**: o usuário informou no meio da sessão que a integração não vai mais existir ("esqueça o Chess Hotel", "não teremos mais integração") — a documentação da integração (`chess-hotel.md`, `chess-hotel-implementacao.md`) recebeu só parte do rebrand de marca antes desse aviso; nada no código (`X-Registro-Key`, endpoints, componente `RegistroLauncher.vue` do lado do Chess) foi tocado, por instrução explícita de parar.

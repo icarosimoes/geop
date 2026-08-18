@@ -27,7 +27,7 @@ descobrir **como extrair esse evento de cada equipamento**.
 
 - Já existe suporte no backend (`TimeClockDevice.model` default `"control_id"`, webhook dedicado).
 - API REST local documentada publicamente (não exige engenharia reversa de protocolo binário).
-- Forte presença em hotéis pequenos/médios — perfil de cliente do Registro.
+- Forte presença em hotéis pequenos/médios, um dos perfis de cliente do GEOP.
 - Permite dois modos de operação, cobrindo os dois cenários de rede do cliente:
   1. **Push nativo**: o próprio equipamento é configurado para enviar HTTP POST direto para
      `https://<tenant>.../integrations/control-id/{token}/punches` (exige IP público/roteamento
@@ -49,9 +49,9 @@ POST /get_catalog.fcgi     {"catalog": "access_logs", "id": <last_id ou 0>}
 POST /destroy_session.fcgi                                          → encerra sessão
 ```
 
-Mapeamento de evento do Control iD → payload do webhook do Registro:
+Mapeamento de evento do Control iD → payload do webhook do GEOP:
 
-| Campo Control iD | Campo Registro |
+| Campo Control iD | Campo GEOP |
 |---|---|
 | `user_id` (resolvido para matrícula/PIS via `load_objects` de `user`) | `external_id` |
 | `time` (epoch) | `punched_at` |
