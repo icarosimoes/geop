@@ -329,7 +329,7 @@ dois pontos:
 2. **Backfill manual** (`api/app/backfill_default_shifts.py`): script
    idempotente para aplicar aos tenants que já existiam antes dessa mudança.
    Rodar com `.venv/bin/python -m app.backfill_default_shifts` (ou
-   `docker exec registro-api-1 python -m app.backfill_default_shifts` em
+   `docker exec geop-api-1 python -m app.backfill_default_shifts` em
    containers já subindo).
 
 Esses turnos são apenas o ponto de partida — o gestor pode renomear, ajustar

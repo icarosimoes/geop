@@ -73,20 +73,20 @@ Isolamento é herdado via FK CASCADE da tabela pai.
 docker compose --profile mysql-import up -d mysql
 
 # 2. Aguardar MySQL ficar healthy
-docker exec registro-mysql-1 mysqladmin ping -h 127.0.0.1 -u root -pregistro-root --silent
+docker exec geop-mysql-1 mysqladmin ping -h 127.0.0.1 -u root -pregistro-root --silent
 
 # 3. Criar database legado e importar dump
-docker exec registro-mysql-1 mysql -u root -pregistro-root -e "CREATE DATABASE IF NOT EXISTS legacy_v1;"
+docker exec geop-mysql-1 mysql -u root -pregistro-root -e "CREATE DATABASE IF NOT EXISTS legacy_v1;"
 (echo "SET FOREIGN_KEY_CHECKS=0;"; cat docs/aero-YYYY-MM-DD.sql) | \
-  docker exec -i registro-mysql-1 mysql -u root -pregistro-root legacy_v1
+  docker exec -i geop-mysql-1 mysql -u root -pregistro-root legacy_v1
 
 # 4. Instalar driver MySQL no container da API (temporário)
-docker exec -u root registro-api-1 pip install asyncmy
+docker exec -u root geop-api-1 pip install asyncmy
 
 # 5. Rodar importação
 docker exec \
   -e LEGACY_DATABASE_URL="mysql+asyncmy://root:registro-root@mysql:3306/legacy_v1" \
-  registro-api-1 python -m app.import_v1
+  geop-api-1 python -m app.import_v1
 
 # 6. Parar MySQL
 docker compose --profile mysql-import stop mysql

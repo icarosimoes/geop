@@ -1,4 +1,4 @@
-name: registro-test
+name: geop-test
 
 services:
   postgres-test:

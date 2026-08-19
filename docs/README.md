@@ -35,6 +35,7 @@ Esta pasta é a fonte de verdade técnica, funcional e operacional do GEOP. A no
 - [Deploy em novo domínio ou novo Swarm](infra/deploy-novo-dominio.md)
 - [Runbook de produção](infra/runbook-producao.md)
 - [Testes e critérios de aceite](infra/testes-integracao.md)
+- [Renomear a stack de produção para geop (plano, não executado)](infra/renomear-stack-producao.md)
 
 ## Padrões, decisões e memória
 

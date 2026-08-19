@@ -124,7 +124,19 @@ Antes de migrations, mudanças críticas ou reboot da VPS, gerar e validar backu
 
 ## Migrations no Swarm
 
-O Alembic **não roda automaticamente** nas réplicas. Para aplicar migrations:
+Desde 19/08/2026, `alembic upgrade head` roda automaticamente no `CMD` de produção
+(`api/Dockerfile`, alvo `production`) antes do `uvicorn` subir — não depende mais de um
+passo manual pós-deploy. É idempotente (no-op se o banco já está no head) e seguro de
+repetir em cada réplica/restart, desde que o deploy continue usando
+`update_config.parallelism: 1` (nunca duas réplicas *novas* migrando ao mesmo tempo). Ver
+decisão em [memoria-projeto.md](../memoria-projeto.md). Isso fecha o padrão que
+já tinha causado 3 incidentes idênticos (`platform_settings` em 13/07, `employee_payslips`
+em 17/08, `suppliers`/`cost_centers` em 18/08 — este último derrubou
+`/integrations/erpsolid` em produção).
+
+O procedimento manual abaixo continua útil como fallback — para rodar uma migration
+específica fora do ciclo normal de deploy (ex.: antes de uma mudança de schema mais
+arriscada, ou se o serviço `api` estiver de fora por outro motivo):
 
 ```bash
 # Descobrir imagem atual da API

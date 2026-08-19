@@ -7,7 +7,7 @@ Paths below are relative to `web/` (this app's root), except the driver
 itself which lives at `web/.claude/skills/run-web/driver.mjs`.
 
 The web app (`web/`) is a Next.js 16 App Router frontend for the tenant
-side of Registro. It's normally served by the `registro-web-1` Docker
+side of Registro. It's normally served by the `geop-web-1` Docker
 container as part of the full stack (API + Postgres + Redis + MinIO),
 not run standalone — Server Actions call the FastAPI backend directly,
 so a bare `npm run dev` without the rest of the stack won't have
@@ -131,7 +131,7 @@ The CPF must match a real, non-deleted employee in the tenant you
 logged into — check/create one first, e.g.:
 
 ```bash
-docker exec registro-postgres-1 psql -U registro -d registro -c \
+docker exec geop-postgres-1 psql -U registro -d registro -c \
   "select id, name, cpf from employees where deleted_at is null order by id desc limit 5;"
 ```
 
@@ -183,6 +183,6 @@ Useless in this headless container — only for reference.
   always be `libasound.so.2` on a different base image) and
   `apt-get download <package> && dpkg-deb -x`.
 - Login redirect never resolves / `wait-for text=Dashboard` times out
-  → check `docker logs registro-api-1 --tail 30`; the API runs
+  → check `docker logs geop-api-1 --tail 30`; the API runs
   migrations/seed on startup and needs a few seconds after
   `docker compose up -d` before login works.

@@ -7,7 +7,7 @@
 # O arquivo resultante (docker-compose.observability.yml, sem ".example") fica de fora
 # do git — ver docs/infra/observability-local.md. Escopo: apenas desenvolvimento local,
 # nunca aplicado à VPS de produção (docker-stack.yml não referencia nada disto).
-name: registro
+name: geop
 
 services:
   glitchtip-postgres:
@@ -17,7 +17,7 @@ services:
       POSTGRES_USER: glitchtip
       POSTGRES_PASSWORD: glitchtip
     volumes:
-      - registro-glitchtip-postgres-data:/var/lib/postgresql/data
+      - geop-glitchtip-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U glitchtip"]
       interval: 5s
@@ -84,4 +84,4 @@ services:
       - observability
 
 volumes:
-  registro-glitchtip-postgres-data:
+  geop-glitchtip-postgres-data:

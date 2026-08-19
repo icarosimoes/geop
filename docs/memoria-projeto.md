@@ -311,3 +311,42 @@ de comparar com uma coluna `DateTime` sem `timezone=True` — não dá pra confi
 chama vai mandar naive. E: cobertura de teste desse tipo de filtro só vale alguma coisa
 rodando contra Postgres real (`TEST_DATABASE_URL`/`DATABASE_URL` apontando pra Postgres) —
 a suíte cai pra SQLite por padrão sem isso, e SQLite não acusa esse tipo de erro de tipo.
+
+## 2026-08-19 — Containers Docker do dev local renomeados; alembic automático em produção
+
+Revisão parcial da decisão de 2026-08-14 (que tinha mantido todos os identificadores
+técnicos de infra como `registro-*`, "pra uma janela de manutenção dedicada"). O usuário
+pediu o rename e, perguntado sobre o escopo, confirmou explicitamente **só dev local**:
+`docker-compose.yml`/`.test.yml`/`.observability.yml(.example)` (nome do projeto Compose e
+volumes) e a documentação de dev que citava nomes de container (`registro-api-1` →
+`geop-api-1`, etc.) — ver execução completa em
+[registro-trabalho.md](registro-trabalho.md#2026-08-19--containers-docker-locais-renomeados-para-geop--e-alembic-automático-em-produção).
+
+**Produção continua `registro-*`** (banco, secrets do Swarm, bucket S3, imagens GHCR
+`icarosimoes/registro/*`, `/opt/registro` e o nome da stack) — renomear isso exige passos
+manuais na VPS que este agente não executa (sem acesso SSH/GHCR): criar secrets novos,
+mover diretório, renomear o pacote no GHCR, redeploy coordenado. Plano completo escrito em
+`docs/infra/renomear-stack-producao.md`, ainda não executado.
+
+Como aplicar: não assumir que containers de produção seguem o mesmo nome do dev local —
+`geop-api-1` é só dev (Compose); em produção os serviços Swarm continuam `registro_api`,
+`registro_web`, etc. até essa segunda etapa ser decidida e executada. Rodar o rename de
+produção exige seguir o runbook, nunca só copiar os arquivos do dev.
+
+## 2026-08-19 — `alembic upgrade head` roda automaticamente no container de produção
+
+Causa raiz dos 3 incidentes idênticos de 500 em produção por migration pendente
+(`platform_settings` 13/07, `employee_payslips` 17/08, `suppliers`/`cost_centers` 18/08 —
+este último derrubando `/integrations/erpsolid`, ver `registro-trabalho.md`) era o `CMD`
+de produção do `api/Dockerfile` nunca ter rodado Alembic — só o dev local fazia isso. Como
+o próprio `registro-trabalho.md` já vinha sugerindo depois do 3º incidente, o `CMD` de
+produção passou a rodar `alembic upgrade head` antes do `uvicorn` subir. É idempotente e
+seguro por réplica desde que o Swarm continue fazendo rolling update com
+`update_config.parallelism: 1` (nunca duas réplicas *novas* migrando ao mesmo tempo).
+
+Como aplicar: o procedimento manual de rodar `alembic upgrade head` via SSH depois de cada
+deploy (`docs/infra/deploy-swarm.md`) deixa de ser necessário no fluxo normal — continua
+documentado só como fallback para rodar uma migration fora do ciclo normal de deploy
+(banco separado, hotfix emergencial, etc.). Se um deploy novo voltar a dar 500 por coluna
+inexistente, suspeitar primeiro de a imagem em produção ainda ser anterior a esta mudança
+(19/08/2026), não do `CMD` ter parado de rodar a migration.

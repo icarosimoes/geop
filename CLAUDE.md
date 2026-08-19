@@ -53,8 +53,8 @@ docs/          → documentação técnica (fonte de verdade)
 ```bash
 docker compose up -d          # sobe PostgreSQL, API, Web, Admin
 docker compose build api      # rebuild após mudar pyproject.toml
-docker restart registro-api-1 # restart rápido (volumes montam o código)
-docker logs registro-api-1 --tail 30  # debug
+docker restart geop-api-1     # restart rápido (volumes montam o código)
+docker logs geop-api-1 --tail 30  # debug
 ```
 
 - API: `localhost:8000` | Web: `localhost:3000` | Admin: `localhost:3001` | PostgreSQL: `localhost:5433`

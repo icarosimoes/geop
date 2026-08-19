@@ -1009,3 +1009,77 @@ Depois da migration aplicada, o usuário reportou "ainda continua com erro". `do
 - **Validação**: reproduzido o erro exato contra Postgres real local (`docker compose up -d postgres`, porta 5433 — não usar SQLite, que não acusa esse tipo de erro) antes do fix, confirmado que sumiu depois. 2 testes de regressão novos cobrindo `since` timezone-aware nos dois endpoints. Suíte completa (579 testes) verde contra Postgres. Pós-deploy, repetida a mesma request que dava 500 direto no container de produção (`200` agora) e o usuário confirmou sync real bem-sucedido pela UI.
 
 Como aplicar: quando um sync incremental (`since`/`updated_at`) começa a falhar só depois do primeiro sucesso — não a partir da primeira vez — suspeitar de mismatch timezone-aware vs. naive entre quem manda o filtro e a coluna que recebe, não só de migration pendente. E: testes que só rodam com `since=None` não cobrem o caminho incremental — qualquer endpoint novo com filtro `since`/`updated_at` precisa de um teste passando um valor não-nulo, de preferência com timezone, contra Postgres real.
+
+## 2026-08-19 — Containers Docker locais renomeados para `geop-*` e alembic automático em produção
+
+Usuário pediu pra renomear os containers/serviços Docker de `registro-*` pra `geop-*`
+(pendência deixada em aberto na decisão de 2026-08-14, ver `memoria-projeto.md`) e pra
+"garantir a integração com o erp e vice versa". Escopo do rename confirmado com o usuário
+via pergunta direta: **só dev local** — produção fica de fora por exigir passos manuais na
+VPS (novos secrets, mover `/opt/registro`, renomear pacote GHCR) que este agente não
+consegue executar (sem acesso SSH/GHCR).
+
+### Rename dev local
+
+- `docker-compose.yml`: `name: registro` → `name: geop`; volumes
+  `registro-{postgres,mysql,redis,minio}-data` → `geop-{postgres,mysql,redis,minio}-data`.
+- `docker-compose.test.yml`: `name: registro-test` → `name: geop-test`.
+- `docker-compose.observability.yml` e `.example`: `name: registro` → `name: geop`; volume
+  `registro-glitchtip-postgres-data` → `geop-glitchtip-postgres-data`.
+- `CLAUDE.md`, `docs/migracao-postgresql.md`, `docs/desenvolvimento.md`,
+  `docs/escala-de-trabalho.md`, `docs/infra/observability-local.md`,
+  `web/.claude/skills/run-web/SKILL.md`: exemplos de comando (`docker exec registro-api-1
+  ...`) atualizados para `geop-api-1`/`geop-postgres-1`/`geop-mysql-1`/`geop-web-1`/
+  `geop-glitchtip-web-1`.
+- **Não renomeado** (fora do escopo confirmado): nomes de usuário/banco Postgres
+  (`registro`/`registro`), senha default do MySQL root, bucket S3, `APP_NAME`, secrets de
+  produção, imagens GHCR, nome da stack Swarm, `/opt/registro` na VPS. Ver
+  `docs/infra/renomear-stack-producao.md` para o plano de quando isso for decidido.
+- **Dados locais migrados, não perdidos**: os volumes antigos (`registro_registro-postgres-
+  data`, `-redis-data`, `-minio-data`) foram copiados pros volumes novos via container
+  temporário (`docker run --rm -v old:/from:ro -v new:/to alpine cp -a /from/. /to/`) antes
+  de subir a stack renomeada — Postgres local confirmado no head do Alembic e com o schema
+  intacto depois da cópia. Volumes antigos preservados como backup, não apagados.
+- `docker compose config --quiet` validado sem erro; `geop-postgres-1` e `geop-minio-1`
+  sobem saudáveis. `geop-redis-1` não conseguiu subir nesta sessão por conflito de porta
+  `6379` com um container de outro projeto local (`financeirodigital-redis-1`) — condição
+  pré-existente do ambiente, não causada por este rename (mesmo padrão de conflito já
+  registrado antes, ver entrada de 2026-08-18 abaixo). Resolver liberando a porta ou
+  trocando o mapeamento antes do próximo `docker compose up -d`.
+
+### Integração erpsolid ↔ GEOP: validação das duas direções
+
+Direção **erpsolid → GEOP** (`POST /integrations/erpsolid/{suppliers,cost-centers,
+employees}`, upsert) e **GEOP → erpsolid** (`GET /integrations/erpsolid/{contracts,
+employee-payslips}`, incremental via `since`) revisadas. Nenhum bug novo encontrado — o
+fix de timezone de `e21f68cf` (2026-08-18) já cobre o caso que quebrava a direção
+GEOP → erpsolid.
+
+- **Suíte completa validada contra Postgres real**: build da imagem `api` sob o novo nome
+  (`geop-api`), `alembic upgrade head` aplicado (banco dev local estava uma revisão atrás,
+  `20260817_0062`, mesma migration `20260818_0063` que causou o incidente em produção) e
+  `python -m pytest tests/ -q` → **579 passed**, incluindo os testes de regressão de
+  timezone dos dois endpoints incrementais.
+- **Causa raiz sistêmica corrigida**: `api/Dockerfile` (alvo `production`) agora roda
+  `alembic upgrade head` antes do `uvicorn` subir (`CMD ["sh", "-c", "alembic upgrade head
+  && exec uvicorn ..."]`), igual ao que o dev local já fazia. Esse é o padrão que já tinha
+  causado **3 incidentes idênticos** de 500 em produção por migration pendente
+  (`platform_settings` em 13/07, `employee_payslips` em 17/08, `suppliers`/`cost_centers`
+  em 18/08 — este último foi o que derrubou `/integrations/erpsolid`, ver entrada abaixo).
+  Idempotente (no-op se já no head), seguro de repetir a cada réplica/restart desde que o
+  deploy continue com `update_config.parallelism: 1` no Swarm (nunca duas réplicas novas
+  migrando ao mesmo tempo). Validado localmente: build da imagem `production`, container
+  smoke-test subiu, aplicou a migration (no-op, já no head) e respondeu `200` em
+  `/api/v1/health`.
+  - `docs/infra/deploy-swarm.md` atualizado: seção "Migrations no Swarm" agora descreve o
+    comportamento automático primeiro, com o procedimento manual antigo mantido como
+    fallback para casos fora do ciclo normal de deploy.
+- **Efeito em produção**: esta mudança só passa a valer no próximo deploy (`publish.yml`
+  builda e troca a imagem normalmente — não precisa de nenhum passo manual extra na VPS,
+  diferente do rename de infra acima).
+
+Como aplicar: qualquer novo endpoint incremental (`since`/`updated_at`) segue a regra já
+documentada em 2026-08-18 (normalizar pra naive UTC). Qualquer migration nova só é
+considerada "aplicada em produção" depois que a imagem com o `CMD` novo estiver rodando —
+antes disso (imagens já publicadas antes desta mudança), o passo manual de
+`deploy-swarm.md` ainda é necessário uma última vez.

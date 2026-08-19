@@ -1,4 +1,4 @@
-name: registro
+name: geop
 
 services:
   postgres:
@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - registro-postgres-data:/var/lib/postgresql/data
+      - geop-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U registro"]
       interval: 5s
@@ -28,7 +28,7 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - registro-mysql-data:/var/lib/mysql
+      - geop-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
@@ -42,7 +42,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - registro-redis-data:/data
+      - geop-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -59,7 +59,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - registro-minio-data:/data
+      - geop-minio-data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -163,7 +163,7 @@ services:
         condition: service_healthy
 
 volumes:
-  registro-postgres-data:
-  registro-mysql-data:
-  registro-redis-data:
-  registro-minio-data:
+  geop-postgres-data:
+  geop-mysql-data:
+  geop-redis-data:
+  geop-minio-data:

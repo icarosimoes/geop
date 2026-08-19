@@ -24,7 +24,7 @@ eventos em background via Celery).
 1. Acesse `http://localhost:8080` e clique em "Registrar" (registro aberto habilitado
    só neste ambiente local via `ENABLE_OPEN_USER_REGISTRATION=true`).
 2. Não há servidor de e-mail real — os e-mails de verificação vão para o log do
-   container: `docker logs registro-glitchtip-web-1 --tail 50` (procure pelo link de
+   container: `docker logs geop-glitchtip-web-1 --tail 50` (procure pelo link de
    confirmação).
 3. Crie uma organização e, dentro dela, dois projetos: um para a API (plataforma
    `Python`/`FastAPI`) e um para o web (plataforma `Next.js`).

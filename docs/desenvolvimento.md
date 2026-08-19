@@ -60,8 +60,8 @@ do domínio `timeclock` (mesma auditoria e regras de negócio da aplicação), n
 precisa copiar antes de rodar:
 
 ```bash
-docker cp api/scripts/seed_timeclock_demo.py registro-api-1:/tmp/seed_timeclock_demo.py
-docker exec -e PYTHONPATH=/app -w /app registro-api-1 python /tmp/seed_timeclock_demo.py
+docker cp api/scripts/seed_timeclock_demo.py geop-api-1:/tmp/seed_timeclock_demo.py
+docker exec -e PYTHONPATH=/app -w /app geop-api-1 python /tmp/seed_timeclock_demo.py
 ```
 
 Login de teste depois do seed: matrícula `DEMO-001` a `DEMO-010`, PIN `123456`, no `colaborador/`.
