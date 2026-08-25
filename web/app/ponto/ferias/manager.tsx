@@ -4,9 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Check, Plus, X } from "lucide-react";
 import {
   createVacationRequestAdminAction,
+  fetchRegistryOptions,
   fetchVacationRequestStats,
   fetchVacationRequests,
   reviewVacationRequestAction,
+  type RegistryOption,
   type VacationRequestItem,
   type VacationRequestStats,
 } from "@/app/actions";
@@ -87,6 +89,8 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
   const canManage = hasPermission(user, "ponto-ferias");
 
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [sectorFilter, setSectorFilter] = useState("");
+  const [sectors, setSectors] = useState<RegistryOption[]>([]);
   const [items, setItems] = useState<VacationRequestItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -119,7 +123,11 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
 
   function reload() {
     setLoading(true);
-    fetchVacationRequests({ status: statusFilter || undefined, pageSize: 50 })
+    fetchVacationRequests({
+      status: statusFilter || undefined,
+      sectorId: sectorFilter ? Number(sectorFilter) : undefined,
+      pageSize: 50,
+    })
       .then((res) => {
         setItems(res.items);
         setTotal(res.total);
@@ -130,10 +138,11 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, sectorFilter]);
 
   useEffect(() => {
     fetchVacationRequestStats().then(setStats);
+    fetchRegistryOptions("Setor").then(setSectors);
   }, []);
 
   function closeDrawer() {
@@ -246,7 +255,7 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
       <section className="module-panel">
         <div
           className="module-toolbar"
-          style={{ padding: "var(--sp-3) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}
+          style={{ padding: "var(--sp-3) var(--sp-5)", borderBottom: "1px solid var(--field-border)", gap: "var(--sp-3)", flexWrap: "wrap" }}
         >
           <div className="segmented">
             {TABS.map((tab) => (
@@ -259,6 +268,19 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
               </button>
             ))}
           </div>
+          {sectors.length > 0 && (
+            <select
+              value={sectorFilter}
+              onChange={(e) => setSectorFilter(e.target.value)}
+              style={{ fontSize: 13 }}
+              aria-label="Filtrar por setor"
+            >
+              <option value="">Todos os setores</option>
+              {sectors.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {loading ? (
@@ -274,8 +296,10 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
               <thead>
                 <tr>
                   <th>Colaborador</th>
+                  <th>Setor</th>
                   <th>Período</th>
                   <th>Dias</th>
+                  <th>Dias úteis</th>
                   <th>Observações</th>
                   <th>Status</th>
                   <th>Notas do RH</th>
@@ -295,10 +319,14 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
                         <strong>{req.employee_name}</strong>
                       </div>
                     </td>
+                    <td className="muted" style={{ fontSize: 13 }}>
+                      {req.employee_sector_name ?? "—"}
+                    </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       {formatDate(req.start_date)} → {formatDate(req.end_date)}
                     </td>
                     <td>{req.days}</td>
+                    <td className="muted">{req.working_days ?? "—"}</td>
                     <td className="muted" style={{ fontSize: 13, maxWidth: 200 }}>
                       {req.notes ?? "—"}
                     </td>

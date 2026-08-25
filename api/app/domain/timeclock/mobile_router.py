@@ -27,6 +27,7 @@ from app.domain.timeclock.schemas import (
     EmployeePinChangeRequest,
     EmployeeSessionResponse,
     EmployeeStatusResponse,
+    EmployeeVacationEntitlement,
     HourBankEntrySummary,
     HourBankSummaryResponse,
     MobilePunchRequest,
@@ -45,6 +46,7 @@ from app.domain.timeclock.service import (
     get_calendar,
     get_employee_credential,
     get_employee_payslip_for_download,
+    get_employee_vacation_entitlement,
     get_hour_bank_summary,
     get_next_expected_punch_type,
     list_employee_payslips,
@@ -345,15 +347,19 @@ async def mobile_list_adjustments(
 # Requisições de Férias — Portal do Colaborador
 # ---------------------------------------------------------------------------
 
-def _vacation_summary(rec, emp_name: str, avatar_url: str | None) -> VacationRequestSummary:
+def _vacation_summary(
+    rec, emp_name: str, avatar_url: str | None, sector_name: str | None = None
+) -> VacationRequestSummary:
     return VacationRequestSummary(
         id=rec.id,
         employee_id=rec.employee_id,
         employee_name=emp_name,
         employee_avatar_url=avatar_url,
+        employee_sector_name=sector_name,
         start_date=rec.start_date,
         end_date=rec.end_date,
         days=rec.days,
+        working_days=rec.working_days,
         notes=rec.notes,
         status=rec.status,
         reviewed_by_user_id=rec.reviewed_by_user_id,
@@ -382,18 +388,23 @@ async def mobile_create_vacation_request(
             status_code=422,
             detail={"code": error, "message": "A data de fim deve ser após a data de início."},
         )
+    if error in ("employee_not_found", "employee_inactive"):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": error, "message": "Colaborador inativo ou não encontrado."},
+        )
     if error or record is None:
         raise HTTPException(
             status_code=422,
             detail={"code": error or "invalid", "message": "Período inválido."},
         )
-    # Busca com join para garantir employee_name e avatar_url
+    # Busca com join para garantir employee_name, avatar_url e sector_name
     rows, _ = await list_vacation_requests(
         session, employee.company_id, 1, 1, employee_id=employee.employee_id,
     )
-    for rec, emp_name, avatar_url in rows:
+    for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:
-            return _vacation_summary(rec, emp_name, avatar_url)
+            return _vacation_summary(rec, emp_name, avatar_url, sector_name)
     return _vacation_summary(record, "", None)
 
 
@@ -405,7 +416,10 @@ async def mobile_list_vacation_requests(
     rows, _ = await list_vacation_requests(
         session, employee.company_id, 1, 50, employee_id=employee.employee_id,
     )
-    return [_vacation_summary(rec, emp_name, avatar_url) for rec, emp_name, avatar_url in rows]
+    return [
+        _vacation_summary(rec, emp_name, avatar_url, sector_name)
+        for rec, emp_name, avatar_url, sector_name in rows
+    ]
 
 
 @router.delete("/vacation-requests/{request_id}", status_code=204)
@@ -430,3 +444,17 @@ async def mobile_cancel_vacation_request(
                 "message": "Apenas solicitações pendentes podem ser canceladas.",
             },
         )
+
+
+@router.get("/vacation-entitlement", response_model=EmployeeVacationEntitlement)
+async def mobile_vacation_entitlement(
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> EmployeeVacationEntitlement:
+    """Retorna o direito de férias do colaborador com base na data de admissão (CLT)."""
+    data = await get_employee_vacation_entitlement(
+        session, employee.company_id, employee.employee_id
+    )
+    if data is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return EmployeeVacationEntitlement(**data)

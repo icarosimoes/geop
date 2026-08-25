@@ -988,15 +988,22 @@ async def export_mirror_endpoint(
 # Requisições de Férias — Painel Administrativo
 # ---------------------------------------------------------------------------
 
-def _vacation_req_summary(rec, emp_name: str, avatar_url: str | None) -> VacationRequestSummary:
+def _vacation_req_summary(
+    rec,
+    emp_name: str,
+    avatar_url: str | None,
+    sector_name: str | None = None,
+) -> VacationRequestSummary:
     return VacationRequestSummary(
         id=rec.id,
         employee_id=rec.employee_id,
         employee_name=emp_name,
         employee_avatar_url=avatar_url,
+        employee_sector_name=sector_name,
         start_date=rec.start_date,
         end_date=rec.end_date,
         days=rec.days,
+        working_days=rec.working_days,
         notes=rec.notes,
         status=rec.status,
         reviewed_by_user_id=rec.reviewed_by_user_id,
@@ -1014,6 +1021,7 @@ async def list_vacation_requests_endpoint(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     status: Annotated[str | None, Query()] = None,
     employee_id: Annotated[int | None, Query()] = None,
+    sector_id: Annotated[int | None, Query()] = None,
 ) -> VacationRequestListResponse:
     rows, total = await list_vacation_requests(
         session,
@@ -1022,10 +1030,12 @@ async def list_vacation_requests_endpoint(
         page_size,
         employee_id=employee_id,
         status=status,
+        sector_id=sector_id,
     )
     return VacationRequestListResponse(
         items=[
-            _vacation_req_summary(rec, emp_name, avatar_url) for rec, emp_name, avatar_url in rows
+            _vacation_req_summary(rec, emp_name, avatar_url, sector_name)
+            for rec, emp_name, avatar_url, sector_name in rows
         ],
         total=total,
         page=page,
@@ -1062,9 +1072,9 @@ async def review_vacation_request_endpoint(
     rows, _ = await list_vacation_requests(
         session, user.company_id, 1, 1, employee_id=record.employee_id,
     )
-    for rec, emp_name, avatar_url in rows:
+    for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:
-            return _vacation_req_summary(rec, emp_name, avatar_url)
+            return _vacation_req_summary(rec, emp_name, avatar_url, sector_name)
     return _vacation_req_summary(record, "", None)
 
 
@@ -1100,11 +1110,19 @@ async def create_vacation_request_admin_endpoint(
                 "message": "A data de fim deve ser após a data de início.",
             },
         )
+    if error in ("employee_not_found", "employee_inactive"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": error,
+                "message": "Colaborador não encontrado ou inativo.",
+            },
+        )
     assert record is not None
     rows, _ = await list_vacation_requests(
         session, user.company_id, 1, 1, employee_id=record.employee_id,
     )
-    for rec, emp_name, avatar_url in rows:
+    for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:
-            return _vacation_req_summary(rec, emp_name, avatar_url)
+            return _vacation_req_summary(rec, emp_name, avatar_url, sector_name)
     return _vacation_req_summary(record, "", None)

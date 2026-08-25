@@ -2105,9 +2105,11 @@ export interface VacationRequestItem {
   employee_id: number;
   employee_name: string;
   employee_avatar_url: string | null;
+  employee_sector_name: string | null;
   start_date: string;
   end_date: string;
   days: number;
+  working_days: number | null;
   notes: string | null;
   status: string;
   reviewed_by_user_id: number | null;
@@ -2128,6 +2130,7 @@ export async function fetchVacationRequests(params: {
   pageSize?: number;
   status?: string;
   employeeId?: number;
+  sectorId?: number;
 }): Promise<VacationRequestListResponse> {
   const query = new URLSearchParams({
     page: String(params.page ?? 1),
@@ -2135,6 +2138,7 @@ export async function fetchVacationRequests(params: {
   });
   if (params.status) query.set("status", params.status);
   if (params.employeeId) query.set("employee_id", String(params.employeeId));
+  if (params.sectorId) query.set("sector_id", String(params.sectorId));
   const response = await authedFetch(`/timeclock/vacation-requests?${query}`);
   if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
   return response.json();

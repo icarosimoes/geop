@@ -422,15 +422,25 @@ class VacationRequestSummary(BaseModel):
     employee_id: int
     employee_name: str
     employee_avatar_url: str | None = None
+    employee_sector_name: str | None = None
     start_date: date
     end_date: date
     days: int
+    working_days: int | None = None
     notes: str | None
     status: str
     reviewed_by_user_id: int | None
     reviewed_at: datetime | None
     review_notes: str | None
     created_at: datetime
+
+
+class EmployeeVacationEntitlement(BaseModel):
+    employee_id: int
+    hire_date: str | None
+    months_employed: int | None
+    entitlement_days: int
+    entitlement_note: str
 
 
 class VacationRequestListResponse(BaseModel):

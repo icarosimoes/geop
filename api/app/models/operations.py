@@ -1158,6 +1158,8 @@ class VacationRequest(Base, TenantMixin):
     end_date: Mapped[date] = mapped_column(Date)
     # Número de dias corridos solicitados.
     days: Mapped[int] = mapped_column(Integer)
+    # Dias úteis (excluindo fins de semana e feriados) — preenchido na criação.
+    working_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
     # pending | approved | rejected | cancelled
     status: Mapped[str] = mapped_column(String(20), default="pending")

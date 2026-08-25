@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 
 import {
   fetchVacationRequests,
+  fetchVacationEntitlement,
   createVacationRequestAction,
   cancelVacationRequestAction,
+  type VacationEntitlement,
   type VacationRequest,
 } from "@/app/actions";
 import TabBar from "@/app/components/TabBar";
@@ -45,6 +47,7 @@ export default function FeriasPage() {
   const [view, setView] = useState<ViewState>("list");
   const [requests, setRequests] = useState<VacationRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [entitlement, setEntitlement] = useState<VacationEntitlement | null>(null);
 
   // Formulário
   const [startDate, setStartDate] = useState("");
@@ -70,6 +73,7 @@ export default function FeriasPage() {
 
   useEffect(() => {
     load();
+    fetchVacationEntitlement().then(setEntitlement);
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -214,6 +218,22 @@ export default function FeriasPage() {
         </div>
       )}
 
+      {view === "list" && entitlement && (
+        <div className="card" style={{ marginBottom: "var(--sp-3)", background: "var(--surface-alt, var(--surface))", borderLeft: "3px solid var(--accent, #2563eb)" }}>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: "0.9rem" }}>
+            Direito de férias
+          </p>
+          <p style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--muted)" }}>
+            {entitlement.entitlement_note}
+          </p>
+          {entitlement.entitlement_days > 0 && (
+            <p style={{ margin: "4px 0 0", fontSize: "1.1rem", fontWeight: 700 }}>
+              {entitlement.entitlement_days} dias
+            </p>
+          )}
+        </div>
+      )}
+
       {view === "list" && (
         <>
           {loading ? (
@@ -242,6 +262,9 @@ export default function FeriasPage() {
                       </p>
                       <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--muted)" }}>
                         {req.days} dia{req.days !== 1 ? "s" : ""}
+                        {req.working_days != null && req.working_days !== req.days && (
+                          <> · {req.working_days} útei{req.working_days !== 1 ? "s" : "l"}</>
+                        )}
                       </p>
                     </div>
                     <span className={statusClass(req.status)} style={{ flexShrink: 0 }}>

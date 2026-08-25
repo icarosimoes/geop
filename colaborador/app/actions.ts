@@ -276,12 +276,21 @@ export interface VacationRequest {
   start_date: string;
   end_date: string;
   days: number;
+  working_days: number | null;
   notes: string | null;
   status: string;
   reviewed_by_user_id: number | null;
   reviewed_at: string | null;
   review_notes: string | null;
   created_at: string;
+}
+
+export interface VacationEntitlement {
+  employee_id: number;
+  hire_date: string | null;
+  months_employed: number | null;
+  entitlement_days: number;
+  entitlement_note: string;
 }
 
 export interface VacationRequestResult {
@@ -340,4 +349,14 @@ export async function cancelVacationRequestAction(requestId: number): Promise<{ 
   if (response.status === 204) return { ok: true };
   const data = await response.json().catch(() => ({}));
   return { ok: false, error: data?.detail?.message ?? "Não foi possível cancelar a solicitação." };
+}
+
+export async function fetchVacationEntitlement(): Promise<VacationEntitlement | null> {
+  try {
+    const response = await authedFetch("/timeclock/mobile/vacation-entitlement");
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
 }

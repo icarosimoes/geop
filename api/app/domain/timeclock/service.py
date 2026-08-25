@@ -27,6 +27,7 @@ from app.models import (
     PunchExcusal,
     Role,
     ScheduleEntry,
+    Sector,
     Shift,
     TimeClockDevice,
     TimeClockEnrollment,
@@ -2054,6 +2055,24 @@ async def _notify_vacation_managers(
     )
 
 
+async def _calc_working_days(
+    session: AsyncSession,
+    company_id: int,
+    start_date: date,
+    end_date: date,
+) -> int:
+    """Conta dias úteis no período excluindo fins de semana e feriados cadastrados."""
+    holiday_dates = await get_holiday_dates(session, company_id, start_date, end_date)
+    holiday_set = {h for h in holiday_dates}
+    working = 0
+    current = start_date
+    while current <= end_date:
+        if current.weekday() < 5 and current not in holiday_set:  # 0=Seg … 4=Sex
+            working += 1
+        current += timedelta(days=1)
+    return working
+
+
 async def create_vacation_request(
     session: AsyncSession,
     company_id: int,
@@ -2071,12 +2090,25 @@ async def create_vacation_request(
     if days < 1:
         return None, "invalid_period"
 
+    # Valida se o funcionário está ativo
+    emp_status = await session.scalar(
+        select(Employee.status).where(
+            Employee.id == employee_id, Employee.company_id == company_id
+        )
+    )
+    if emp_status is None:
+        return None, "employee_not_found"
+    if emp_status != "active":
+        return None, "employee_inactive"
+
+    working_days = await _calc_working_days(session, company_id, start_date, end_date)
     record = VacationRequest(
         company_id=company_id,
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
         days=days,
+        working_days=working_days,
         notes=notes,
         status="pending",
     )
@@ -2099,19 +2131,28 @@ async def list_vacation_requests(
     *,
     employee_id: int | None = None,
     status: str | None = None,
+    sector_id: int | None = None,
 ) -> tuple[list[tuple], int]:
     filters = [VacationRequest.company_id == company_id]
     if employee_id is not None:
         filters.append(VacationRequest.employee_id == employee_id)
     if status is not None:
         filters.append(VacationRequest.status == status)
+    if sector_id is not None:
+        filters.append(Employee.sector_id == sector_id)
 
-    total = await session.scalar(select(func.count(VacationRequest.id)).where(*filters)) or 0
+    base_q = (
+        select(VacationRequest, Employee.name, Employee.avatar_url, Sector.name)
+        .join(Employee, Employee.id == VacationRequest.employee_id)
+        .outerjoin(Sector, Sector.id == Employee.sector_id)
+        .where(*filters)
+    )
+    total = await session.scalar(
+        select(func.count()).select_from(base_q.subquery())
+    ) or 0
     rows = (
         await session.execute(
-            select(VacationRequest, Employee.name, Employee.avatar_url)
-            .join(Employee, Employee.id == VacationRequest.employee_id)
-            .where(*filters)
+            base_q
             .order_by(VacationRequest.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -2242,12 +2283,26 @@ async def create_vacation_request_for_employee(
     if end_date < start_date:
         return None, "end_before_start"
     days = (end_date - start_date).days + 1
+
+    # Valida se o funcionário existe e está ativo
+    emp_status = await session.scalar(
+        select(Employee.status).where(
+            Employee.id == employee_id, Employee.company_id == company_id
+        )
+    )
+    if emp_status is None:
+        return None, "employee_not_found"
+    if emp_status != "active":
+        return None, "employee_inactive"
+
+    working_days = await _calc_working_days(session, company_id, start_date, end_date)
     record = VacationRequest(
         company_id=company_id,
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
         days=days,
+        working_days=working_days,
         notes=notes,
         status="approved",
         reviewed_by_user_id=actor_id,
@@ -2258,3 +2313,61 @@ async def create_vacation_request_for_employee(
     await session.commit()
     await session.refresh(record)
     return record, None
+
+
+async def get_employee_vacation_entitlement(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+) -> dict | None:
+    """Calcula direito de férias CLT com base na data de admissão.
+    CLT: 30 dias após 12 meses de serviço (proporcional antes disso)."""
+    row = await session.execute(
+        select(Employee.hire_date, Employee.status, Employee.name).where(
+            Employee.id == employee_id, Employee.company_id == company_id
+        )
+    )
+    emp = row.one_or_none()
+    if emp is None:
+        return None
+    hire_date_str, status, name = emp
+    if not hire_date_str:
+        return {
+            "employee_id": employee_id,
+            "hire_date": None,
+            "months_employed": None,
+            "entitlement_days": 0,
+            "entitlement_note": "Data de admissão não cadastrada.",
+        }
+    today = date.today()
+    try:
+        hd = date.fromisoformat(hire_date_str)
+    except ValueError:
+        return {
+            "employee_id": employee_id,
+            "hire_date": hire_date_str,
+            "months_employed": None,
+            "entitlement_days": 0,
+            "entitlement_note": "Data de admissão com formato inválido.",
+        }
+    months = (today.year - hd.year) * 12 + (today.month - hd.month)
+    if today.day < hd.day:
+        months -= 1
+    if months < 0:
+        months = 0
+    if months >= 12:
+        entitlement = 30
+        note = f"Admitido há {months} meses — direito a 30 dias de férias."
+    else:
+        entitlement = months * 2  # 2,5 dias por mês aproximado
+        note = (
+            f"Admitido há {months} mês(es) — direito proporcional a "
+            f"aproximadamente {entitlement} dias de férias."
+        )
+    return {
+        "employee_id": employee_id,
+        "hire_date": hire_date_str,
+        "months_employed": months,
+        "entitlement_days": entitlement,
+        "entitlement_note": note,
+    }
