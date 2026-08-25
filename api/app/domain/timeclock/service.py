@@ -32,6 +32,7 @@ from app.models import (
     TimeClockEnrollment,
     TimePunch,
     User,
+    VacationRequest,
 )
 from app.models.identity import role_permissions
 
@@ -2034,3 +2035,139 @@ async def import_employee_payslips(
         )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Requisições de Férias
+# ---------------------------------------------------------------------------
+
+async def _notify_vacation_managers(
+    session: AsyncSession, company_id: int, employee_name: str, request_id: int
+) -> None:
+    await _notify_punch_managers(
+        session,
+        company_id,
+        title=f"Nova solicitação de férias de {employee_name}",
+        body="Aguardando aprovação no Portal Administrativo.",
+        entity_type="vacation_request",
+        entity_id=request_id,
+    )
+
+
+async def create_vacation_request(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    *,
+    start_date: date,
+    end_date: date,
+    notes: str | None,
+) -> tuple[VacationRequest | None, str | None]:
+    """Cria uma solicitação de férias. Retorna (record, None) em sucesso ou
+    (None, código_de_erro) em falha."""
+    if end_date < start_date:
+        return None, "end_before_start"
+    days = (end_date - start_date).days + 1
+    if days < 1:
+        return None, "invalid_period"
+
+    record = VacationRequest(
+        company_id=company_id,
+        employee_id=employee_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+        notes=notes,
+        status="pending",
+    )
+    session.add(record)
+    await session.flush()
+    employee_name = await session.scalar(select(Employee.name).where(Employee.id == employee_id))
+    await _notify_vacation_managers(
+        session, company_id, employee_name or "funcionário", record.id
+    )
+    await session.commit()
+    await session.refresh(record)
+    return record, None
+
+
+async def list_vacation_requests(
+    session: AsyncSession,
+    company_id: int,
+    page: int,
+    page_size: int,
+    *,
+    employee_id: int | None = None,
+    status: str | None = None,
+) -> tuple[list[tuple], int]:
+    filters = [VacationRequest.company_id == company_id]
+    if employee_id is not None:
+        filters.append(VacationRequest.employee_id == employee_id)
+    if status is not None:
+        filters.append(VacationRequest.status == status)
+
+    total = await session.scalar(select(func.count(VacationRequest.id)).where(*filters)) or 0
+    rows = (
+        await session.execute(
+            select(VacationRequest, Employee.name, Employee.avatar_url)
+            .join(Employee, Employee.id == VacationRequest.employee_id)
+            .where(*filters)
+            .order_by(VacationRequest.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    return rows, total  # type: ignore[return-value]
+
+
+async def review_vacation_request(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    request_id: int,
+    *,
+    approve: bool,
+    review_notes: str | None,
+) -> tuple[VacationRequest | None, str | None]:
+    record = await session.scalar(
+        select(VacationRequest).where(
+            VacationRequest.id == request_id,
+            VacationRequest.company_id == company_id,
+        )
+    )
+    if record is None:
+        return None, "not_found"
+    if record.status != "pending":
+        return None, "already_reviewed"
+
+    record.status = "approved" if approve else "rejected"
+    record.reviewed_by_user_id = actor_id
+    record.reviewed_at = datetime.now()
+    record.review_notes = review_notes
+    await session.commit()
+    await session.refresh(record)
+    return record, None
+
+
+async def cancel_vacation_request(
+    session: AsyncSession,
+    company_id: int,
+    employee_id: int,
+    request_id: int,
+) -> tuple[VacationRequest | None, str | None]:
+    record = await session.scalar(
+        select(VacationRequest).where(
+            VacationRequest.id == request_id,
+            VacationRequest.company_id == company_id,
+            VacationRequest.employee_id == employee_id,
+        )
+    )
+    if record is None:
+        return None, "not_found"
+    if record.status not in ("pending",):
+        return None, "cannot_cancel"
+
+    record.status = "cancelled"
+    await session.commit()
+    await session.refresh(record)
+    return record, None

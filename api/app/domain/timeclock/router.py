@@ -52,6 +52,9 @@ from app.domain.timeclock.schemas import (
     TimeClockEnrollmentSummary,
     TimePunchListResponse,
     TimePunchSummary,
+    VacationRequestListResponse,
+    VacationRequestReview,
+    VacationRequestSummary,
 )
 from app.domain.timeclock.service import (
     create_device,
@@ -77,9 +80,11 @@ from app.domain.timeclock.service import (
     list_punch_excusals,
     list_punches,
     list_shifts,
+    list_vacation_requests,
     recalculate_hour_bank,
     reset_employee_pin,
     review_punch_adjustment_request,
+    review_vacation_request,
     set_hour_bank_initial_balance,
     set_schedule_day,
     update_device,
@@ -973,3 +978,87 @@ async def export_mirror_endpoint(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Requisições de Férias — Painel Administrativo
+# ---------------------------------------------------------------------------
+
+def _vacation_req_summary(rec, emp_name: str, avatar_url: str | None) -> VacationRequestSummary:
+    return VacationRequestSummary(
+        id=rec.id,
+        employee_id=rec.employee_id,
+        employee_name=emp_name,
+        employee_avatar_url=avatar_url,
+        start_date=rec.start_date,
+        end_date=rec.end_date,
+        days=rec.days,
+        notes=rec.notes,
+        status=rec.status,
+        reviewed_by_user_id=rec.reviewed_by_user_id,
+        reviewed_at=rec.reviewed_at,
+        review_notes=rec.review_notes,
+        created_at=rec.created_at,
+    )
+
+
+@router.get("/vacation-requests", response_model=VacationRequestListResponse)
+async def list_vacation_requests_endpoint(
+    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    status: Annotated[str | None, Query()] = None,
+    employee_id: Annotated[int | None, Query()] = None,
+) -> VacationRequestListResponse:
+    rows, total = await list_vacation_requests(
+        session,
+        user.company_id,
+        page,
+        page_size,
+        employee_id=employee_id,
+        status=status,
+    )
+    return VacationRequestListResponse(
+        items=[
+            _vacation_req_summary(rec, emp_name, avatar_url) for rec, emp_name, avatar_url in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/vacation-requests/{request_id}/review", response_model=VacationRequestSummary)
+async def review_vacation_request_endpoint(
+    request_id: int,
+    body: VacationRequestReview,
+    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> VacationRequestSummary:
+    record, error = await review_vacation_request(
+        session,
+        user.company_id,
+        user.user_id,
+        request_id,
+        approve=body.approve,
+        review_notes=body.review_notes,
+    )
+    if error == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "Solicitação não encontrada."},
+        )
+    if error == "already_reviewed":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "already_reviewed", "message": "Solicitação já foi analisada."},
+        )
+    assert record is not None
+    rows, _ = await list_vacation_requests(
+        session, user.company_id, 1, 1, employee_id=record.employee_id,
+    )
+    for rec, emp_name, avatar_url in rows:
+        if rec.id == record.id:
+            return _vacation_req_summary(rec, emp_name, avatar_url)
+    return _vacation_req_summary(record, "", None)

@@ -1139,3 +1139,34 @@ class PunchAdjustmentRequest(Base, TenantMixin):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class VacationRequest(Base, TenantMixin):
+    """Solicitação de férias feita pelo colaborador via Portal do Colaborador,
+    sujeita à aprovação do RH."""
+
+    __tablename__ = "vacation_requests"
+    __table_args__ = (
+        Index("ix_vacation_requests_employee", "company_id", "employee_id"),
+        Index("ix_vacation_requests_status", "company_id", "status"),
+        Index("ix_vacation_requests_period", "company_id", "start_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    # Número de dias corridos solicitados.
+    days: Mapped[int] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
+    # pending | approved | rejected | cancelled
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

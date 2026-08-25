@@ -2097,3 +2097,58 @@ export async function deleteHolidayAction(id: number): Promise<MutationResult> {
   if (!response.ok) return { ok: false, error: "Erro ao excluir feriado." };
   return { ok: true };
 }
+
+// --- Requisições de Férias ---
+
+export interface VacationRequestItem {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_avatar_url: string | null;
+  start_date: string;
+  end_date: string;
+  days: number;
+  notes: string | null;
+  status: string;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+}
+
+export interface VacationRequestListResponse {
+  items: VacationRequestItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchVacationRequests(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  employeeId?: number;
+}): Promise<VacationRequestListResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  if (params.status) query.set("status", params.status);
+  if (params.employeeId) query.set("employee_id", String(params.employeeId));
+  const response = await authedFetch(`/timeclock/vacation-requests?${query}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  return response.json();
+}
+
+export async function reviewVacationRequestAction(
+  requestId: number,
+  approve: boolean,
+  reviewNotes?: string,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/vacation-requests/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ approve, review_notes: reviewNotes ?? null }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao revisar solicitação." };
+  return { ok: true, data: await response.json() };
+}

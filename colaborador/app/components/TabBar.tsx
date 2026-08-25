@@ -47,6 +47,16 @@ const TABS = [
       </svg>
     ),
   },
+  {
+    href: "/ferias",
+    label: "Férias",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 2C7 2 3 7 3 12s4 10 9 10 9-4.5 9-10S17 2 12 2z" />
+        <path d="M12 6v6l4 2" />
+      </svg>
+    ),
+  },
 ];
 
 export default function TabBar() {

@@ -407,3 +407,39 @@ class EmployeePayslipImportResponse(BaseModel):
     updated: int
     failed: int
     results: list[EmployeePayslipImportRowResult]
+
+
+# --- Requisição de Férias ---
+
+class VacationRequestCreate(BaseModel):
+    start_date: date
+    end_date: date
+    notes: str | None = None
+
+
+class VacationRequestSummary(BaseModel):
+    id: int
+    employee_id: int
+    employee_name: str
+    employee_avatar_url: str | None = None
+    start_date: date
+    end_date: date
+    days: int
+    notes: str | None
+    status: str
+    reviewed_by_user_id: int | None
+    reviewed_at: datetime | None
+    review_notes: str | None
+    created_at: datetime
+
+
+class VacationRequestListResponse(BaseModel):
+    items: list[VacationRequestSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class VacationRequestReview(BaseModel):
+    approve: bool
+    review_notes: str | None = None

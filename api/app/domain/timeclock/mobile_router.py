@@ -33,11 +33,15 @@ from app.domain.timeclock.schemas import (
     MobilePunchResponse,
     PunchAdjustmentCreate,
     PunchAdjustmentSummary,
+    VacationRequestCreate,
+    VacationRequestSummary,
 )
 from app.domain.timeclock.service import (
     authenticate_employee,
+    cancel_vacation_request,
     create_mobile_punch,
     create_punch_adjustment_request,
+    create_vacation_request,
     get_calendar,
     get_employee_credential,
     get_employee_payslip_for_download,
@@ -45,6 +49,7 @@ from app.domain.timeclock.service import (
     get_next_expected_punch_type,
     list_employee_payslips,
     list_punch_adjustment_requests,
+    list_vacation_requests,
     set_employee_pin,
 )
 
@@ -334,3 +339,94 @@ async def mobile_list_adjustments(
         )
         for record, employee_name, avatar_url in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Requisições de Férias — Portal do Colaborador
+# ---------------------------------------------------------------------------
+
+def _vacation_summary(rec, emp_name: str, avatar_url: str | None) -> VacationRequestSummary:
+    return VacationRequestSummary(
+        id=rec.id,
+        employee_id=rec.employee_id,
+        employee_name=emp_name,
+        employee_avatar_url=avatar_url,
+        start_date=rec.start_date,
+        end_date=rec.end_date,
+        days=rec.days,
+        notes=rec.notes,
+        status=rec.status,
+        reviewed_by_user_id=rec.reviewed_by_user_id,
+        reviewed_at=rec.reviewed_at,
+        review_notes=rec.review_notes,
+        created_at=rec.created_at,
+    )
+
+
+@router.post("/vacation-requests", response_model=VacationRequestSummary, status_code=201)
+async def mobile_create_vacation_request(
+    body: VacationRequestCreate,
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> VacationRequestSummary:
+    record, error = await create_vacation_request(
+        session,
+        employee.company_id,
+        employee.employee_id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        notes=body.notes,
+    )
+    if error == "end_before_start":
+        raise HTTPException(
+            status_code=422,
+            detail={"code": error, "message": "A data de fim deve ser após a data de início."},
+        )
+    if error or record is None:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": error or "invalid", "message": "Período inválido."},
+        )
+    # Busca com join para garantir employee_name e avatar_url
+    rows, _ = await list_vacation_requests(
+        session, employee.company_id, 1, 1, employee_id=employee.employee_id,
+    )
+    for rec, emp_name, avatar_url in rows:
+        if rec.id == record.id:
+            return _vacation_summary(rec, emp_name, avatar_url)
+    return _vacation_summary(record, "", None)
+
+
+@router.get("/vacation-requests", response_model=list[VacationRequestSummary])
+async def mobile_list_vacation_requests(
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> list[VacationRequestSummary]:
+    rows, _ = await list_vacation_requests(
+        session, employee.company_id, 1, 50, employee_id=employee.employee_id,
+    )
+    return [_vacation_summary(rec, emp_name, avatar_url) for rec, emp_name, avatar_url in rows]
+
+
+@router.delete("/vacation-requests/{request_id}", status_code=204)
+async def mobile_cancel_vacation_request(
+    request_id: int,
+    employee: Annotated[AuthenticatedEmployee, Depends(require_employee_session)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> None:
+    _, error = await cancel_vacation_request(
+        session, employee.company_id, employee.employee_id, request_id,
+    )
+    if error == "not_found":
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "Solicitação não encontrada."},
+        )
+    if error == "cannot_cancel":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "cannot_cancel",
+                "message": "Apenas solicitações pendentes podem ser canceladas.",
+            },
+        )

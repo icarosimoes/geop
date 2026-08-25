@@ -265,3 +265,79 @@ export async function createAdjustmentAction(body: {
   const data = await response.json().catch(() => ({}));
   return { ok: false, error: data?.detail?.message ?? "Não foi possível enviar a solicitação." };
 }
+
+// --- Requisição de Férias ---
+
+export interface VacationRequest {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_avatar_url: string | null;
+  start_date: string;
+  end_date: string;
+  days: number;
+  notes: string | null;
+  status: string;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+}
+
+export interface VacationRequestResult {
+  ok: boolean;
+  error?: string;
+  data?: VacationRequest;
+}
+
+export async function fetchVacationRequests(): Promise<VacationRequest[]> {
+  try {
+    const response = await authedFetch("/timeclock/mobile/vacation-requests");
+    if (!response.ok) return [];
+    return response.json();
+  } catch {
+    redirect("/login");
+  }
+}
+
+export async function createVacationRequestAction(body: {
+  startDate: string;
+  endDate: string;
+  notes?: string;
+}): Promise<VacationRequestResult> {
+  let response: Response;
+  try {
+    response = await authedFetch("/timeclock/mobile/vacation-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        start_date: body.startDate,
+        end_date: body.endDate,
+        notes: body.notes || null,
+      }),
+    });
+  } catch {
+    redirect("/login");
+  }
+
+  if (response.status === 201) {
+    const data = await response.json();
+    return { ok: true, data };
+  }
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data?.detail?.message ?? "Não foi possível enviar a solicitação." };
+}
+
+export async function cancelVacationRequestAction(requestId: number): Promise<{ ok: boolean; error?: string }> {
+  let response: Response;
+  try {
+    response = await authedFetch(`/timeclock/mobile/vacation-requests/${requestId}`, {
+      method: "DELETE",
+    });
+  } catch {
+    redirect("/login");
+  }
+
+  if (response.status === 204) return { ok: true };
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data?.detail?.message ?? "Não foi possível cancelar a solicitação." };
+}
