@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Check, Plus, X } from "lucide-react";
 import {
+  createVacationRequestAdminAction,
+  fetchVacationRequestStats,
   fetchVacationRequests,
   reviewVacationRequestAction,
   type VacationRequestItem,
+  type VacationRequestStats,
 } from "@/app/actions";
 import { Avatar } from "@/components/avatar";
+import { EmployeeAutocomplete } from "@/components/employee-autocomplete";
 import type { TenantUser } from "@/lib/api";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -31,13 +35,47 @@ function statusClass(status: string) {
   return "status status-progress";
 }
 
+function hasPermission(user: TenantUser, code: string) {
+  return user.permissions.includes("*") || user.permissions.includes(code);
+}
+
+function monthLabel(iso: string) {
+  const [year, month] = iso.split("-");
+  const names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  return `${names[Number(month) - 1]}/${year.slice(2)}`;
+}
+
 function formatDate(iso: string) {
   const [year, month, day] = iso.split("-");
   return `${day}/${month}/${year}`;
 }
 
-function hasPermission(user: TenantUser, code: string) {
-  return user.permissions.includes("*") || user.permissions.includes(code);
+function calcDays(start: string, end: string) {
+  if (!start || !end) return 0;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (e < s) return 0;
+  return Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+}
+
+function MonthlyTrendChart({ trend }: { trend: VacationRequestStats["monthly_trend"] }) {
+  const maxVal = Math.max(...trend.map((d) => d.count), 1);
+  return (
+    <div className="kpi-trend">
+      <div className="kpi-trend-chart">
+        {trend.map((d) => (
+          <div key={d.month} className="kpi-trend-day" title={`${monthLabel(d.month)}: ${d.count}`}>
+            <div className="kpi-trend-bar blue" style={{ height: `${(d.count / maxVal) * 100}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="kpi-trend-labels">
+        {trend.map((d) => (
+          <span key={d.month}>{monthLabel(d.month)}</span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 interface ReviewModalState {
@@ -46,39 +84,94 @@ interface ReviewModalState {
 }
 
 export function VacationRequestManager({ user }: { user: TenantUser }) {
-  const canReview = hasPermission(user, "ponto-ferias");
+  const canManage = hasPermission(user, "ponto-ferias");
 
-  const [activeTab, setActiveTab] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState("pending");
   const [items, setItems] = useState<VacationRequestItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState<number | null>(null);
+  const [toast, setToast] = useState("");
 
+  const [stats, setStats] = useState<VacationRequestStats | null>(null);
+
+  // Drawer de criação
+  const [drawer, setDrawer] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newEmployeeId, setNewEmployeeId] = useState("");
+  const [newStart, setNewStart] = useState("");
+  const [newEnd, setNewEnd] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+
+  // Modal de revisão
   const [reviewModal, setReviewModal] = useState<ReviewModalState | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
-  const [reviewing, setReviewing] = useState(false);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  const PAGE_SIZE = 20;
+  const previewDays = calcDays(newStart, newEnd);
 
-  async function load(tab: string, p: number) {
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 2600);
+  }
+
+  function reload() {
     setLoading(true);
-    const data = await fetchVacationRequests({ page: p, pageSize: PAGE_SIZE, status: tab || undefined });
-    setItems(data.items);
-    setTotal(data.total);
-    setLoading(false);
+    fetchVacationRequests({ status: statusFilter || undefined, pageSize: 50 })
+      .then((res) => {
+        setItems(res.items);
+        setTotal(res.total);
+      })
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load(activeTab, page);
-  }, [activeTab, page]);
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
-  function switchTab(tab: string) {
-    setActiveTab(tab);
-    setPage(1);
+  useEffect(() => {
+    fetchVacationRequestStats().then(setStats);
+  }, []);
+
+  function closeDrawer() {
+    setDrawer(false);
+    setNewEmployeeId("");
+    setNewStart("");
+    setNewEnd("");
+    setNewNotes("");
+    setDrawerError(null);
   }
 
-  function openReview(request: VacationRequestItem, approve: boolean) {
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    setDrawerError(null);
+    if (!newEmployeeId || !newStart || !newEnd) return;
+    if (previewDays < 1) {
+      setDrawerError("A data de fim deve ser igual ou posterior ao início.");
+      return;
+    }
+    setSaving(true);
+    const result = await createVacationRequestAdminAction({
+      employee_id: Number(newEmployeeId),
+      start_date: newStart,
+      end_date: newEnd,
+      notes: newNotes || undefined,
+    });
+    setSaving(false);
+    if (result.ok) {
+      showToast("Férias registradas.");
+      closeDrawer();
+      reload();
+      fetchVacationRequestStats().then(setStats);
+    } else {
+      setDrawerError(result.error ?? "Erro ao registrar.");
+    }
+  }
+
+  function openReviewModal(request: VacationRequestItem, approve: boolean) {
     setReviewModal({ request, approve });
     setReviewNotes("");
     setReviewError(null);
@@ -86,152 +179,275 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
 
   async function submitReview() {
     if (!reviewModal) return;
-    setReviewing(true);
+    setReviewSaving(true);
     setReviewError(null);
     const result = await reviewVacationRequestAction(
       reviewModal.request.id,
       reviewModal.approve,
       reviewNotes || undefined,
     );
-    setReviewing(false);
-    if (!result.ok) {
+    setReviewSaving(false);
+    if (result.ok) {
+      showToast(reviewModal.approve ? "Férias aprovadas." : "Solicitação rejeitada.");
+      setReviewModal(null);
+      reload();
+      fetchVacationRequestStats().then(setStats);
+    } else {
       setReviewError(result.error ?? "Erro ao processar.");
-      return;
     }
-    setReviewModal(null);
-    await load(activeTab, page);
   }
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const today = new Date().toISOString().split("T")[0];
 
   return (
-    <div className="page-content">
-      <div className="page-header">
-        <h1>Requisições de Férias</h1>
-        <p className="page-subtitle">
-          Gerencie as solicitações de férias dos colaboradores.
-        </p>
-      </div>
-
-      {/* Tabs de status */}
-      <div className="tabs" style={{ marginBottom: "var(--sp-4)" }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            className={`tab ${activeTab === tab.value ? "active" : ""}`}
-            onClick={() => switchTab(tab.value)}
-          >
-            {tab.label}
+    <>
+      <header className="module-heading">
+        <div>
+          <p className="eyebrow">Ponto</p>
+          <h1>Gestão de Férias</h1>
+          <p>
+            Solicitações enviadas pelos colaboradores e férias registradas diretamente pelo RH.
+          </p>
+        </div>
+        {canManage && (
+          <button className="primary-button" onClick={() => setDrawer(true)}>
+            <Plus size={18} /> Registrar férias
           </button>
-        ))}
-      </div>
-
-      {/* Tabela */}
-      <div className="table-card">
-        {loading ? (
-          <div className="table-empty">Carregando...</div>
-        ) : items.length === 0 ? (
-          <div className="table-empty">Nenhuma solicitação encontrada.</div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Colaborador</th>
-                <th>Período</th>
-                <th>Dias</th>
-                <th>Observações</th>
-                <th>Status</th>
-                <th>Notas do RH</th>
-                {canReview && activeTab === "pending" && <th>Ações</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((req) => (
-                <tr key={req.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
-                      <Avatar name={req.employee_name} url={req.employee_avatar_url} size={28} />
-                      <span>{req.employee_name}</span>
-                    </div>
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {formatDate(req.start_date)} → {formatDate(req.end_date)}
-                  </td>
-                  <td>{req.days}</td>
-                  <td style={{ maxWidth: "200px", color: "var(--muted)", fontSize: "0.85rem" }}>
-                    {req.notes ?? "—"}
-                  </td>
-                  <td>
-                    <span className={statusClass(req.status)}>
-                      {STATUS_LABELS[req.status] ?? req.status}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: "0.85rem", color: "var(--muted)", maxWidth: "200px" }}>
-                    {req.review_notes ?? "—"}
-                  </td>
-                  {canReview && activeTab === "pending" && (
-                    <td>
-                      <div style={{ display: "flex", gap: "var(--sp-1)" }}>
-                        <button
-                          type="button"
-                          className="icon-btn success"
-                          title="Aprovar"
-                          onClick={() => openReview(req, true)}
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-btn danger"
-                          title="Rejeitar"
-                          onClick={() => openReview(req, false)}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
-      </div>
+      </header>
 
-      {/* Paginação */}
-      {totalPages > 1 && (
-        <div className="pagination" style={{ marginTop: "var(--sp-3)" }}>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="btn-secondary"
-          >
-            Anterior
-          </button>
-          <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="btn-secondary"
-          >
-            Próxima
-          </button>
+      {/* KPIs */}
+      {stats && (
+        <div className="kpi-grid">
+          <div className="kpi-panel">
+            <h3>Solicitações por mês</h3>
+            <MonthlyTrendChart trend={stats.monthly_trend} />
+          </div>
+          <div className="kpi-panel">
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+              <div>
+                <div className="kpi-label">Aguardando aprovação</div>
+                <div className="kpi-value">{stats.pending}</div>
+              </div>
+              <div>
+                <div className="kpi-label">Férias aprovadas (total)</div>
+                <div className="kpi-value">{stats.approved_total}</div>
+              </div>
+              <div>
+                <div className="kpi-label">Próximas férias (60 dias)</div>
+                <div className="kpi-value">{stats.upcoming_60d}</div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Modal de revisão */}
+      {/* Tabela */}
+      <section className="module-panel">
+        <div
+          className="module-toolbar"
+          style={{ padding: "var(--sp-3) var(--sp-5)", borderBottom: "1px solid var(--field-border)" }}
+        >
+          <div className="segmented">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                className={statusFilter === tab.value ? "selected" : ""}
+                onClick={() => setStatusFilter(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="module-state">Carregando...</div>
+        ) : items.length === 0 ? (
+          <div className="module-state">
+            <strong>Nenhuma solicitação</strong>
+            <span>Não há férias neste filtro.</span>
+          </div>
+        ) : (
+          <div className="module-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Colaborador</th>
+                  <th>Período</th>
+                  <th>Dias</th>
+                  <th>Observações</th>
+                  <th>Status</th>
+                  <th>Notas do RH</th>
+                  {canManage && statusFilter === "pending" && <th>Ações</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((req) => (
+                  <tr key={req.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                        <Avatar
+                          name={req.employee_name}
+                          avatarUrl={req.employee_avatar_url}
+                          size={28}
+                        />
+                        <strong>{req.employee_name}</strong>
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {formatDate(req.start_date)} → {formatDate(req.end_date)}
+                    </td>
+                    <td>{req.days}</td>
+                    <td className="muted" style={{ fontSize: 13, maxWidth: 200 }}>
+                      {req.notes ?? "—"}
+                    </td>
+                    <td>
+                      <span className={statusClass(req.status)}>
+                        {STATUS_LABELS[req.status] ?? req.status}
+                      </span>
+                    </td>
+                    <td className="muted" style={{ fontSize: 13, maxWidth: 220 }}>
+                      {req.review_notes ?? "—"}
+                    </td>
+                    {canManage && statusFilter === "pending" && (
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            onClick={() => openReviewModal(req, true)}
+                            disabled={reviewing === req.id}
+                            aria-label="Aprovar"
+                            title="Aprovar"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={() => openReviewModal(req, false)}
+                            disabled={reviewing === req.id}
+                            aria-label="Rejeitar"
+                            title="Rejeitar"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <footer className="module-pagination">
+          <span>{total} solicitação(ões)</span>
+        </footer>
+      </section>
+
+      {/* Drawer — Registrar férias pelo RH */}
+      {drawer && (
+        <div className="modal-layer" role="presentation" onClick={closeDrawer}>
+          <section
+            className="record-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>Ponto</span>
+                <h2>Registrar férias</h2>
+              </div>
+              <button className="icon-button" onClick={closeDrawer} aria-label="Fechar">
+                <X />
+              </button>
+            </header>
+
+            <form onSubmit={handleCreate}>
+              <label>
+                Colaborador
+                <EmployeeAutocomplete
+                  key="vacation-create"
+                  onChange={(id) => setNewEmployeeId(id)}
+                  placeholder="Digite o nome do colaborador..."
+                  required
+                />
+              </label>
+              <label>
+                Início das férias
+                <input
+                  type="date"
+                  min={today}
+                  value={newStart}
+                  onChange={(e) => setNewStart(e.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Fim das férias
+                <input
+                  type="date"
+                  min={newStart || today}
+                  value={newEnd}
+                  onChange={(e) => setNewEnd(e.target.value)}
+                  required
+                />
+              </label>
+              {previewDays > 0 && (
+                <p className="muted" style={{ margin: "-var(--sp-2) 0 var(--sp-2)", fontSize: 13 }}>
+                  Período de <strong>{previewDays} dia{previewDays !== 1 ? "s" : ""}</strong>
+                </p>
+              )}
+              <label>
+                Observações (opcional)
+                <input
+                  value={newNotes}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  placeholder="Informação adicional..."
+                />
+              </label>
+              {drawerError && (
+                <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{drawerError}</p>
+              )}
+              <footer>
+                <button type="button" onClick={closeDrawer}>Cancelar</button>
+                <button type="submit" disabled={saving}>
+                  {saving ? "Salvando…" : "Registrar como aprovado"}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {/* Modal de revisão (aprovar / rejeitar) */}
       {reviewModal && (
-        <div className="modal-overlay" onClick={() => setReviewModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginBottom: "var(--sp-3)", fontSize: "1.05rem" }}>
-              {reviewModal.approve ? "Aprovar" : "Rejeitar"} solicitação
-            </h2>
-            <p style={{ fontSize: "0.9rem", marginBottom: "var(--sp-3)" }}>
+        <div
+          className="modal-layer"
+          role="presentation"
+          onClick={() => setReviewModal(null)}
+        >
+          <section
+            className="record-modal"
+            role="dialog"
+            aria-modal="true"
+            style={{ maxWidth: 440 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>Férias</span>
+                <h2>{reviewModal.approve ? "Aprovar solicitação" : "Rejeitar solicitação"}</h2>
+              </div>
+              <button
+                className="icon-button"
+                onClick={() => setReviewModal(null)}
+                aria-label="Fechar"
+              >
+                <X />
+              </button>
+            </header>
+
+            <p style={{ margin: "0 0 var(--sp-4)", fontSize: "0.9rem" }}>
               <strong>{reviewModal.request.employee_name}</strong>
               {" — "}
               {formatDate(reviewModal.request.start_date)} até{" "}
@@ -239,49 +455,49 @@ export function VacationRequestManager({ user }: { user: TenantUser }) {
               ({reviewModal.request.days} dias)
             </p>
 
-            <label htmlFor="review_notes" style={{ display: "block", marginBottom: "var(--sp-2)", fontSize: "0.85rem" }}>
+            <label>
               {reviewModal.approve ? "Notas (opcional)" : "Motivo da rejeição (opcional)"}
+              <textarea
+                rows={3}
+                style={{ width: "100%", resize: "vertical" }}
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder={
+                  reviewModal.approve ? "Alguma observação..." : "Explique o motivo..."
+                }
+              />
             </label>
-            <textarea
-              id="review_notes"
-              rows={3}
-              style={{ width: "100%", resize: "vertical", marginBottom: "var(--sp-3)" }}
-              value={reviewNotes}
-              onChange={(e) => setReviewNotes(e.target.value)}
-              placeholder={reviewModal.approve ? "Alguma observação..." : "Explique o motivo..."}
-            />
 
             {reviewError && (
-              <p style={{ color: "var(--red)", fontSize: "0.85rem", marginBottom: "var(--sp-2)" }}>
-                {reviewError}
-              </p>
+              <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{reviewError}</p>
             )}
 
-            <div style={{ display: "flex", gap: "var(--sp-2)", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setReviewModal(null)}
-                disabled={reviewing}
-              >
+            <footer>
+              <button type="button" onClick={() => setReviewModal(null)} disabled={reviewSaving}>
                 Cancelar
               </button>
               <button
                 type="button"
-                className={reviewModal.approve ? "btn-primary" : "btn-danger"}
                 onClick={submitReview}
-                disabled={reviewing}
+                disabled={reviewSaving}
               >
-                {reviewing
-                  ? "Processando..."
+                {reviewSaving
+                  ? "Processando…"
                   : reviewModal.approve
                   ? "Confirmar aprovação"
                   : "Confirmar rejeição"}
               </button>
-            </div>
-          </div>
+            </footer>
+          </section>
         </div>
       )}
-    </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="module-toast" role="status">
+          {toast}
+        </div>
+      )}
+    </>
   );
 }

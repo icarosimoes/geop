@@ -52,8 +52,10 @@ from app.domain.timeclock.schemas import (
     TimeClockEnrollmentSummary,
     TimePunchListResponse,
     TimePunchSummary,
+    VacationRequestAdminCreate,
     VacationRequestListResponse,
     VacationRequestReview,
+    VacationRequestStats,
     VacationRequestSummary,
 )
 from app.domain.timeclock.service import (
@@ -64,6 +66,7 @@ from app.domain.timeclock.service import (
     create_manual_punch,
     create_punch_excusal,
     create_shift,
+    create_vacation_request_for_employee,
     delete_device,
     delete_enrollment,
     delete_holiday,
@@ -72,6 +75,7 @@ from app.domain.timeclock.service import (
     get_calendar,
     get_hour_bank_summary,
     get_punch_adjustment_stats,
+    get_vacation_request_stats,
     import_employee_payslips,
     list_devices,
     list_enrollments,
@@ -1053,6 +1057,48 @@ async def review_vacation_request_endpoint(
         raise HTTPException(
             status_code=409,
             detail={"code": "already_reviewed", "message": "Solicitação já foi analisada."},
+        )
+    assert record is not None
+    rows, _ = await list_vacation_requests(
+        session, user.company_id, 1, 1, employee_id=record.employee_id,
+    )
+    for rec, emp_name, avatar_url in rows:
+        if rec.id == record.id:
+            return _vacation_req_summary(rec, emp_name, avatar_url)
+    return _vacation_req_summary(record, "", None)
+
+
+@router.get("/vacation-requests/stats", response_model=VacationRequestStats)
+async def vacation_request_stats_endpoint(
+    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> VacationRequestStats:
+    data = await get_vacation_request_stats(session, user.company_id)
+    return VacationRequestStats(**data)
+
+
+@router.post("/vacation-requests", response_model=VacationRequestSummary, status_code=201)
+async def create_vacation_request_admin_endpoint(
+    body: VacationRequestAdminCreate,
+    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> VacationRequestSummary:
+    record, error = await create_vacation_request_for_employee(
+        session,
+        user.company_id,
+        user.user_id,
+        body.employee_id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        notes=body.notes,
+    )
+    if error == "end_before_start":
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "end_before_start",
+                "message": "A data de fim deve ser após a data de início.",
+            },
         )
     assert record is not None
     rows, _ = await list_vacation_requests(

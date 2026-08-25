@@ -443,3 +443,17 @@ class VacationRequestListResponse(BaseModel):
 class VacationRequestReview(BaseModel):
     approve: bool
     review_notes: str | None = None
+
+
+class VacationRequestStats(BaseModel):
+    monthly_trend: list[dict]
+    pending: int
+    approved_total: int
+    upcoming_60d: int
+
+
+class VacationRequestAdminCreate(BaseModel):
+    employee_id: int
+    start_date: date
+    end_date: date
+    notes: str | None = None

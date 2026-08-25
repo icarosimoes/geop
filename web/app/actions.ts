@@ -2152,3 +2152,31 @@ export async function reviewVacationRequestAction(
   if (!response.ok) return { ok: false, error: "Erro ao revisar solicitação." };
   return { ok: true, data: await response.json() };
 }
+
+export interface VacationRequestStats {
+  monthly_trend: Array<{ month: string; count: number }>;
+  pending: number;
+  approved_total: number;
+  upcoming_60d: number;
+}
+
+export async function fetchVacationRequestStats(): Promise<VacationRequestStats | null> {
+  const response = await authedFetch("/timeclock/vacation-requests/stats");
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function createVacationRequestAdminAction(body: {
+  employee_id: number;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/vacation-requests", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (response.status === 201) return { ok: true, data: await response.json() };
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data?.detail?.message ?? "Erro ao registrar férias." };
+}

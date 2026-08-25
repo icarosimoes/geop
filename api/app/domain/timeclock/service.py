@@ -2171,3 +2171,90 @@ async def cancel_vacation_request(
     await session.commit()
     await session.refresh(record)
     return record, None
+
+
+async def get_vacation_request_stats(session: AsyncSession, company_id: int) -> dict:
+    now = datetime.now()
+    months: list[date] = []
+    cursor = now.replace(day=1)
+    for _ in range(6):
+        months.append(cursor.date())
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    months.reverse()
+    period_start = datetime.combine(months[0], time.min)
+
+    month_trunc = func.date_trunc(literal_column("'month'"), VacationRequest.created_at)
+    trend_rows = (
+        await session.execute(
+            select(month_trunc, func.count(VacationRequest.id))
+            .where(
+                VacationRequest.company_id == company_id,
+                VacationRequest.created_at >= period_start,
+            )
+            .group_by(month_trunc)
+        )
+    ).all()
+    counts_by_month = {d.date().replace(day=1).isoformat(): c for d, c in trend_rows}
+    monthly_trend = [
+        {"month": m.isoformat(), "count": counts_by_month.get(m.isoformat(), 0)} for m in months
+    ]
+
+    # Contagem por status
+    status_rows = (
+        await session.execute(
+            select(VacationRequest.status, func.count(VacationRequest.id))
+            .where(VacationRequest.company_id == company_id)
+            .group_by(VacationRequest.status)
+        )
+    ).all()
+    by_status = {s: c for s, c in status_rows}
+
+    # Próximas férias aprovadas (próximos 60 dias)
+    upcoming = await session.scalar(
+        select(func.count(VacationRequest.id)).where(
+            VacationRequest.company_id == company_id,
+            VacationRequest.status == "approved",
+            VacationRequest.start_date >= now.date(),
+            VacationRequest.start_date <= (now + timedelta(days=60)).date(),
+        )
+    ) or 0
+
+    return {
+        "monthly_trend": monthly_trend,
+        "pending": by_status.get("pending", 0),
+        "approved_total": by_status.get("approved", 0),
+        "upcoming_60d": upcoming,
+    }
+
+
+async def create_vacation_request_for_employee(
+    session: AsyncSession,
+    company_id: int,
+    actor_id: int,
+    employee_id: int,
+    *,
+    start_date: date,
+    end_date: date,
+    notes: str | None,
+) -> tuple[VacationRequest | None, str | None]:
+    """Cria uma solicitação de férias diretamente aprovada pelo RH
+    (sem passar por pending — criação administrativa é aprovação implícita)."""
+    if end_date < start_date:
+        return None, "end_before_start"
+    days = (end_date - start_date).days + 1
+    record = VacationRequest(
+        company_id=company_id,
+        employee_id=employee_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+        notes=notes,
+        status="approved",
+        reviewed_by_user_id=actor_id,
+        reviewed_at=datetime.now(),
+        review_notes="Cadastro direto pelo RH.",
+    )
+    session.add(record)
+    await session.commit()
+    await session.refresh(record)
+    return record, None
