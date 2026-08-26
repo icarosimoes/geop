@@ -2097,3 +2097,90 @@ export async function deleteHolidayAction(id: number): Promise<MutationResult> {
   if (!response.ok) return { ok: false, error: "Erro ao excluir feriado." };
   return { ok: true };
 }
+
+// --- Requisições de Férias ---
+
+export interface VacationRequestItem {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_avatar_url: string | null;
+  employee_sector_name: string | null;
+  start_date: string;
+  end_date: string;
+  days: number;
+  working_days: number | null;
+  notes: string | null;
+  status: string;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+}
+
+export interface VacationRequestListResponse {
+  items: VacationRequestItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchVacationRequests(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  employeeId?: number;
+  sectorId?: number;
+}): Promise<VacationRequestListResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 20),
+  });
+  if (params.status) query.set("status", params.status);
+  if (params.employeeId) query.set("employee_id", String(params.employeeId));
+  if (params.sectorId) query.set("sector_id", String(params.sectorId));
+  const response = await authedFetch(`/timeclock/vacation-requests?${query}`);
+  if (!response.ok) return { items: [], total: 0, page: 1, page_size: 20 };
+  return response.json();
+}
+
+export async function reviewVacationRequestAction(
+  requestId: number,
+  approve: boolean,
+  reviewNotes?: string,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/timeclock/vacation-requests/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ approve, review_notes: reviewNotes ?? null }),
+  });
+  if (!response.ok) return { ok: false, error: "Erro ao revisar solicitação." };
+  return { ok: true, data: await response.json() };
+}
+
+export interface VacationRequestStats {
+  monthly_trend: Array<{ month: string; count: number }>;
+  pending: number;
+  approved_total: number;
+  upcoming_60d: number;
+}
+
+export async function fetchVacationRequestStats(): Promise<VacationRequestStats | null> {
+  const response = await authedFetch("/timeclock/vacation-requests/stats");
+  if (!response.ok) return null;
+  return response.json();
+}
+
+export async function createVacationRequestAdminAction(body: {
+  employee_id: number;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+}): Promise<MutationResult> {
+  const response = await authedFetch("/timeclock/vacation-requests", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (response.status === 201) return { ok: true, data: await response.json() };
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data?.detail?.message ?? "Erro ao registrar férias." };
+}

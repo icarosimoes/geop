@@ -4,7 +4,7 @@ import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
   FileText, Home, Link2, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
-  Receipt, Settings, ShieldCheck, Timer, Truck, UserCog, Users, Wallet, X,
+  Receipt, Settings, ShieldCheck, Timer, Truck, Umbrella, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -49,6 +49,7 @@ const pontoSub = [
   { slug: "ponto-vinculos", label: "Vínculos", icon: Link2, href: "/ponto/vinculos" },
   { slug: "ponto-escalas", label: "Escalas de trabalho", icon: CalendarClock, href: "/ponto/escalas" },
   { slug: "ponto-feriados", label: "Feriados", icon: CalendarDays, href: "/ponto/feriados" },
+  { slug: "ponto-ferias", label: "Férias", icon: Umbrella, href: "/ponto/ferias" },
 ];
 
 export function AppLayout({ user, children }: { user: TenantUser; children: ReactNode }) {

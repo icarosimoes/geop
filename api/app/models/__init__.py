@@ -44,6 +44,7 @@ from app.models.operations import (
     PunchAdjustmentRequest,
     PunchExcusal,
     ScheduleEntry,
+    VacationRequest,
     Sector,
     Shift,
     ShiftHandoff,
