@@ -1053,7 +1053,7 @@ async def review_vacation_request_endpoint(
     record, error = await review_vacation_request(
         session,
         user.company_id,
-        user.user_id,
+        user.id,
         request_id,
         approve=body.approve,
         review_notes=body.review_notes,
@@ -1096,7 +1096,7 @@ async def create_vacation_request_admin_endpoint(
     record, error = await create_vacation_request_for_employee(
         session,
         user.company_id,
-        user.user_id,
+        user.id,
         body.employee_id,
         start_date=body.start_date,
         end_date=body.end_date,
