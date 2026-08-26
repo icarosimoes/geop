@@ -1015,7 +1015,7 @@ def _vacation_req_summary(
 
 @router.get("/vacation-requests", response_model=VacationRequestListResponse)
 async def list_vacation_requests_endpoint(
-    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    user: Annotated[AuthenticatedUser, require_permission("ponto-ferias")],
     session: Annotated[AsyncSession, Depends(require_session)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -1047,7 +1047,7 @@ async def list_vacation_requests_endpoint(
 async def review_vacation_request_endpoint(
     request_id: int,
     body: VacationRequestReview,
-    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    user: Annotated[AuthenticatedUser, require_permission("ponto-ferias")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> VacationRequestSummary:
     record, error = await review_vacation_request(
@@ -1080,7 +1080,7 @@ async def review_vacation_request_endpoint(
 
 @router.get("/vacation-requests/stats", response_model=VacationRequestStats)
 async def vacation_request_stats_endpoint(
-    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    user: Annotated[AuthenticatedUser, require_permission("ponto-ferias")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> VacationRequestStats:
     data = await get_vacation_request_stats(session, user.company_id)
@@ -1090,7 +1090,7 @@ async def vacation_request_stats_endpoint(
 @router.post("/vacation-requests", response_model=VacationRequestSummary, status_code=201)
 async def create_vacation_request_admin_endpoint(
     body: VacationRequestAdminCreate,
-    user: Annotated[AuthenticatedUser, Depends(require_permission("ponto-ferias"))],
+    user: Annotated[AuthenticatedUser, require_permission("ponto-ferias")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> VacationRequestSummary:
     record, error = await create_vacation_request_for_employee(
