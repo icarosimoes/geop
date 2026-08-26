@@ -988,6 +988,7 @@ async def export_mirror_endpoint(
 # Requisições de Férias — Painel Administrativo
 # ---------------------------------------------------------------------------
 
+
 def _vacation_req_summary(
     rec,
     emp_name: str,
@@ -1070,7 +1071,11 @@ async def review_vacation_request_endpoint(
         )
     assert record is not None
     rows, _ = await list_vacation_requests(
-        session, user.company_id, 1, 1, employee_id=record.employee_id,
+        session,
+        user.company_id,
+        1,
+        1,
+        employee_id=record.employee_id,
     )
     for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:
@@ -1120,7 +1125,11 @@ async def create_vacation_request_admin_endpoint(
         )
     assert record is not None
     rows, _ = await list_vacation_requests(
-        session, user.company_id, 1, 1, employee_id=record.employee_id,
+        session,
+        user.company_id,
+        1,
+        1,
+        employee_id=record.employee_id,
     )
     for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:

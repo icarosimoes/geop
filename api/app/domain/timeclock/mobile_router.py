@@ -347,6 +347,7 @@ async def mobile_list_adjustments(
 # Requisições de Férias — Portal do Colaborador
 # ---------------------------------------------------------------------------
 
+
 def _vacation_summary(
     rec, emp_name: str, avatar_url: str | None, sector_name: str | None = None
 ) -> VacationRequestSummary:
@@ -400,7 +401,11 @@ async def mobile_create_vacation_request(
         )
     # Busca com join para garantir employee_name, avatar_url e sector_name
     rows, _ = await list_vacation_requests(
-        session, employee.company_id, 1, 1, employee_id=employee.employee_id,
+        session,
+        employee.company_id,
+        1,
+        1,
+        employee_id=employee.employee_id,
     )
     for rec, emp_name, avatar_url, sector_name in rows:
         if rec.id == record.id:
@@ -414,7 +419,11 @@ async def mobile_list_vacation_requests(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> list[VacationRequestSummary]:
     rows, _ = await list_vacation_requests(
-        session, employee.company_id, 1, 50, employee_id=employee.employee_id,
+        session,
+        employee.company_id,
+        1,
+        50,
+        employee_id=employee.employee_id,
     )
     return [
         _vacation_summary(rec, emp_name, avatar_url, sector_name)
@@ -429,7 +438,10 @@ async def mobile_cancel_vacation_request(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
     _, error = await cancel_vacation_request(
-        session, employee.company_id, employee.employee_id, request_id,
+        session,
+        employee.company_id,
+        employee.employee_id,
+        request_id,
     )
     if error == "not_found":
         raise HTTPException(

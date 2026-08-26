@@ -2042,6 +2042,7 @@ async def import_employee_payslips(
 # Requisições de Férias
 # ---------------------------------------------------------------------------
 
+
 async def _notify_vacation_managers(
     session: AsyncSession, company_id: int, employee_name: str, request_id: int
 ) -> None:
@@ -2092,9 +2093,7 @@ async def create_vacation_request(
 
     # Valida se o funcionário está ativo
     emp_status = await session.scalar(
-        select(Employee.status).where(
-            Employee.id == employee_id, Employee.company_id == company_id
-        )
+        select(Employee.status).where(Employee.id == employee_id, Employee.company_id == company_id)
     )
     if emp_status is None:
         return None, "employee_not_found"
@@ -2115,9 +2114,7 @@ async def create_vacation_request(
     session.add(record)
     await session.flush()
     employee_name = await session.scalar(select(Employee.name).where(Employee.id == employee_id))
-    await _notify_vacation_managers(
-        session, company_id, employee_name or "funcionário", record.id
-    )
+    await _notify_vacation_managers(session, company_id, employee_name or "funcionário", record.id)
     await session.commit()
     await session.refresh(record)
     return record, None
@@ -2147,13 +2144,10 @@ async def list_vacation_requests(
         .outerjoin(Sector, Sector.id == Employee.sector_id)
         .where(*filters)
     )
-    total = await session.scalar(
-        select(func.count()).select_from(base_q.subquery())
-    ) or 0
+    total = await session.scalar(select(func.count()).select_from(base_q.subquery())) or 0
     rows = (
         await session.execute(
-            base_q
-            .order_by(VacationRequest.created_at.desc())
+            base_q.order_by(VacationRequest.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -2251,14 +2245,17 @@ async def get_vacation_request_stats(session: AsyncSession, company_id: int) -> 
     by_status = {s: c for s, c in status_rows}
 
     # Próximas férias aprovadas (próximos 60 dias)
-    upcoming = await session.scalar(
-        select(func.count(VacationRequest.id)).where(
-            VacationRequest.company_id == company_id,
-            VacationRequest.status == "approved",
-            VacationRequest.start_date >= now.date(),
-            VacationRequest.start_date <= (now + timedelta(days=60)).date(),
+    upcoming = (
+        await session.scalar(
+            select(func.count(VacationRequest.id)).where(
+                VacationRequest.company_id == company_id,
+                VacationRequest.status == "approved",
+                VacationRequest.start_date >= now.date(),
+                VacationRequest.start_date <= (now + timedelta(days=60)).date(),
+            )
         )
-    ) or 0
+        or 0
+    )
 
     return {
         "monthly_trend": monthly_trend,
@@ -2286,9 +2283,7 @@ async def create_vacation_request_for_employee(
 
     # Valida se o funcionário existe e está ativo
     emp_status = await session.scalar(
-        select(Employee.status).where(
-            Employee.id == employee_id, Employee.company_id == company_id
-        )
+        select(Employee.status).where(Employee.id == employee_id, Employee.company_id == company_id)
     )
     if emp_status is None:
         return None, "employee_not_found"
