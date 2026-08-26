@@ -411,6 +411,7 @@ class EmployeePayslipImportResponse(BaseModel):
 
 # --- Requisição de Férias ---
 
+
 class VacationRequestCreate(BaseModel):
     start_date: date
     end_date: date

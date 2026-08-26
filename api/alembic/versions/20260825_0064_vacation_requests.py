@@ -57,9 +57,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_vacation_requests_employee", "vacation_requests", ["company_id", "employee_id"]
     )
-    op.create_index(
-        "ix_vacation_requests_status", "vacation_requests", ["company_id", "status"]
-    )
+    op.create_index("ix_vacation_requests_status", "vacation_requests", ["company_id", "status"])
     op.create_index(
         "ix_vacation_requests_period", "vacation_requests", ["company_id", "start_date"]
     )
