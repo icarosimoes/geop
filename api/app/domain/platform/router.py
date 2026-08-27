@@ -702,6 +702,90 @@ async def save_platform_email(
 
 
 # ---------------------------------------------------------------------------
+# Auditoria de plataforma
+# ---------------------------------------------------------------------------
+
+
+class AuditLogItem(BaseModel):
+    id: int
+    operator_email: str | None
+    action: str
+    entity_type: str
+    entity_id: str | None
+    details: dict | None
+    ip_address: str | None
+    created_at: datetime
+
+
+class AuditLogPage(BaseModel):
+    items: list[AuditLogItem]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/audit", response_model=AuditLogPage)
+async def list_audit_logs(
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    page: int = QueryParam(1, ge=1),
+    page_size: int = QueryParam(50, ge=1, le=200),
+    action: str | None = QueryParam(None),
+    operator: str | None = QueryParam(None),
+    date_from: str | None = QueryParam(None),
+    date_to: str | None = QueryParam(None),
+) -> AuditLogPage:
+    base_q = select(PlatformAuditLog, PlatformUser.email.label("operator_email")).outerjoin(
+        PlatformUser, PlatformAuditLog.platform_user_id == PlatformUser.id
+    )
+    if action:
+        base_q = base_q.where(PlatformAuditLog.action.ilike(f"%{action}%"))
+    if operator:
+        base_q = base_q.where(PlatformUser.email.ilike(f"%{operator}%"))
+    if date_from:
+        try:
+            from datetime import date as _date
+
+            df = datetime.combine(_date.fromisoformat(date_from), datetime.min.time())
+            base_q = base_q.where(PlatformAuditLog.created_at >= df)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import date as _date
+
+            dt = datetime.combine(_date.fromisoformat(date_to), datetime.max.time())
+            base_q = base_q.where(PlatformAuditLog.created_at <= dt)
+        except ValueError:
+            pass
+
+    count_q = select(func.count()).select_from(base_q.subquery())
+    total: int = (await session.execute(count_q)).scalar_one()
+
+    rows_q = (
+        base_q.order_by(PlatformAuditLog.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await session.execute(rows_q)).all()
+
+    items = [
+        AuditLogItem(
+            id=log.id,
+            operator_email=email,
+            action=log.action,
+            entity_type=log.target_type,
+            entity_id=log.target_id,
+            details=log.payload,
+            ip_address=log.ip_address,
+            created_at=log.created_at,
+        )
+        for log, email in rows
+    ]
+    return AuditLogPage(items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

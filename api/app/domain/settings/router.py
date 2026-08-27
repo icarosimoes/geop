@@ -76,7 +76,11 @@ async def save_evolution(
     else:
         session.add(CompanySetting(company_id=user.company_id, key="evolution", value=new_value))
     await session.commit()
-    return EvolutionRead(has_credentials=True, api_url=body.api_url, instance=body.instance)
+    return EvolutionRead(
+        has_credentials=bool(body.api_key),
+        api_url=body.api_url,
+        instance=body.instance,
+    )
 
 
 class EvolutionTestSend(BaseModel):
@@ -183,7 +187,11 @@ async def save_brevo(
     else:
         session.add(CompanySetting(company_id=user.company_id, key="brevo", value=new_value))
     await session.commit()
-    return BrevoRead(has_credentials=True, from_address=body.from_address, from_name=body.from_name)
+    return BrevoRead(
+        has_credentials=bool(body.api_key),
+        from_address=body.from_address,
+        from_name=body.from_name,
+    )
 
 
 class BrevoTestSend(BaseModel):
