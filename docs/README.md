@@ -15,6 +15,7 @@ Esta pasta é a fonte de verdade técnica, funcional e operacional do GEOP. A no
 - [Catálogo de relógios de ponto](relogios-de-ponto-catalogo.md)
 - [Como desenvolver](desenvolvimento.md)
 - [Backlog e critérios de corte](backlog.md)
+- [Oportunidades identificadas no legado](oportunidades-legado-operacao.md)
 - [Segurança](seguranca.md)
 - [Plataforma SaaS e painel administrativo](plataforma-saas.md)
 - [Integração futura com Asaas](integracoes/asaas.md)

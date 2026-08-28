@@ -1,5 +1,7 @@
 # Versão Laravel mantida somente no ambiente local
 /docs/v1/
+/docs/aero-main/
+/docs/aero-main.zip
 
 # Segredos e configuração local
 .env

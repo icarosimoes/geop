@@ -18,6 +18,7 @@ from app.core.rate_limit import limiter
 from app.domain.apartment_inspections.router import router as apartment_inspections_router
 from app.domain.attachments.router import router as attachments_router
 from app.domain.audit_reports.router import router as audit_reports_router
+from app.domain.discrepancy_reports.router import router as discrepancy_reports_router
 from app.domain.auth.router import router as auth_router
 from app.domain.bulletin.router import router as bulletin_router
 from app.domain.check_suites.router import router as check_suites_router
@@ -158,6 +159,7 @@ v1_router.include_router(check_suites_router)
 v1_router.include_router(inspection_suites_router)
 v1_router.include_router(apartment_inspections_router)
 v1_router.include_router(audit_reports_router)
+v1_router.include_router(discrepancy_reports_router)
 v1_router.include_router(work_diaries_router)
 v1_router.include_router(maintenance_router)
 v1_router.include_router(bulletin_router)

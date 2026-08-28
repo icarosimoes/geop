@@ -485,3 +485,34 @@ feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy man
 ## Definition of Done por módulo
 
 Contrato, autorização, isolamento por empresa, estados de UI, CRUD necessário, anexos/exportações, testes, comparação de dados, observabilidade, documentação e rollback precisam estar aprovados antes do corte. Uma entrega não está concluída se a documentação pertinente em `/docs` estiver ausente ou desatualizada.
+
+## P15 — oportunidades do legado e gestão operacional (2026-08-28)
+
+Detalhamento funcional e critérios de aceite em [oportunidades-legado-operacao.md](oportunidades-legado-operacao.md).
+
+### Alta — primeiro vertical slice
+
+- [x] **Conferência operacional de discrepâncias** — domínio `discrepancy_reports`: grade por local/unidade, resumo por código, responsáveis (preparado/conferido/recebido), estados rascunho → enviada → fechada, filtros por data/status, exportação PDF (reportlab) e isolamento por empresa (RLS). Tela `/conferencias` com listagem paginada e formulário de grade. Pendente: códigos configuráveis por tenant (hoje é string livre), reabertura de conferência fechada, exportação Excel, timeline/anexos.
+- [x] **Testes da conferência de discrepâncias** — 8 testes em `test_discrepancy_reports.py`: CRUD, resumo por código, local duplicado, fechamento, isolamento cross-tenant, local de outro tenant rejeitado, permissão e PDF.
+
+### Alta — gestão gerencial
+
+- [ ] **Indicadores mensais de gestão** — competência por tenant, receita/custos/caixa, valores derivados server-side, saldo transportado, fechamento auditado e exportação anual.
+- [ ] **Contrato e testes dos indicadores mensais** — unicidade de competência, reabertura autorizada, cálculos, importação/exportação e isolamento.
+
+### Média-alta — extensão de auditorias
+
+- [ ] **Conferência financeira de auditorias** — itens de caixa, formas de pagamento, divergências, valores em Decimal, providências, anexos, responsáveis, aprovação e relatório consolidado.
+
+### Alta — agnóstico de segmento, baixo esforço
+
+- [ ] **Controle de documentos com vencimento** — tipos de documento configuráveis por tenant, registro com órgão emissor/emissão/vencimento/alerta, status calculado no servidor (pendente de anexo → em dia → vence em breve → vencido → sem vencimento), anexo com histórico por substituição (reaproveitando o serviço de attachments existente) e notificação de vencimento via `notify_record_event`.
+
+### Oportunidades condicionais
+
+- [ ] **Formulários configuráveis versionados** — somente após validar demanda em clientes fora da hotelaria.
+- [ ] **Relatórios de perdas e abastecimento** — módulos opcionais, sem acoplar o núcleo a regras de quartos ou hotelaria.
+
+### Não migrar
+
+- [x] Código Laravel, regras rígidas de apartamentos e tabelas genéricas sem contrato não serão copiados para a nova stack.
