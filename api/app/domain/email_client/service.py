@@ -35,7 +35,7 @@ def _encrypt(plain: str) -> str:
 
 def _decrypt(stored: str) -> str:
     if stored.startswith(_MARKER):
-        return base64.b64decode(stored[len(_MARKER):]).decode()
+        return base64.b64decode(stored[len(_MARKER) :]).decode()
     return stored  # fallback para senhas antigas não marcadas
 
 
@@ -120,16 +120,18 @@ async def list_messages(
         q = q.where(EmailMessage.account_id == account_id)
     if only_unread:
         q = q.where(EmailMessage.is_read.is_(False))
-    total = (
-        await session.execute(select(func.count()).select_from(q.subquery()))
-    ).scalar_one()
+    total = (await session.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
     items = (
-        await session.execute(
-            q.order_by(EmailMessage.received_at.desc().nullslast())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await session.execute(
+                q.order_by(EmailMessage.received_at.desc().nullslast())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(items), total
 
 
@@ -155,10 +157,12 @@ async def mark_read(session: AsyncSession, *, message: EmailMessage, is_read: bo
 
 async def list_alert_rules(session: AsyncSession, *, company_id: int) -> list[EmailAlertRule]:
     result = await session.execute(
-        select(EmailAlertRule).where(
+        select(EmailAlertRule)
+        .where(
             EmailAlertRule.company_id == company_id,
             EmailAlertRule.deleted_at.is_(None),
-        ).order_by(EmailAlertRule.id)
+        )
+        .order_by(EmailAlertRule.id)
     )
     return list(result.scalars().all())
 
@@ -289,8 +293,7 @@ def _format_alert(msg: EmailMessage, account_name: str) -> str:
         f"*De:* {from_display} <{msg.from_addr}>\n"
         f"*Assunto:* {subject}\n"
         f"*Recebido:* {received}\n\n"
-        f"{preview}"
-        + ("\n[...]" if len(msg.body_text or "") > 400 else "")
+        f"{preview}" + ("\n[...]" if len(msg.body_text or "") > 400 else "")
     )
 
 
@@ -368,9 +371,7 @@ async def sync_account(
 
             # Checar regras ativas que incluem esta conta
             applicable_rules = [
-                r for r in rules
-                if r.active
-                and (not r.account_ids or account.id in r.account_ids)
+                r for r in rules if r.active and (not r.account_ids or account.id in r.account_ids)
             ]
             for rule in applicable_rules:
                 if rule.id in (msg_obj.alerted_rule_ids or []):
@@ -454,17 +455,19 @@ def _imap_fetch(
                 except Exception:
                     pass
 
-            messages.append({
-                "uid": uid,
-                "folder": "INBOX",
-                "from_addr": from_addr or from_raw,
-                "from_name": from_name,
-                "to_addr": to_addr,
-                "subject": subject or None,
-                "body_text": body_text,
-                "body_html": body_html,
-                "received_at": received_at,
-            })
+            messages.append(
+                {
+                    "uid": uid,
+                    "folder": "INBOX",
+                    "from_addr": from_addr or from_raw,
+                    "from_name": from_name,
+                    "to_addr": to_addr,
+                    "subject": subject or None,
+                    "body_text": body_text,
+                    "body_html": body_html,
+                    "received_at": received_at,
+                }
+            )
 
         conn.logout()
         return messages, None
@@ -526,17 +529,19 @@ def _pop3_fetch(
                     except Exception:
                         pass
 
-                messages.append({
-                    "uid": uid,
-                    "folder": "INBOX",
-                    "from_addr": from_addr or from_raw,
-                    "from_name": from_name,
-                    "to_addr": to_addr,
-                    "subject": subject or None,
-                    "body_text": body_text,
-                    "body_html": body_html,
-                    "received_at": received_at,
-                })
+                messages.append(
+                    {
+                        "uid": uid,
+                        "folder": "INBOX",
+                        "from_addr": from_addr or from_raw,
+                        "from_name": from_name,
+                        "to_addr": to_addr,
+                        "subject": subject or None,
+                        "body_text": body_text,
+                        "body_html": body_html,
+                        "received_at": received_at,
+                    }
+                )
             except Exception:
                 continue
 
@@ -581,7 +586,12 @@ async def _send_whatsapp_alerts(
 
 
 async def test_connection(
-    *, host: str, port: int, ssl: bool, username: str, password: str,
+    *,
+    host: str,
+    port: int,
+    ssl: bool,
+    username: str,
+    password: str,
     protocol: str = "imap",
 ) -> dict:
     """Testa conexão IMAP ou POP3 sem persistir nada."""
