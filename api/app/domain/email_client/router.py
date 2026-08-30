@@ -53,9 +53,7 @@ async def update_account(
     user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> schemas.EmailAccountRead:
-    account = await service.get_account(
-        session, company_id=user.company_id, account_id=account_id
-    )
+    account = await service.get_account(session, company_id=user.company_id, account_id=account_id)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     account = await service.update_account(session, account=account, data=body)
@@ -78,9 +76,7 @@ async def delete_account(
     user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
-    account = await service.get_account(
-        session, company_id=user.company_id, account_id=account_id
-    )
+    account = await service.get_account(session, company_id=user.company_id, account_id=account_id)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     await service.delete_account(session, account=account)
@@ -93,9 +89,7 @@ async def test_account_connection(
     user: Annotated[AuthenticatedUser, require_permission("settings.view")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> dict:
-    account = await service.get_account(
-        session, company_id=user.company_id, account_id=account_id
-    )
+    account = await service.get_account(session, company_id=user.company_id, account_id=account_id)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     password = service._decrypt(account.password_enc)
@@ -144,9 +138,7 @@ async def get_message(
     user: Annotated[AuthenticatedUser, require_permission("settings.view")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> schemas.EmailMessageRead:
-    msg = await service.get_message(
-        session, company_id=user.company_id, message_id=message_id
-    )
+    msg = await service.get_message(session, company_id=user.company_id, message_id=message_id)
     if not msg:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     # Marca como lido automaticamente ao abrir
@@ -162,9 +154,7 @@ async def mark_message_read(
     session: Annotated[AsyncSession, Depends(require_session)],
     is_read: bool = True,
 ) -> dict:
-    msg = await service.get_message(
-        session, company_id=user.company_id, message_id=message_id
-    )
+    msg = await service.get_message(session, company_id=user.company_id, message_id=message_id)
     if not msg:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     await service.mark_read(session, message=msg, is_read=is_read)
@@ -190,9 +180,7 @@ async def create_alert_rule(
     user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> schemas.EmailAlertRuleRead:
-    rule = await service.create_alert_rule(
-        session, company_id=user.company_id, data=body
-    )
+    rule = await service.create_alert_rule(session, company_id=user.company_id, data=body)
     await record_event(
         session,
         company_id=user.company_id,
@@ -212,9 +200,7 @@ async def update_alert_rule(
     user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> schemas.EmailAlertRuleRead:
-    rule = await service.get_alert_rule(
-        session, company_id=user.company_id, rule_id=rule_id
-    )
+    rule = await service.get_alert_rule(session, company_id=user.company_id, rule_id=rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     rule = await service.update_alert_rule(session, rule=rule, data=body)
@@ -228,9 +214,7 @@ async def delete_alert_rule(
     user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> None:
-    rule = await service.get_alert_rule(
-        session, company_id=user.company_id, rule_id=rule_id
-    )
+    rule = await service.get_alert_rule(session, company_id=user.company_id, rule_id=rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     await service.delete_alert_rule(session, rule=rule)
@@ -275,9 +259,7 @@ async def sync_one(
     session: Annotated[AsyncSession, Depends(require_session)],
 ) -> schemas.SyncResult:
     """Sincroniza uma conta específica."""
-    account = await service.get_account(
-        session, company_id=user.company_id, account_id=account_id
-    )
+    account = await service.get_account(session, company_id=user.company_id, account_id=account_id)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 

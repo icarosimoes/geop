@@ -7,6 +7,7 @@ type EmailAccount = {
   id: number;
   name: string;
   provider: string;
+  protocol: "imap" | "pop3";
   imap_host: string;
   imap_port: number;
   imap_ssl: boolean;

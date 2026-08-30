@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-import sqlalchemy as sa
 from sqlalchemy import (
     JSON,
     Boolean,
