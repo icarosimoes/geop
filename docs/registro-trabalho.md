@@ -1142,3 +1142,90 @@ geradas (pytest + driver) foram apagadas ao final (`discrepancy_reports`,
 `discrepancy_report_entries`, `audit_events` do tipo `discrepancy_report`). Recomendação:
 recriar o volume Postgres local do zero (`docker compose down -v postgres` + `up`) para
 voltar a ter o seed interativo real em vez desta mistura de fixtures.
+
+## 2026-08-30 — Consolidação de branches pendentes e CI vermelho no main
+
+Pedido: trazer todas as branches existentes (local + remoto) e mesclar na main. Antes de
+mesclar qualquer coisa, cada branch foi checada com `git branch -r --no-merged origin/main`
+e `git diff origin/main..origin/<branch> --stat` para separar o que era conteúdo real do
+que era só uma branch desatualizada.
+
+### Branches descartadas (5) — mesclar teria revertido produção
+
+`fix/ponto-ferias-mypy-user-id`, `fix/ruff-format`, `claude/contracts-improvements-pbtr75`,
+`claude/formulario-requisicao-ferias-953lxy`, `claude/github-update-y8ywht`: todas já
+tiveram PR mesclada por squash antes desta sessão, então `--no-merged` não reconhecia (SHA
+diferente), mas o diff real contra `origin/main` só mostrava **remoções** — a feature de
+e-mail (IMAP/POP3), por exemplo, apareceria como apagada se qualquer uma delas fosse
+mesclada de novo. Nenhuma ação tomada nelas; recomendação é apagar essas branches remotas
+por estarem obsoletas.
+
+### `claude/o-que-implementar-ysvcz9` — cherry-pick em vez de merge (PR #19)
+
+Mesmo diagnóstico das cinco acima (branch antiga, base anterior à feature de e-mail), mas
+com uma diferença: tinha um commit (`039b2d30`) nunca mesclado — `fix(settings)`
+`has_credentials` refletindo `api_key` real em `save_brevo`/`save_evolution`, mais
+`feat(admin/audit)` (`GET /platform/audit` paginado + tela `admin/app/(app)/audit/`).
+Trazido via `git cherry-pick 039b2d30` isolado (não a branch inteira), pra não arrastar de
+volta o resto do estado antigo dela.
+
+### `feat/discrepancy-reports-vertical-slice` — CI vermelho ao abrir a PR (#17)
+
+O branch nunca tinha sido enviado ao remoto; ao dar rebase em `origin/main` (que tinha
+avançado com férias, e-mail client etc.) apareceram dois conflitos de merge em
+`web/app/actions.ts` e `web/components/app-layout.tsx` — em ambos os casos era só adição
+paralela no mesmo ponto do arquivo (feature de férias de um lado, discrepancy-reports do
+outro), resolvidos mantendo as duas. Depois do rebase, a PR abriu com **5 checks
+falhando**:
+
+- **Alembic "multiple heads"**: `20260828_0064_discrepancy_reports.py` e
+  `20260825_0064_vacation_requests.py` (que veio do main) apontavam pro mesmo
+  `down_revision`, criando duas pontas na árvore de migrations. Corrigido renomeando a
+  migration pra `20260830_0067` e reencadeando no head atual (`20260830_0066`).
+- **mypy** (4 erros): `list(rows.all())` não tipava como `list[tuple[...]]` (troca por list
+  comprehension desestruturada); `report.status` (`str` no model) atribuído direto num
+  campo `Literal["draft","submitted","closed"]` do schema (`cast()`); `update_report`
+  retornando `DiscrepancyReportDetail | None` passado sem checar pra uma função que espera
+  não-`None` (adicionado 404 explícito).
+  - **ruff check + ruff format** (import fora de ordem em `main.py` sobrado do merge do
+  rebase, linhas >100 colunas na migration, formatação da migration e de `pdf.py`).
+
+Depois de corrigir e revalidar (ver seção "Como validar" abaixo), o PR só ficou verde
+depois que o problema seguinte (pré-existente no main) também foi resolvido.
+
+### `Web — TypeScript` e `Ruff` já vermelhos no `main` antes desta sessão (PR #18)
+
+`gh run list --branch main` confirmou que o main já estava com CI falhando havia várias
+execuções, desde os commits da feature de e-mail (`d1f6d7c1`/`d8ac304c`):
+
+- **TypeScript**: `web/app/email/page.tsx` declarava um `EmailAccount` local sem o campo
+  `protocol`; `email-client.tsx` (que recebe esses dados via prop) exige o campo desde a
+  migration `20260830_0066` — dois tipos de mesmo nome incompatíveis (`TS2719`).
+- **Ruff**: import fora de ordem em duas migrations/schemas, `datetime.now(timezone.utc)`
+  em vez de `datetime.now(UTC)` (5 ocorrências), linha >100 colunas, import não usado de
+  `sqlalchemy`, e `ruff format` (não só `ruff check`) reformatando `router.py`/`service.py`
+  inteiros.
+
+Corrigido numa PR própria (`fix/email-client-ci-issues`, não misturado com a feature de
+discrepancy-reports), mesclada primeiro; só depois o PR #17 foi rebaseado em cima do main
+já verde e re-mesclado.
+
+### Como validar CI localmente antes de abrir/atualizar PR
+
+`ruff check .`/`mypy` local não bastam — a diferença real apareceu ao reproduzir o que o
+CI faz: `docker compose up -d postgres api`, criar um banco `registro_test` **separado** do
+banco de dev (`CREATE DATABASE registro_test OWNER registro`), rodar
+`alembic upgrade head` nele e só então `pytest tests/`. Rodar a suíte contra o banco de dev
+persistente (`DATABASE_URL` padrão do container) dá **59 falhas falsas** por dados de
+fixtures antigos colidindo (CPF/e-mail duplicado, `IntegrityError`) — sintoma do mesmo
+P11.5 já registrado acima. Banco de teste apagado (`DROP DATABASE registro_test`) ao final
+de cada rodada. Faltou rodar `ruff format --check .` (não só `ruff check .`) numa primeira
+tentativa — os dois comandos verificam coisas diferentes e o CI roda ambos.
+
+**Cuidado ao mesclar em massa**: `git add -A` nesta sessão quase commitou
+`docs/aero-main/` e `docs/aero-main.zip` (dump de referência do legado, ~160MB) numa branch
+onde o `.gitignore` que os exclui ainda não tinha chegado (só existe a partir do PR #17).
+Staging feito arquivo por arquivo depois disso.
+
+**Resultado**: PRs #18 → #17 → #19 mesclados nessa ordem em `main`, cada um só depois de
+CI 100% verde (6 checks) e suíte completa (587 testes) rodando contra banco limpo.
