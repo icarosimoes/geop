@@ -1,7 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { JetBrains_Mono, Syne } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
+
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-syne",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "GEOP — Gestão Operacional",
@@ -31,12 +46,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" className={`${syne.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </head>
       <body>
         {children}

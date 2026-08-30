@@ -840,7 +840,7 @@ const styles = `
   gap: 10px;
   padding: 18px 16px 12px;
   color: #E2E6F0;
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: var(--font-syne), system-ui, sans-serif;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
@@ -855,7 +855,7 @@ const styles = `
   text-transform: uppercase;
   color: #4B5563;
   padding: 14px 16px 4px;
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: var(--font-syne), system-ui, sans-serif;
 }
 
 .ec-nav { padding: 8px 0; }
@@ -943,7 +943,7 @@ const styles = `
 }
 
 .ec-list-title {
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: var(--font-syne), system-ui, sans-serif;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: .04em;
@@ -982,7 +982,7 @@ const styles = `
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-jetbrains-mono), monospace;
 }
 
 .ec-avatar-lg { width: 44px; height: 44px; font-size: 14px; }
@@ -1009,7 +1009,7 @@ const styles = `
   font-size: 11.5px;
   color: #9CA3AF;
   flex-shrink: 0;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-jetbrains-mono), monospace;
 }
 
 .ec-subject {
@@ -1026,7 +1026,7 @@ const styles = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-jetbrains-mono), monospace;
 }
 
 .ec-unread-dot {
@@ -1076,8 +1076,8 @@ const styles = `
 }
 
 .ec-detail-from { font-size: 14px; font-weight: 600; color: #111827; }
-.ec-detail-addr { font-size: 12.5px; color: #6B7280; font-family: 'JetBrains Mono', monospace; }
-.ec-detail-date { font-size: 12px; color: #9CA3AF; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+.ec-detail-addr { font-size: 12.5px; color: #6B7280; font-family: var(--font-jetbrains-mono), monospace; }
+.ec-detail-date { font-size: 12px; color: #9CA3AF; margin-top: 2px; font-family: var(--font-jetbrains-mono), monospace; }
 
 .ec-detail-body {
   padding: 20px 24px;
@@ -1121,7 +1121,7 @@ const styles = `
 }
 
 .ec-page-header h2 {
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: var(--font-syne), system-ui, sans-serif;
   font-size: 18px;
   font-weight: 700;
   color: #111827;
@@ -1198,7 +1198,7 @@ const styles = `
 }
 
 .ec-rule-filter-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-jetbrains-mono), monospace;
   font-size: 12.5px;
   color: #374151;
 }
@@ -1258,8 +1258,8 @@ const styles = `
 
 .ec-account-info { flex: 1; min-width: 0; }
 .ec-account-name { font-size: 14.5px; font-weight: 600; color: #111827; margin: 0 0 2px; }
-.ec-account-detail { font-size: 12.5px; color: #6B7280; font-family: 'JetBrains Mono', monospace; margin: 0 0 2px; }
-.ec-protocol-badge { display: inline-block; font-size: 10px; font-family: 'JetBrains Mono', monospace; background: var(--ec-border); color: var(--ec-text-muted); border-radius: 3px; padding: 0 4px; margin-left: 4px; vertical-align: middle; }
+.ec-account-detail { font-size: 12.5px; color: #6B7280; font-family: var(--font-jetbrains-mono), monospace; margin: 0 0 2px; }
+.ec-protocol-badge { display: inline-block; font-size: 10px; font-family: var(--font-jetbrains-mono), monospace; background: var(--ec-border); color: var(--ec-text-muted); border-radius: 3px; padding: 0 4px; margin-left: 4px; vertical-align: middle; }
 .ec-account-sync { font-size: 12px; color: #9CA3AF; margin: 0; }
 .ec-account-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
@@ -1342,7 +1342,7 @@ const styles = `
 }
 
 .ec-modal-header h3 {
-  font-family: 'Syne', system-ui, sans-serif;
+  font-family: var(--font-syne), system-ui, sans-serif;
   font-size: 16px;
   font-weight: 700;
   color: #111827;
@@ -1450,7 +1450,7 @@ const styles = `
 }
 
 .ec-target-text { flex: 1; font-size: 13px; color: #15803D; font-weight: 500; }
-.ec-target-num { font-size: 11.5px; color: #6B7280; font-family: 'JetBrains Mono', monospace; }
+.ec-target-num { font-size: 11.5px; color: #6B7280; font-family: var(--font-jetbrains-mono), monospace; }
 
 .ec-add-target { display: flex; gap: 8px; }
 .ec-add-target input { flex: 1; }
