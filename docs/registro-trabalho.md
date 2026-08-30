@@ -1229,3 +1229,65 @@ Staging feito arquivo por arquivo depois disso.
 
 **Resultado**: PRs #18 → #17 → #19 mesclados nessa ordem em `main`, cada um só depois de
 CI 100% verde (6 checks) e suíte completa (587 testes) rodando contra banco limpo.
+
+## 2026-08-30 — Bugs reportados via console do browser: CSP, manifest/sw e sync IMAP
+
+Dois lotes de bugs reportados pelo usuário direto do console do browser (tela de login e
+`/email`), sem relação com o trabalho de consolidação de branches acima.
+
+### CSP bloqueando Google Fonts e `manifest.json`/`sw.js` redirecionando pro login (PR #21)
+
+Console mostrava `Loading the stylesheet 'https://fonts.googleapis.com/...' violates
+... "style-src 'self' 'unsafe-inline'"` e `Manifest: Line: 1, column: 1, Syntax error`
+(o terceiro erro do console, `content_script.js: Could not establish connection`, é de
+extensão do browser — não é bug da aplicação, ignorado).
+
+- **CSP**: `web/app/layout.tsx` carregava Syne/JetBrains Mono via `<link
+  rel="stylesheet">` apontando pro CDN do Google; `style-src`/`font-src` em
+  `next.config.ts` só permitem `'self'`. Trocado por `next/font/google` — as fontes são
+  baixadas em build time e servidas de `/_next/static/media/*.woff2` (mesma origem, zero
+  requisição externa, CSP não precisou ser afrouxada). Viram CSS vars (`--font-syne`,
+  `--font-jetbrains-mono`) aplicadas em `<html>`; `email-client.tsx` (único consumidor)
+  atualizado pra referenciá-las em vez do nome literal da fonte.
+- **manifest.json/sw.js/sw-loader.js redirecionando pro login**: o matcher do
+  `middleware.ts` excluía `favicon.ico`/`sitemap.xml`/`robots.txt`/extensões de imagem,
+  mas não esses três arquivos de `web/public/`. Um visitante sem `tenant_token` (ex.: na
+  própria tela de login) recebia um 307 pro `/login` ao pedir qualquer um deles, e o
+  browser tentava parsear a página HTML de login como manifest/service worker.
+  Adicionados à lista de exclusão do matcher.
+- **Detalhe de ambiente**: `middleware.ts` fica fora dos volumes montados em dev
+  (`docker-compose.yml` só monta `web/app`, `web/components`, `web/lib`) — a primeira
+  tentativa de validar via `curl` continuou vendo o redirect até rodar `docker compose
+  build web`.
+
+### Sincronização de e-mail não funcionava de verdade (PR #22)
+
+Ao investigar mais a fundo o "não está sincronizando" (depois de descartada a hipótese de
+CSP/manifest, já corrigidos acima), dois bugs — um em cada ponta:
+
+- **`_imap_fetch` usava número de sequência, não UID**: `conn.search(None, "ALL")` +
+  `conn.fetch(uid_bytes, ...)` operam por número de sequência da mensagem na caixa, que
+  muda a cada alteração (mensagem apagada, nova chegando). Como `sync_account` deduplica
+  pelo campo `uid` armazenado no banco, isso fazia mensagens novas serem silenciosamente
+  puladas (coincidiam com um número de sequência já visto antes) ou mensagens antigas
+  reaparecerem como "novas" depois de qualquer mudança na caixa. Trocado por `conn.uid
+  ("search", None, "ALL")`/`conn.uid("fetch", ...)` (UID persistente) — o fetch POP3 já
+  fazia isso certo via `UIDL`, IMAP passou a seguir o mesmo padrão. `None` no lugar do
+  charset é o próprio padrão do `imaplib` (mesmo formato do `search()`), mas a stub de
+  tipos não modela isso — `# type: ignore[arg-type]` documentado inline.
+- **Frontend engolia erro de sync**: `handleSync` disparava `POST
+  /api/email-client/sync` sem checar `response.ok` nem o corpo (`SyncResult[]`, que traz
+  um `error` por conta quando a sincronização falha) — sempre mostrava "Caixa de entrada
+  sincronizada." mesmo com IMAP fora do ar ou credencial errada, escondendo qualquer
+  falha real do usuário. Agora verifica o status da resposta e o `error` de cada conta,
+  mostra a mensagem real, e atualiza a lista de contas (`last_synced_at`) além das
+  mensagens.
+- **2 testes novos** (`test_email_client_sync.py`) — o domínio inteiro (`email_client`)
+  não tinha nenhum teste antes: um confirma que `_imap_fetch` usa `UID SEARCH`/`UID
+  FETCH` (não `SEARCH`/`FETCH` por sequência) e que o `uid` armazenado é o persistente;
+  outro cobre o caso de falha de `SEARCH`.
+
+**Como foi validado**: mesmo processo das PRs anteriores — stack Docker completo,
+`ruff check`/`ruff format --check`/`mypy` limpos, suíte completa (589 testes) contra
+banco de teste isolado, `tsc --noEmit` limpo, e verificação manual via `curl` real pro
+CSP/manifest (não só leitura de código).
