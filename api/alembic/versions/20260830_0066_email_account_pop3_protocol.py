@@ -7,8 +7,9 @@ Create Date: 2026-08-30
 Adiciona coluna `protocol` (imap|pop3) à tabela email_accounts.
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "20260830_0066"
 down_revision = "20260830_0065"

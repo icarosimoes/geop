@@ -6,7 +6,7 @@ import email.header
 import imaplib
 import poplib
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parseaddr, parsedate_to_datetime
 
 import structlog
@@ -100,7 +100,7 @@ async def update_account(
 
 
 async def delete_account(session: AsyncSession, *, account: EmailAccount) -> None:
-    account.deleted_at = datetime.now(timezone.utc)
+    account.deleted_at = datetime.now(UTC)
 
 
 # ── Mensagens ──
@@ -211,7 +211,7 @@ async def update_alert_rule(
 
 
 async def delete_alert_rule(session: AsyncSession, *, rule: EmailAlertRule) -> None:
-    rule.deleted_at = datetime.now(timezone.utc)
+    rule.deleted_at = datetime.now(UTC)
 
 
 # ── IMAP helpers ──
@@ -388,7 +388,7 @@ async def sync_account(
                         msg_obj.alerted_rule_ids = alerted
                         alerts_sent += 1
 
-        account.last_synced_at = datetime.now(timezone.utc)
+        account.last_synced_at = datetime.now(UTC)
 
     except Exception as exc:
         logger.error("email_sync_error", account_id=account.id, error=str(exc))
@@ -450,7 +450,7 @@ def _imap_fetch(
                 try:
                     received_at = parsedate_to_datetime(date_str)
                     if received_at.tzinfo:
-                        received_at = received_at.astimezone(timezone.utc).replace(tzinfo=None)
+                        received_at = received_at.astimezone(UTC).replace(tzinfo=None)
                 except Exception:
                     pass
 
@@ -522,7 +522,7 @@ def _pop3_fetch(
                     try:
                         received_at = parsedate_to_datetime(date_str)
                         if received_at.tzinfo:
-                            received_at = received_at.astimezone(timezone.utc).replace(tzinfo=None)
+                            received_at = received_at.astimezone(UTC).replace(tzinfo=None)
                     except Exception:
                         pass
 
@@ -613,4 +613,6 @@ async def test_connection(
 async def test_imap_connection(
     *, host: str, port: int, ssl: bool, username: str, password: str
 ) -> dict:
-    return await test_connection(host=host, port=port, ssl=ssl, username=username, password=password)
+    return await test_connection(
+        host=host, port=port, ssl=ssl, username=username, password=password
+    )
