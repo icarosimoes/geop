@@ -39,9 +39,7 @@ def generate_discrepancy_report_pdf(
         bottomMargin=2 * cm,
     )
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "DRTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=6
-    )
+    title_style = ParagraphStyle("DRTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=6)
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=12, spaceBefore=12, spaceAfter=6)
     body = styles["BodyText"]
 

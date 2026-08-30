@@ -77,11 +77,7 @@ def upgrade() -> None:
     )
 
     conn = op.get_bind()
-    conn.execute(
-        sa.text(
-            "ALTER TABLE discrepancy_reports ENABLE ROW LEVEL SECURITY"
-        )
-    )
+    conn.execute(sa.text("ALTER TABLE discrepancy_reports ENABLE ROW LEVEL SECURITY"))
     conn.execute(sa.text("ALTER TABLE discrepancy_reports FORCE ROW LEVEL SECURITY"))
     conn.execute(
         sa.text(
