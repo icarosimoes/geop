@@ -417,7 +417,14 @@ def _imap_fetch(
         conn.login(account.username, password)
         conn.select("INBOX")
 
-        status, data = conn.search(None, "ALL")
+        # UID SEARCH/FETCH (não SEARCH/FETCH por número de sequência): o número de
+        # sequência muda a cada alteração da caixa (mensagem apagada, nova mensagem
+        # chegando), o que quebraria a deduplicação por "uid" em sync_account —
+        # mensagens já sincronizadas voltariam a aparecer como novas, ou mensagens
+        # novas seriam puladas por coincidir com um número já visto antes.
+        # `None` no lugar do charset é o padrão do próprio imaplib (mesmo formato de
+        # search()); a stub de tipos não modela esse argumento como opcional.
+        status, data = conn.uid("search", None, "ALL")  # type: ignore[arg-type]
         if status != "OK":
             conn.logout()
             return [], "IMAP search falhou"
@@ -429,7 +436,7 @@ def _imap_fetch(
         messages = []
         for uid_bytes in reversed(uids):
             uid = uid_bytes.decode()
-            status, msg_data = conn.fetch(uid_bytes, "(RFC822)")
+            status, msg_data = conn.uid("fetch", uid_bytes, "(RFC822)")
             if status != "OK" or not msg_data or not msg_data[0]:
                 continue
             raw_email = msg_data[0][1]

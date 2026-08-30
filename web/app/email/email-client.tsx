@@ -124,13 +124,31 @@ export function EmailClient({
   const handleSync = useCallback(() => {
     startSync(async () => {
       try {
-        await fetch("/api/email-client/sync", { method: "POST" });
-        const res = await fetch("/api/email-client/messages?page=1&page_size=50");
-        if (res.ok) {
-          const data = await res.json();
+        const syncRes = await fetch("/api/email-client/sync", { method: "POST" });
+        if (!syncRes.ok) {
+          showFeedback("Erro ao sincronizar. Verifique a conexão IMAP.");
+          return;
+        }
+        const results: { account_id: number; error: string | null }[] = await syncRes.json();
+        const failed = results.filter((r) => r.error);
+
+        const [messagesRes, accountsRes] = await Promise.all([
+          fetch("/api/email-client/messages?page=1&page_size=50"),
+          fetch("/api/email-client/accounts"),
+        ]);
+        if (messagesRes.ok) {
+          const data = await messagesRes.json();
           setMessages(data.items);
         }
-        showFeedback("Caixa de entrada sincronizada.");
+        if (accountsRes.ok) {
+          setAccounts(await accountsRes.json());
+        }
+
+        if (failed.length > 0) {
+          showFeedback(`Erro ao sincronizar: ${failed[0].error}`);
+        } else {
+          showFeedback("Caixa de entrada sincronizada.");
+        }
       } catch {
         showFeedback("Erro ao sincronizar. Verifique a conexão IMAP.");
       }
