@@ -38,10 +38,9 @@ async def create_account(
         session,
         company_id=user.company_id,
         user_id=user.id,
-        action="email_account.create",
+        event_type="create",
         entity_type="email_account",
         entity_id=account.id,
-        after={"name": account.name, "username": account.username},
     )
     await session.commit()
     return schemas.EmailAccountRead.model_validate(account)
@@ -64,9 +63,10 @@ async def update_account(
         session,
         company_id=user.company_id,
         user_id=user.id,
-        action="email_account.update",
+        event_type="update",
         entity_type="email_account",
         entity_id=account.id,
+        diff={"updated": True},
     )
     await session.commit()
     return schemas.EmailAccountRead.model_validate(account)
@@ -197,10 +197,9 @@ async def create_alert_rule(
         session,
         company_id=user.company_id,
         user_id=user.id,
-        action="email_alert_rule.create",
+        event_type="create",
         entity_type="email_alert_rule",
         entity_id=rule.id,
-        after={"name": rule.name, "filter_type": rule.filter_type},
     )
     await session.commit()
     return schemas.EmailAlertRuleRead.model_validate(rule)
