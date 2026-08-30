@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.email_client import EmailAccount, EmailAlertRule, EmailMessage
 from app.models.employees import (
     Employee,
     EmployeeCredential,
@@ -91,6 +92,9 @@ __all__ = [
     "AuditReport",
     "AuditReportItem",
     "Base",
+    "EmailAccount",
+    "EmailAlertRule",
+    "EmailMessage",
     "BulletinPost",
     "ChecklistExecution",
     "ChecklistExecutionItem",

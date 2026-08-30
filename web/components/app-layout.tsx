@@ -3,7 +3,7 @@
 import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
-  FileText, Home, Link2, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
+  FileText, Home, Link2, Mail, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
   Receipt, Settings, ShieldCheck, Timer, Truck, Umbrella, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,6 +25,7 @@ const navOperation = [
   { slug: "contratos", label: "Contratos", icon: FileSignature, href: "/contratos" },
   { slug: "relatorios", label: "Relatórios", icon: BarChart3, href: "/relatorios" },
   { slug: "mural", label: "Mural de avisos", icon: Bell, href: "/mural" },
+  { slug: "email", label: "E-mail & Alertas WA", icon: Mail, href: "/email" },
 ];
 
 const cadastrosSub = [
