@@ -1,9 +1,10 @@
-"""Serviço do cliente de e-mail: IMAP, cache de mensagens, alertas WhatsApp."""
+"""Serviço do cliente de e-mail: IMAP/POP3, cache de mensagens, alertas WhatsApp."""
 
 import base64
 import email
 import email.header
 import imaplib
+import poplib
 import re
 from datetime import datetime, timezone
 from email.utils import parseaddr, parsedate_to_datetime
@@ -72,6 +73,7 @@ async def create_account(
         company_id=company_id,
         name=data.name,
         provider=data.provider,
+        protocol=data.protocol,
         imap_host=data.imap_host,
         imap_port=data.imap_port,
         imap_ssl=data.imap_ssl,
@@ -292,7 +294,7 @@ def _format_alert(msg: EmailMessage, account_name: str) -> str:
     )
 
 
-# ── Sincronização IMAP ──
+# ── Sincronização IMAP / POP3 ──
 
 
 async def sync_account(
@@ -304,7 +306,7 @@ async def sync_account(
     max_messages: int = 50,
 ) -> SyncResult:
     """
-    Conecta via IMAP, busca mensagens novas, armazena e dispara alertas.
+    Conecta via IMAP ou POP3, busca mensagens novas, armazena e dispara alertas.
     Executado em thread separada para não bloquear o event loop.
     """
     import asyncio
@@ -315,9 +317,11 @@ async def sync_account(
 
     try:
         password = _decrypt(account.password_enc)
+        protocol = getattr(account, "protocol", "imap") or "imap"
+        fetch_fn = _pop3_fetch if protocol == "pop3" else _imap_fetch
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: _imap_fetch(account, password, max_messages),
+            lambda: fetch_fn(account, password, max_messages),
         )
         raw_messages, fetch_error = result
         if fetch_error:
@@ -470,6 +474,79 @@ def _imap_fetch(
         return [], str(exc)
 
 
+def _pop3_fetch(
+    account: EmailAccount, password: str, max_messages: int
+) -> tuple[list[dict], str | None]:
+    """Executa fetch POP3 em thread síncrona, usando UIDL para deduplicação."""
+    try:
+        if account.imap_ssl:
+            conn = poplib.POP3_SSL(account.imap_host, account.imap_port)
+        else:
+            conn = poplib.POP3(account.imap_host, account.imap_port)
+
+        conn.user(account.username)
+        conn.pass_(password)
+
+        # UIDL mapeia número → uid único persistente
+        uidl_resp = conn.uidl()
+        # uidl_resp é lista de bytes b"num uid"
+        uid_map: list[tuple[int, str]] = []
+        for line in uidl_resp[1]:
+            parts = line.decode(errors="replace").split()
+            if len(parts) >= 2:
+                uid_map.append((int(parts[0]), parts[1]))
+
+        # Pega os mais recentes
+        uid_map = uid_map[-max_messages:]
+
+        messages = []
+        for msg_num, uid in reversed(uid_map):
+            try:
+                resp, lines, _octets = conn.retr(msg_num)
+                raw_email = b"\r\n".join(lines)
+                parsed = email.message_from_bytes(raw_email)
+
+                from_raw = parsed.get("From", "")
+                from_name_raw, from_addr = parseaddr(from_raw)
+                from_name = _decode_header(from_name_raw) or None
+
+                subject = _decode_header(parsed.get("Subject"))
+                to_addr = parsed.get("To")
+                body_text, body_html = _extract_body(parsed)
+
+                received_at = None
+                date_str = parsed.get("Date")
+                if date_str:
+                    try:
+                        received_at = parsedate_to_datetime(date_str)
+                        if received_at.tzinfo:
+                            received_at = received_at.astimezone(timezone.utc).replace(tzinfo=None)
+                    except Exception:
+                        pass
+
+                messages.append({
+                    "uid": uid,
+                    "folder": "INBOX",
+                    "from_addr": from_addr or from_raw,
+                    "from_name": from_name,
+                    "to_addr": to_addr,
+                    "subject": subject or None,
+                    "body_text": body_text,
+                    "body_html": body_html,
+                    "received_at": received_at,
+                })
+            except Exception:
+                continue
+
+        conn.quit()
+        return messages, None
+
+    except poplib.error_proto as exc:
+        return [], f"POP3 error: {exc}"
+    except Exception as exc:
+        return [], str(exc)
+
+
 async def _send_whatsapp_alerts(
     msg: EmailMessage,
     rule: EmailAlertRule,
@@ -499,24 +576,35 @@ async def _send_whatsapp_alerts(
     return all_ok
 
 
-async def test_imap_connection(
-    *, host: str, port: int, ssl: bool, username: str, password: str
+async def test_connection(
+    *, host: str, port: int, ssl: bool, username: str, password: str,
+    protocol: str = "imap",
 ) -> dict:
-    """Testa conexão IMAP sem persistir nada."""
+    """Testa conexão IMAP ou POP3 sem persistir nada."""
     import asyncio
 
     def _test() -> dict:
         try:
-            if ssl:
-                conn = imaplib.IMAP4_SSL(host, port)
+            if protocol == "pop3":
+                conn = poplib.POP3_SSL(host, port) if ssl else poplib.POP3(host, port)
+                conn.user(username)
+                conn.pass_(password)
+                conn.quit()
             else:
-                conn = imaplib.IMAP4(host, port)
-            conn.login(username, password)
-            conn.logout()
+                conn = imaplib.IMAP4_SSL(host, port) if ssl else imaplib.IMAP4(host, port)
+                conn.login(username, password)
+                conn.logout()
             return {"ok": True}
-        except imaplib.IMAP4.error as exc:
+        except (imaplib.IMAP4.error, poplib.error_proto) as exc:
             return {"ok": False, "error": str(exc)}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
     return await asyncio.get_event_loop().run_in_executor(None, _test)
+
+
+# Alias para compatibilidade retroativa
+async def test_imap_connection(
+    *, host: str, port: int, ssl: bool, username: str, password: str
+) -> dict:
+    return await test_connection(host=host, port=port, ssl=ssl, username=username, password=password)

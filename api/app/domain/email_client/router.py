@@ -99,12 +99,13 @@ async def test_account_connection(
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     password = service._decrypt(account.password_enc)
-    result = await service.test_imap_connection(
+    result = await service.test_connection(
         host=account.imap_host,
         port=account.imap_port,
         ssl=account.imap_ssl,
         username=account.username,
         password=password,
+        protocol=getattr(account, "protocol", "imap") or "imap",
     )
     return result
 

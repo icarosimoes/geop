@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Contas de e-mail ──
@@ -17,6 +17,7 @@ class WhatsAppTarget(BaseModel):
 class EmailAccountCreate(BaseModel):
     name: str = Field(..., max_length=120)
     provider: Literal["gmail", "microsoft", "imap"] = "imap"
+    protocol: Literal["imap", "pop3"] = "imap"
     imap_host: str = Field(..., max_length=255)
     imap_port: int = Field(993, ge=1, le=65535)
     imap_ssl: bool = True
@@ -31,6 +32,7 @@ class EmailAccountCreate(BaseModel):
 
 class EmailAccountUpdate(BaseModel):
     name: str | None = Field(None, max_length=120)
+    protocol: Literal["imap", "pop3"] | None = None
     imap_host: str | None = Field(None, max_length=255)
     imap_port: int | None = Field(None, ge=1, le=65535)
     imap_ssl: bool | None = None
@@ -43,6 +45,7 @@ class EmailAccountRead(BaseModel):
     id: int
     name: str
     provider: str
+    protocol: str
     imap_host: str
     imap_port: int
     imap_ssl: bool

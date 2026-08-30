@@ -19,7 +19,7 @@ from app.models.base import Base, TenantMixin, TimestampMixin
 
 
 class EmailAccount(Base, TenantMixin, TimestampMixin):
-    """Conta de e-mail IMAP configurada por tenant."""
+    """Conta de e-mail IMAP ou POP3 configurada por tenant."""
 
     __tablename__ = "email_accounts"
     __table_args__ = (Index("ix_email_accounts_company", "company_id"),)
@@ -28,7 +28,10 @@ class EmailAccount(Base, TenantMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(120))
     provider: Mapped[str] = mapped_column(String(40), default="imap")
     # gmail | microsoft | imap
+    protocol: Mapped[str] = mapped_column(String(10), default="imap")
+    # imap | pop3 — determina qual biblioteca usar na sincronização
     imap_host: Mapped[str] = mapped_column(String(255))
+    # campo reutilizado para host POP3 também (nome mantido por compatibilidade)
     imap_port: Mapped[int] = mapped_column(Integer, default=993)
     imap_ssl: Mapped[bool] = mapped_column(Boolean, default=True)
     username: Mapped[str] = mapped_column(String(255))

@@ -11,6 +11,7 @@ type EmailAccount = {
   id: number;
   name: string;
   provider: string;
+  protocol: "imap" | "pop3";
   imap_host: string;
   imap_port: number;
   imap_ssl: boolean;
@@ -51,10 +52,11 @@ type MessageDetail = MessageListItem & {
 
 type Tab = "inbox" | "alertas" | "contas";
 
-const PROVIDER_PRESETS: Record<string, { host: string; port: number; ssl: boolean }> = {
-  gmail: { host: "imap.gmail.com", port: 993, ssl: true },
-  microsoft: { host: "outlook.office365.com", port: 993, ssl: true },
-  imap: { host: "", port: 993, ssl: true },
+const PROVIDER_PRESETS: Record<string, { host: string; port: number; ssl: boolean; protocol: "imap" | "pop3" }> = {
+  gmail:     { host: "imap.gmail.com",          port: 993, ssl: true,  protocol: "imap" },
+  microsoft: { host: "outlook.office365.com",   port: 993, ssl: true,  protocol: "imap" },
+  imap:      { host: "",                         port: 993, ssl: true,  protocol: "imap" },
+  pop3:      { host: "",                         port: 995, ssl: true,  protocol: "pop3" },
 };
 
 const FILTER_TYPE_LABELS: Record<string, { label: string; icon: React.ElementType; help: string }> = {
@@ -445,7 +447,7 @@ export function EmailClient({
                     </div>
                     <div className="ec-account-info">
                       <p className="ec-account-name">{acc.name}</p>
-                      <p className="ec-account-detail">{acc.username} · {acc.imap_host}:{acc.imap_port}</p>
+                      <p className="ec-account-detail">{acc.username} · {acc.imap_host}:{acc.imap_port} <span className="ec-protocol-badge">{(acc.protocol ?? "imap").toUpperCase()}</span></p>
                       <p className="ec-account-sync">
                         {acc.last_synced_at
                           ? `Sincronizado ${formatDate(acc.last_synced_at)}`
@@ -511,13 +513,14 @@ function AccountModal({ onClose, onSaved }: {
   onClose: () => void;
   onSaved: (acc: EmailAccount) => void;
 }) {
-  const [provider, setProvider] = useState<"gmail" | "microsoft" | "imap">("gmail");
+  const [provider, setProvider] = useState<"gmail" | "microsoft" | "imap" | "pop3">("gmail");
   const preset = PROVIDER_PRESETS[provider];
   const [form, setForm] = useState({
     name: "",
     imap_host: preset.host,
     imap_port: preset.port,
     imap_ssl: preset.ssl,
+    protocol: preset.protocol as "imap" | "pop3",
     username: "",
     password: "",
   });
@@ -525,21 +528,22 @@ function AccountModal({ onClose, onSaved }: {
   const [error, setError] = useState<string | null>(null);
   const [showPass, setShowPass] = useState(false);
 
-  function applyPreset(p: "gmail" | "microsoft" | "imap") {
+  function applyPreset(p: "gmail" | "microsoft" | "imap" | "pop3") {
     setProvider(p);
     const pre = PROVIDER_PRESETS[p];
-    setForm((f) => ({ ...f, imap_host: pre.host, imap_port: pre.port, imap_ssl: pre.ssl }));
+    setForm((f) => ({ ...f, imap_host: pre.host, imap_port: pre.port, imap_ssl: pre.ssl, protocol: pre.protocol }));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const apiProvider = provider === "pop3" ? "imap" : provider; // backend usa "imap" como fallback genérico
     try {
       const res = await fetch("/api/email-client/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, provider }),
+        body: JSON.stringify({ ...form, provider: apiProvider }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -564,9 +568,9 @@ function AccountModal({ onClose, onSaved }: {
         </div>
         <form onSubmit={submit} className="ec-form">
           <div className="ec-provider-tabs">
-            {(["gmail", "microsoft", "imap"] as const).map((p) => (
+            {(["gmail", "microsoft", "imap", "pop3"] as const).map((p) => (
               <button key={p} type="button" className={`ec-provider-tab ${provider === p ? "active" : ""}`} onClick={() => applyPreset(p)}>
-                {p === "gmail" ? "Gmail" : p === "microsoft" ? "Microsoft" : "IMAP"}
+                {p === "gmail" ? "Gmail" : p === "microsoft" ? "Microsoft" : p === "imap" ? "IMAP" : "POP3"}
               </button>
             ))}
           </div>
@@ -580,12 +584,17 @@ function AccountModal({ onClose, onSaved }: {
               Para Outlook/Microsoft 365, certifique-se que o acesso IMAP está habilitado na conta e use a senha da conta ou uma senha de aplicativo se o 2FA estiver ativo.
             </div>
           )}
+          {provider === "pop3" && (
+            <div className="ec-info-box">
+              POP3 baixa os e-mails do servidor (padrão: porta 995 com SSL). Gmail POP3: <code>pop.gmail.com:995</code>. Microsoft: <code>outlook.office365.com:995</code>. Obs: POP3 não mantém pastas — todas as mensagens ficam em Caixa de entrada.
+            </div>
+          )}
           <div className="ec-field">
             <label>Nome da conta</label>
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Financeiro, Suporte..." />
           </div>
           <div className="ec-field">
-            <label>E-mail / usuário IMAP</label>
+            <label>E-mail / usuário</label>
             <input required type="email" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="conta@empresa.com" />
           </div>
           <div className="ec-field">
@@ -597,15 +606,22 @@ function AccountModal({ onClose, onSaved }: {
               </button>
             </div>
           </div>
-          {provider === "imap" && (
+          {(provider === "imap" || provider === "pop3") && (
             <div className="ec-field-row">
               <div className="ec-field ec-field-grow">
-                <label>Servidor IMAP</label>
-                <input required value={form.imap_host} onChange={(e) => setForm({ ...form, imap_host: e.target.value })} placeholder="imap.exemplo.com" />
+                <label>Servidor {provider === "pop3" ? "POP3" : "IMAP"}</label>
+                <input required value={form.imap_host} onChange={(e) => setForm({ ...form, imap_host: e.target.value })} placeholder={provider === "pop3" ? "pop.exemplo.com" : "imap.exemplo.com"} />
               </div>
               <div className="ec-field ec-field-sm">
                 <label>Porta</label>
                 <input required type="number" value={form.imap_port} onChange={(e) => setForm({ ...form, imap_port: +e.target.value })} />
+              </div>
+              <div className="ec-field ec-field-sm">
+                <label>SSL</label>
+                <select value={form.imap_ssl ? "true" : "false"} onChange={(e) => setForm({ ...form, imap_ssl: e.target.value === "true" })}>
+                  <option value="true">Sim</option>
+                  <option value="false">Não</option>
+                </select>
               </div>
             </div>
           )}
@@ -1243,6 +1259,7 @@ const styles = `
 .ec-account-info { flex: 1; min-width: 0; }
 .ec-account-name { font-size: 14.5px; font-weight: 600; color: #111827; margin: 0 0 2px; }
 .ec-account-detail { font-size: 12.5px; color: #6B7280; font-family: 'JetBrains Mono', monospace; margin: 0 0 2px; }
+.ec-protocol-badge { display: inline-block; font-size: 10px; font-family: 'JetBrains Mono', monospace; background: var(--ec-border); color: var(--ec-text-muted); border-radius: 3px; padding: 0 4px; margin-left: 4px; vertical-align: middle; }
 .ec-account-sync { font-size: 12px; color: #9CA3AF; margin: 0; }
 .ec-account-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
