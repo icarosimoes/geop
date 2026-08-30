@@ -2125,6 +2125,51 @@ export interface VacationRequestListResponse {
   page_size: number;
 }
 
+// --- Conferência de discrepâncias ---
+
+export interface DiscrepancyEntryInput {
+  location_id: number;
+  first_code?: string | null;
+  second_code?: string | null;
+  notes?: string | null;
+}
+
+export interface DiscrepancyEntry extends DiscrepancyEntryInput {
+  id: number;
+  location_name: string;
+}
+
+export type DiscrepancyStatus = "draft" | "submitted" | "closed";
+
+export interface DiscrepancyReportSummary {
+  id: number;
+  report_date: string;
+  status: DiscrepancyStatus;
+  prepared_by_user_id: number | null;
+  prepared_by_name: string | null;
+  entry_count: number;
+  discrepancy_count: number;
+  updated_at: string;
+}
+
+export interface DiscrepancyReportDetail extends DiscrepancyReportSummary {
+  checked_by_user_id: number | null;
+  checked_by_name: string | null;
+  received_by_user_id: number | null;
+  received_by_name: string | null;
+  observations: string | null;
+  entries: DiscrepancyEntry[];
+  code_summary: { code: string; count: number }[];
+  created_at: string;
+}
+
+export interface DiscrepancyReportPage {
+  items: DiscrepancyReportSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export async function fetchVacationRequests(params: {
   page?: number;
   pageSize?: number;
@@ -2183,4 +2228,85 @@ export async function createVacationRequestAdminAction(body: {
   if (response.status === 201) return { ok: true, data: await response.json() };
   const data = await response.json().catch(() => ({}));
   return { ok: false, error: data?.detail?.message ?? "Erro ao registrar férias." };
+}
+
+export interface DiscrepancyReportPayload {
+  report_date: string;
+  prepared_by_user_id?: number | null;
+  checked_by_user_id?: number | null;
+  received_by_user_id?: number | null;
+  status?: DiscrepancyStatus;
+  observations?: string | null;
+  entries: DiscrepancyEntryInput[];
+}
+
+function apiErrorMessage(payload: unknown, fallback: string): string {
+  const detail = (payload as { detail?: unknown } | null)?.detail;
+  return typeof detail === "string" ? detail : fallback;
+}
+
+export async function fetchDiscrepancyReports(
+  params: { page?: number; date_from?: string; date_to?: string; status?: string } = {},
+): Promise<DiscrepancyReportPage> {
+  const query = new URLSearchParams();
+  query.set("page", String(params.page ?? 1));
+  query.set("page_size", "20");
+  if (params.date_from) query.set("date_from", params.date_from);
+  if (params.date_to) query.set("date_to", params.date_to);
+  if (params.status) query.set("status", params.status);
+  const response = await authedFetch(`/discrepancy-reports?${query}`);
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { items: [], total: 0, page: 1, page_size: 20 };
+  }
+  return response.json();
+}
+
+export async function fetchDiscrepancyReport(id: number): Promise<DiscrepancyReportDetail | null> {
+  const response = await authedFetch(`/discrepancy-reports/${id}`);
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return null;
+  }
+  return response.json();
+}
+
+export async function createDiscrepancyReportAction(
+  body: DiscrepancyReportPayload,
+): Promise<MutationResult> {
+  const response = await authedFetch("/discrepancy-reports", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    const payload = await response.json().catch(() => null);
+    return { ok: false, error: apiErrorMessage(payload, "Erro ao criar conferência.") };
+  }
+  return { ok: true, data: await response.json() };
+}
+
+export async function updateDiscrepancyReportAction(
+  id: number,
+  body: Partial<DiscrepancyReportPayload>,
+): Promise<MutationResult> {
+  const response = await authedFetch(`/discrepancy-reports/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    const payload = await response.json().catch(() => null);
+    return { ok: false, error: apiErrorMessage(payload, "Erro ao salvar conferência.") };
+  }
+  return { ok: true, data: await response.json() };
+}
+
+export async function deleteDiscrepancyReportAction(id: number): Promise<MutationResult> {
+  const response = await authedFetch(`/discrepancy-reports/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao excluir conferência." };
+  }
+  return { ok: true };
 }

@@ -1027,3 +1027,22 @@ POST /settings/brevo/test  { to: string }  → { status: "sent", message_id }
 Dispara um e-mail real via `app.integrations.brevo.send_email()` usando a config já salva em `company_settings.brevo` (não aceita credenciais no body — sempre usa o que está persistido). `422 not_configured` se a empresa ainda não salvou nenhuma config; `502 send_failed` (com `status` = código HTTP retornado pela Brevo) se a API rejeitar a chave/remetente — cenário mais comum quando o domínio do remetente não está autenticado (SPF/DKIM) na conta Brevo, algo que a API do GEOP não verifica nem pode automatizar.
 
 Frontend `web/`: seção "Testar envio" em `/configuracoes?tab=integracoes`, só aparece depois que `has_credentials` é `true` (`BrevoSettingsSection` em `web/components/settings-sections.tsx`).
+
+### Conferência de discrepâncias (`/discrepancy-reports`) (2026-08-28)
+
+Primeiro vertical slice das oportunidades identificadas no legado — detalhamento funcional em [oportunidades-legado-operacao.md](oportunidades-legado-operacao.md).
+
+```
+GET    /discrepancy-reports          (discrepancy_report.view)   ?page&page_size&date_from&date_to&status → lista paginada
+GET    /discrepancy-reports/{id}     (discrepancy_report.view)   → detalhe com entries, resumo por código e nomes dos responsáveis
+POST   /discrepancy-reports          (discrepancy_report.create) { report_date, status?, observations?, prepared_by_user_id?, checked_by_user_id?, received_by_user_id?, entries: [{location_id, first_code?, second_code?, notes?}] }
+PATCH  /discrepancy-reports/{id}     (discrepancy_report.edit)   → mesmos campos, todos opcionais; 422 se a conferência já estiver `closed` (nenhum campo é aceito, nem voltar o status)
+DELETE /discrepancy-reports/{id}     (discrepancy_report.delete) → soft delete
+GET    /discrepancy-reports/{id}/pdf (discrepancy_report.view)   → PDF (reportlab) com meta, grade de locais e resumo por código
+```
+
+`entries` não aceita `location_id` repetido nem local de outro tenant (`422` em ambos os casos, validado no service antes de qualquer insert). `entry_count`/`discrepancy_count`/`code_summary` são sempre calculados no servidor a partir das entries — nunca aceitos do payload. `discrepancy_report_entries` não tem `company_id` próprio nem RLS direta; isolamento vem de `report_id` + verificação de tenant no service.
+
+Pendências conhecidas: sem catálogo de códigos por tenant (`first_code`/`second_code` são string livre até 40 caracteres); sem exportação Excel; sem uso de timeline/anexos.
+
+Frontend: `/conferencias` — listagem paginada com filtro por data/status, formulário com grade de locais (adicionar/remover linha) e busca de responsáveis (`UserPicker`, mesmo padrão ARIA combobox de `operational-module.tsx`). Proxy de download do PDF em `web/app/api/discrepancy-reports/[id]/pdf/route.ts` (mesmo padrão de `work-orders`).

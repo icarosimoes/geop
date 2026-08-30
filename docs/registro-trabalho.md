@@ -1083,3 +1083,62 @@ documentada em 2026-08-18 (normalizar pra naive UTC). Qualquer migration nova s�
 considerada "aplicada em produção" depois que a imagem com o `CMD` novo estiver rodando —
 antes disso (imagens já publicadas antes desta mudança), o passo manual de
 `deploy-swarm.md` ainda é necessário uma última vez.
+
+## 2026-08-28 — Conferência de discrepâncias (primeiro vertical slice do legado) e achado de controle de documentos
+
+### Conferência de discrepâncias — domínio `discrepancy_reports`
+
+Backend (migration, model, router, service) já estava em andamento, não commitado, quando
+esta sessão começou. Completado o vertical slice descrito em
+[oportunidades-legado-operacao.md](oportunidades-legado-operacao.md):
+
+- **Exportação em PDF** (`api/app/domain/discrepancy_reports/pdf.py`, reportlab): meta
+  (data, status, três responsáveis), grade de locais com linha destacada quando há
+  divergência, resumo por código e observações. Endpoint
+  `GET /discrepancy-reports/{id}/pdf`.
+- **Nomes dos responsáveis no detalhe**: `service.get_report` fazia apenas
+  `prepared_by_name` (join único); estendido para `checked_by_name`/`received_by_name`
+  via três `aliased(User)` — sem isso, editar uma conferência existente na tela
+  silenciosamente zerava `checked_by_user_id`/`received_by_user_id` ao salvar, porque o
+  frontend não tinha como pré-popular esses dois campos.
+- **8 testes** (`api/tests/test_discrepancy_reports.py`): CRUD, resumo por código, local
+  duplicado (422), fechamento bloqueia PATCH (422), isolamento cross-tenant, local de
+  outro tenant rejeitado, 403 sem permissão, PDF (`content-type` + assinatura `%PDF`).
+- **Tela `/conferencias`** (`web/app/conferencias/`): listagem paginada com filtro por
+  data/status, modal de criação/edição com grade de locais (adicionar/remover linha) e
+  três campos de busca de responsável (`UserPicker`, mesmo padrão ARIA combobox de
+  `operational-module.tsx`, mas controlado em vez de baseado em `name` de formulário não
+  controlado). Conferência `closed` desabilita todo o formulário — a API rejeita qualquer
+  PATCH nesse estado, inclusive voltar o status, então a tela evita oferecer uma ação que
+  sempre falharia. Proxy de download do PDF em
+  `web/app/api/discrepancy-reports/[id]/pdf/route.ts` (mesmo padrão de `work-orders`).
+- Verificado ponta a ponta com a skill `run-web` (criação real via browser headless,
+  toast de sucesso, linha nova na listagem com divergência em vermelho).
+
+**Pendências registradas no backlog**: catálogo de códigos por tenant (hoje é string
+livre até 40 caracteres), caminho de reabertura de conferência fechada, exportação Excel,
+timeline/anexos.
+
+### Achado novo: controle de documentos com vencimento
+
+Ao reler `docs/aero-main` além do que a análise anterior já tinha coberto, apareceu
+`DocumentRecord`/`DocumentType` (alvará, licença, certidão, contrato): status calculado no
+servidor (`pending_attachment`/`current`/`expiring_soon`/`overdue`/`no_expiration`) e
+histórico de anexo por substituição, sem tabela extra. Agnóstico de segmento — nenhum
+tenant do GEOP hoje tem onde registrar isso. Registrado como item 5 em
+`oportunidades-legado-operacao.md` e no backlog, ainda não implementado.
+
+### Nota sobre o ambiente de dev local
+
+O volume Postgres local (`geop_geop-postgres-data`) já existia antes desta sessão e está
+contaminado com dados de fixtures de teste (`a@test.com`/`b@test.com`, locais como "Sede
+LOGIN-OK") em vez do seed interativo documentado (`icaro@registro.local`/demo tenant) —
+sintoma concreto do item **P11.5** já registrado no backlog (suíte roda contra o banco de
+dev, sem `TEST_DATABASE_URL`). Para verificar a tela `/conferencias` num browser real foi
+preciso: (1) trocar a senha do usuário `a@test.com` (hash bcrypt antigo não foi salvo antes
+da troca — **não é reversível**); (2) conceder a permissão `*` ao role "Admin" (`role_id=1`
+da company 1), que estava sem nenhuma permissão associada. As ~44 conferências de teste
+geradas (pytest + driver) foram apagadas ao final (`discrepancy_reports`,
+`discrepancy_report_entries`, `audit_events` do tipo `discrepancy_report`). Recomendação:
+recriar o volume Postgres local do zero (`docker compose down -v postgres` + `up`) para
+voltar a ter o seed interativo real em vez desta mistura de fixtures.

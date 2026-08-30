@@ -10,6 +10,7 @@
 | `/reunioes` | lista e CRUD | CRUD via API + mutações server-side | API `meetings` (tabela dedicada) isolada por tenant |
 | `/relatorios-turno` | lista e CRUD + pendências inline | CRUD via API + seção HandoffSection integrada | API `shift-reports` + `handoffs` isolada por tenant |
 | `/inspecoes` | tela dedicada com abas | Inspeções: CRUD com checklist 30 itens + payload completo. Checklists: CRUD de templates com itens | API `modules/inspecoes` + `checklists/templates` |
+| `/conferencias` | lista e CRUD com grade de locais | conferência de discrepâncias por local, filtro por data/status, exportação PDF | API `discrepancy-reports` isolada por tenant |
 | `/solicitacoes-fiscais` | lista, formulário condicional, SLA, anexos e tratativa | CRUD via API + mutações server-side | API `fiscal_requests` isolada por tenant |
 | `/ordens-servico` | Kanban com drag-and-drop, toggle para visão em Lista | CRUD + transições + categorias via select + setor/unidade/prazo/comentários/participantes + export XLSX/PDF + clone. Absorveu `/ocorrencias` em 2026-07-14 (rota removida) | API `work-orders` + `work-orders/categories` + `work-orders/export` isolada por tenant |
 | `/preventivas` | lista e CRUD | CRUD via API + geração automática de OS | API `preventive-plans` isolada por tenant |
