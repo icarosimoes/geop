@@ -1,7 +1,7 @@
 """add operational discrepancy reports
 
-Revision ID: 20260828_0064
-Revises: 20260818_0063
+Revision ID: 20260830_0067
+Revises: 20260830_0066
 Create Date: 2026-08-28
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "20260828_0064"
-down_revision = "20260818_0063"
+revision = "20260830_0067"
+down_revision = "20260830_0066"
 branch_labels = None
 depends_on = None
 
@@ -33,8 +33,12 @@ def upgrade() -> None:
         sa.Column("received_by_user_id", sa.Integer(), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("observations", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.Column("deleted_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["prepared_by_user_id"], ["users.id"], ondelete="SET NULL"),
@@ -55,8 +59,12 @@ def upgrade() -> None:
         sa.Column("first_code", sa.String(length=40), nullable=True),
         sa.Column("second_code", sa.String(length=40), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["report_id"], ["discrepancy_reports.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["location_id"], ["locations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -28,7 +28,7 @@ def _summary(row: service.DiscrepancyReportRow) -> DiscrepancyReportSummary:
     return DiscrepancyReportSummary(
         id=report.id,
         report_date=report.report_date,
-        status=report.status,
+        status=cast(DiscrepancyStatus, report.status),
         prepared_by_user_id=report.prepared_by_user_id,
         prepared_by_name=row.prepared_by_name,
         entry_count=row.entry_count,
@@ -53,7 +53,7 @@ def _detail(detail: service.DiscrepancyReportDetail) -> DiscrepancyReportDetail:
     return DiscrepancyReportDetail(
         id=report.id,
         report_date=report.report_date,
-        status=report.status,
+        status=cast(DiscrepancyStatus, report.status),
         prepared_by_user_id=report.prepared_by_user_id,
         prepared_by_name=detail.prepared_by_name,
         checked_by_user_id=report.checked_by_user_id,
@@ -132,9 +132,10 @@ async def update_discrepancy_report(
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=422, detail={"code": "no_fields"})
-    return _detail(
-        await service.update_report(session, user.company_id, user.id, report_id, updates)
-    )
+    detail = await service.update_report(session, user.company_id, user.id, report_id, updates)
+    if detail is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    return _detail(detail)
 
 
 @router.get("/{report_id}/pdf")

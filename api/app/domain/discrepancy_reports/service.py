@@ -39,7 +39,7 @@ async def _entry_rows(
         )
         .order_by(Location.name, DiscrepancyReportEntry.id)
     )
-    return list(rows.all())
+    return [(entry, location_name) for entry, location_name in rows.all()]
 
 
 def _discrepancy_count(entries: list[tuple[DiscrepancyReportEntry, str]]) -> int:

@@ -18,13 +18,13 @@ from app.core.rate_limit import limiter
 from app.domain.apartment_inspections.router import router as apartment_inspections_router
 from app.domain.attachments.router import router as attachments_router
 from app.domain.audit_reports.router import router as audit_reports_router
-from app.domain.discrepancy_reports.router import router as discrepancy_reports_router
 from app.domain.auth.router import router as auth_router
 from app.domain.bulletin.router import router as bulletin_router
 from app.domain.check_suites.router import router as check_suites_router
 from app.domain.checklists.router import router as checklists_router
 from app.domain.contracts.router import router as contracts_router
 from app.domain.dashboard.router import router as dashboard_router
+from app.domain.discrepancy_reports.router import router as discrepancy_reports_router
 from app.domain.email_client.router import router as email_client_router
 from app.domain.employees.router import router as employees_router
 from app.domain.fiscal_requests.router import router as fiscal_requests_router
