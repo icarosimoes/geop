@@ -240,17 +240,17 @@ def _extract_body(msg: email.message.Message) -> tuple[str | None, str | None]:
             ct = part.get_content_type()
             if ct == "text/plain" and text_plain is None:
                 payload = part.get_payload(decode=True)
-                if payload:
+                if isinstance(payload, bytes):
                     charset = part.get_content_charset() or "utf-8"
                     text_plain = payload.decode(charset, errors="replace")
             elif ct == "text/html" and text_html is None:
                 payload = part.get_payload(decode=True)
-                if payload:
+                if isinstance(payload, bytes):
                     charset = part.get_content_charset() or "utf-8"
                     text_html = payload.decode(charset, errors="replace")
     else:
         payload = msg.get_payload(decode=True)
-        if payload:
+        if isinstance(payload, bytes):
             charset = msg.get_content_charset() or "utf-8"
             content = payload.decode(charset, errors="replace")
             if msg.get_content_type() == "text/html":
@@ -407,6 +407,7 @@ def _imap_fetch(
 ) -> tuple[list[dict], str | None]:
     """Executa fetch IMAP em thread síncrona."""
     try:
+        conn: imaplib.IMAP4
         if account.imap_ssl:
             conn = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
         else:
@@ -479,6 +480,7 @@ def _pop3_fetch(
 ) -> tuple[list[dict], str | None]:
     """Executa fetch POP3 em thread síncrona, usando UIDL para deduplicação."""
     try:
+        conn: poplib.POP3
         if account.imap_ssl:
             conn = poplib.POP3_SSL(account.imap_host, account.imap_port)
         else:
@@ -562,7 +564,9 @@ async def _send_whatsapp_alerts(
     text = _format_alert(msg, account_name)
     all_ok = True
     for target in rule.whatsapp_targets:
-        number = target.get("number") if isinstance(target, dict) else target.number
+        number: str | None = target.get("number") if isinstance(target, dict) else target.number
+        if not number:
+            continue
         result = await send_text(
             api_url=evolution_config["api_url"],
             api_key=evolution_config["api_key"],
@@ -586,14 +590,16 @@ async def test_connection(
     def _test() -> dict:
         try:
             if protocol == "pop3":
-                conn = poplib.POP3_SSL(host, port) if ssl else poplib.POP3(host, port)
-                conn.user(username)
-                conn.pass_(password)
-                conn.quit()
+                pop: poplib.POP3 = poplib.POP3_SSL(host, port) if ssl else poplib.POP3(host, port)
+                pop.user(username)
+                pop.pass_(password)
+                pop.quit()
             else:
-                conn = imaplib.IMAP4_SSL(host, port) if ssl else imaplib.IMAP4(host, port)
-                conn.login(username, password)
-                conn.logout()
+                imap: imaplib.IMAP4 = (
+                    imaplib.IMAP4_SSL(host, port) if ssl else imaplib.IMAP4(host, port)
+                )
+                imap.login(username, password)
+                imap.logout()
             return {"ok": True}
         except (imaplib.IMAP4.error, poplib.error_proto) as exc:
             return {"ok": False, "error": str(exc)}
