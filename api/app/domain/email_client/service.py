@@ -100,7 +100,10 @@ async def update_account(
 
 
 async def delete_account(session: AsyncSession, *, account: EmailAccount) -> None:
-    account.deleted_at = datetime.now(UTC)
+    # naive UTC: deleted_at é TIMESTAMP WITHOUT TIME ZONE — asyncpg rejeita
+    # datetime com tzinfo aqui (mesma causa do incidente documentado do
+    # erpsolid em docs/registro-trabalho.md).
+    account.deleted_at = datetime.now(UTC).replace(tzinfo=None)
 
 
 # ── Mensagens ──
@@ -215,7 +218,7 @@ async def update_alert_rule(
 
 
 async def delete_alert_rule(session: AsyncSession, *, rule: EmailAlertRule) -> None:
-    rule.deleted_at = datetime.now(UTC)
+    rule.deleted_at = datetime.now(UTC).replace(tzinfo=None)  # naive UTC, ver delete_account
 
 
 # ── IMAP helpers ──
@@ -389,7 +392,8 @@ async def sync_account(
                         msg_obj.alerted_rule_ids = alerted
                         alerts_sent += 1
 
-        account.last_synced_at = datetime.now(UTC)
+        # naive UTC, ver delete_account
+        account.last_synced_at = datetime.now(UTC).replace(tzinfo=None)
 
     except Exception as exc:
         logger.error("email_sync_error", account_id=account.id, error=str(exc))
