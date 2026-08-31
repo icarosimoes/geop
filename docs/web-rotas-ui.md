@@ -169,6 +169,28 @@ Redesenhado em 2026-07-09: o componente original (`contracts-manager.tsx`) tinha
 
 Corrigidos dois bugs de backend descobertos ao testar o CRUD pela primeira vez (nenhum teste automatizado cobria suppliers/contracts): `record_event()` era chamado com argumentos posicionais em `app/domain/contracts/service.py` inteiro, mas a função só aceita `session` posicional (resto é keyword-only) — toda mutação (criar/editar/excluir fornecedor e contrato, aditivo, aprovação) quebrava com `TypeError`. E `deleted_at`/`decided_at` eram setados com `datetime.now(UTC)` (aware) contra colunas `TIMESTAMP WITHOUT TIME ZONE` — `datetime.now()` (naive) é a convenção usada em todos os outros domínios do projeto.
 
+## Comercial (`/comercial/orcamentos`, `/comercial/vendas`, `/cadastros/clientes`)
+
+Pipeline cliente → orçamento → aceite → venda → faturamento/cobrança, detalhado em
+[comercial.md](comercial.md). `/cadastros/clientes` segue o mesmo padrão de
+`/cadastros/fornecedores` (page.tsx + manager.tsx + actions.ts próprios, sem sub-entidade de
+contatos). `/comercial/orcamentos` e `/comercial/vendas` reaproveitam o mesmo sistema visual de
+`/contratos` (`.module-*`/`.modal-layer`+`.record-modal`/`.status-*`) — nenhuma classe CSS
+nova, só composição das existentes.
+
+`/orcamento/[token]` é a única rota do sistema **fora do login**: o cliente do tenant abre esse
+link (recebido fora do GEOP, ex.: WhatsApp/e-mail) sem autenticação nenhuma e aprova/recusa o
+orçamento. Liberada explicitamente em `PUBLIC_PREFIXES` no `middleware.ts` — sem essa entrada
+o middleware redireciona qualquer rota sem cookie de sessão pra `/login`, inclusive esta. Como
+`middleware.ts` fica fora dos diretórios montados como volume no `docker-compose.yml`
+(`./web/app`, `./web/components`, `./web/lib`), uma mudança nele só entra em vigor com
+`docker compose build web`, não com `docker restart geop-web-1`.
+
+O dashboard ganhou um card "Funil comercial" (`components/commercial-funnel-card.tsx`) com os
+5 números do pipeline (orçado/aprovado/entregue/faturado/recebido), buscado server-side em
+`dashboard/page.tsx` — some da tela (sem quebrar o resto do dashboard) se a requisição falhar,
+ex. usuário sem `commercial.view`.
+
 ## Tratativa (timeline de conversa)
 
 Todo registro operacional possui uma timeline de tratativa (`history`) no estilo de conversa de ticket. A thread aparece em dois lugares:

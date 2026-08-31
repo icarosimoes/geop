@@ -16,6 +16,7 @@ ALLOWED_ENTITY_TYPES = {
     "module_record",
     "employee_payslip",
     "contract",
+    "quote",
 }
 
 

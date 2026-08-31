@@ -1821,3 +1821,97 @@ mudança, mesmo conjunto exato de testes (confirmado rodando a suíte com `git s
 comparar contra o `main` sem as alterações) — é a contaminação de dados do banco de dev já
 registrada no backlog (P11.5: suíte roda contra o banco de dev, sem `TEST_DATABASE_URL`), não
 regressão desta mudança. `npx tsc --noEmit` limpo em `web/` e `admin/`.
+
+## 2026-08-31 — Módulo comercial: orçamento, venda, instalação, faturamento e cobrança
+
+Pedido do usuário: acompanhar em formato de gestão o que foi orçado, aprovado, entregue,
+faturado e recebido de cada cliente, com o cliente aprovando/recusando o orçamento por um link
+público sem login; preparar (sem conectar ainda) a integração futura de venda/cobrança com o
+ERP Solid. Detalhamento completo em [comercial.md](comercial.md), resumo do backlog em
+[backlog.md](backlog.md#p17--módulo-comercial-orçamento-venda-instalação-faturamento-e-cobrança-2026-08-31).
+
+**Modelo**: domínio novo `app/domain/commercial/` (schemas/service/router + `public_router.py`
+separado, mesma separação de `timeclock/router.py` vs `timeclock/webhook_router.py`) e
+`app/models/commercial.py` com 6 tabelas: `Customer` (cadastro simples, sem sub-entidade de
+contatos — diferente de `Supplier`/`SupplierContact`, decisão de escopo pra manter o CRUD
+enxuto), `Quote`+`QuoteItem` (orçamento com itens produto/serviço, `subtotal`/`total`
+recalculados a cada mudança de item), `Sale` (1:1 com `Quote` aceito, entrega/instalação como
+campos da própria venda — não virou domínio próprio, evita duplicar o que `work_orders` já
+resolve pra trabalho interno), `SalesInvoice` (N por venda, ex. entrada+saldo) e `SalesPayment`
+(recebimento parcial, fatura quita sozinha quando a soma bate o valor). Nomeados
+`SalesInvoice`/`SalesPayment`, não `Invoice`/`Payment` — colidiria com
+`app.models.platform.Invoice`, a fatura de assinatura SaaS do GEOP pro tenant, domínio
+inteiramente diferente (ver nota em `domain-model.md`). Todas as 6 tabelas com RLS `ENABLE`+
+`FORCE` desde a migration original (`20260831_0075`) — diferente de `contracts`/`suppliers`,
+que nunca ganharam RLS quando foram criadas (gap conhecido, não deste trabalho).
+
+**Aceite público**: em vez de token opaco armazenado em coluna própria, o link
+(`POST /commercial/quotes/{id}/send`) usa um JWT assinado
+(`create_quote_acceptance_token`/`decode_quote_acceptance_token` em `app/core/security.py`,
+`type=quote_acceptance`, claims `sub=quote_id`+`company_id`, 90 dias) — mesma família de padrão
+já usada pra convite de usuário e SSO do erpsolid nesse arquivo. `app/domain/commercial/
+public_router.py` decodifica o token e chama `set_tenant_context` manualmente **antes** de
+qualquer query (não existe sessão de `User` nesse fluxo pra passar pelo `current_user` normal)
+— mesmo padrão de `timeclock/mobile_auth.py::require_employee_session`. Quem trava a decisão
+não é o token (ele continua "válido" pelos 90 dias inteiros), é o `status` do `Quote`: decidir
+uma vez, ou `valid_until` vencer, joga `422 invalid_state` em cima de qualquer tentativa nova
+de aceitar/recusar — sem precisar de tabela de nonce nem revogação de token.
+
+**Web**: `/cadastros/clientes` (mesmo padrão de `/cadastros/fornecedores`), `/comercial/
+orcamentos` (itens dinâmicos com totais calculados no cliente antes de enviar, link de aceite
+copiável), `/comercial/vendas` (status de entrega/instalação, faturas embutidas com registro de
+recebimento inline), e `/orcamento/[token]` — a única rota do sistema fora do login. Isso
+exigiu duas coisas que nenhuma feature anterior tinha precisado: (1) liberar a rota no
+`middleware.ts` (`PUBLIC_PREFIXES`, sem redirecionar nem pra `/login` nem pra `/dashboard`,
+diferente do tratamento que `/login` já tinha); (2) descobrir, testando, que `middleware.ts`
+fica **fora** dos diretórios montados como volume no `docker-compose.yml` do serviço `web`
+(`./web/app`, `./web/components`, `./web/lib`) — uma mudança nele só entra em vigor com
+`docker compose build web`, `docker restart geop-web-1` sozinho serve o `middleware.ts` antigo
+da imagem. Card "Funil comercial" novo no dashboard (`components/commercial-funnel-card.tsx`),
+buscado via `GET /commercial/funnel`.
+
+**Dois bugs pré-existentes achados e corrigidos, nenhum deles específico deste módulo:**
+
+1. **`AuditEvent.diff` quebrava a INSERT com `TypeError: Object of type date is not JSON
+   serializable`** assim que um diff continha `date`/`Decimal` cru — `compute_diff` guardava o
+   valor bruto do model, e a coluna `diff` (JSON) usa `json.dumps` puro, sem serializer custom
+   no engine. Só apareceu agora porque `update_sale` foi o primeiro fluxo do projeto a editar um
+   campo `Date`/`Decimal` através de `compute_diff` num teste real de ponta a ponta (contratos
+   tem campos de data também, mas nenhum teste — nem manual, nem automatizado — tinha exercitado
+   um PATCH que mudasse `start_date`/`end_date`/`signed_at`). Corrigido com um `_json_safe()`
+   recursivo em `app/core/audit.py::record_event` (ponto único de inserção — cobre tanto diffs
+   de `compute_diff` quanto os montados à mão por outros domínios), não em `compute_diff`
+   (evita duplicar a sanitização em dois lugares).
+2. **`tests/conftest.py` setava o GUC de RLS com `is_local=true` (`SET LOCAL`)** — a mesmíssima
+   classe de bug já encontrada e corrigida em produção mais cedo neste mesmo dia (ver entrada
+   "Timeline nos chamados de suporte e dois bugs de RLS a mais, achados testando" acima), só
+   que na produção usa `set_tenant_context()` (`app/core/rls.py`, já com `is_local=false`) e o
+   harness de teste tinha sua própria implementação paralela (`_current_user_test` em
+   `tests/conftest.py`, com `SELECT set_config(..., true)` direto) que nunca foi atualizada
+   junto. Qualquer teste cujo fluxo fizesse uma query depois de um `commit()` intermediário
+   (`session.refresh()` após `commit()`, padrão comum em praticamente todo `service.py` do
+   projeto) quebrava com "invalid input syntax for type integer: ''" a partir da 2ª query.
+   Corrigido chamando `set_tenant_context()` de verdade em `_current_user_test`, com `RESET
+   app.current_company_id` no `finally` de `_test_session` (par certo do `is_local=false`,
+   mesma lógica de `require_session` em produção). **Sozinho, esse fix derrubou a suíte de 123
+   falhas pra 65** — as 65 restantes são dados órfãos de execuções anteriores contra o Postgres
+   de dev compartilhado (P11.5 do backlog, sem `TEST_DATABASE_URL` isolado), não relacionadas a
+   este trabalho: confirmado que nenhuma falha restante toca `commercial`, nem qualquer arquivo
+   tocado nesta mudança.
+
+**Testes**: 6 casos novos em `test_commercial.py` — totais calculados a partir dos itens, envio
+exige ao menos 1 item, edição bloqueada depois de enviado, fluxo completo (aceite público →
+venda criada → fatura → dois recebimentos parciais → fatura quitada → funil), token de aceite
+escopado ao tenant certo (token forjado com `company_id` de outro tenant mas `quote_id` real
+→ `404`, RLS impede o vazamento), isolamento cross-tenant de cliente.
+
+**Validação**: `ruff check .`, `ruff format --check .` e `mypy app/ --ignore-missing-imports`
+limpos; `alembic upgrade head`/`downgrade -1`/`upgrade head` de novo (ida e volta limpa) e
+`alembic check` sem diffs pendentes; `npx tsc --noEmit` limpo em `web/`. Fluxo completo validado
+duas vezes: via `curl` direto na API (customer → quote → send → accept público → sale →
+invoice → payment → funnel) e de ponta a ponta pelo navegador real com o driver Playwright do
+projeto (`web/.claude/skills/run-web/`) — login, `/comercial/orcamentos` (criar, ver link de
+aceite), `/comercial/vendas`, e a página pública `/orcamento/[token]` renderizando os dados reais
+do orçamento criado, com o botão "Aprovar orçamento". `pytest tests/`: 65 falhas (era 123 antes
+do fix de RLS do harness, ver acima) — nenhuma em `test_commercial.py` nem em qualquer arquivo
+tocado por esta mudança.

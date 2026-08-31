@@ -64,4 +64,4 @@ docker logs geop-api-1 --tail 30  # debug
 
 ## Domínios implementados
 
-auth, dashboard, occurrences, users, registries, modules, procedures, notifications, timeline, settings, platform, health
+auth, dashboard, occurrences, users, registries, modules, procedures, notifications, timeline, settings, platform, health, contracts, commercial

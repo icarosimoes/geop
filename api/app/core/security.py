@@ -274,3 +274,35 @@ def decode_employee_session_token(token: str, secret: str) -> dict[str, Any]:
     if payload.get("type") != "employee_session":
         raise jwt.InvalidTokenError("tipo de token inválido")
     return payload
+
+
+def create_quote_acceptance_token(
+    *,
+    quote_id: int,
+    company_id: int,
+    secret: str,
+    days: int = 90,
+) -> str:
+    """Link público de aceite de orçamento — o cliente abre sem login. `company_id`
+    vai assinado no claim (não é lido de sessão nenhuma, já que não há uma) pra
+    permitir `set_tenant_context` ANTES de qualquer query em `quotes` (RLS, ver
+    app/core/rls.py). O token em si não é a única trava: o endpoint público só
+    aceita a decisão enquanto `Quote.status == "enviado"` e `valid_until` não
+    passou — decidir uma vez (ou o orçamento expirar) invalida o link mesmo
+    dentro da janela de `days`, sem precisar revogar o JWT."""
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "sub": str(quote_id),
+        "company_id": company_id,
+        "type": "quote_acceptance",
+        "iat": now,
+        "exp": now + timedelta(days=days),
+    }
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
+
+
+def decode_quote_acceptance_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "quote_acceptance":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload

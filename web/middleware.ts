@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_PATHS = ["/login"];
 
+// Prefixo de páginas públicas por natureza (não é "tela de login alternativa" —
+// um usuário autenticado do tenant também pode abrir o link, ex.: pra
+// conferir o que o cliente vê antes de mandar) — nunca redireciona, em
+// nenhum dos dois sentidos. Ver app/orcamento/[token]/ (aceite de orçamento
+// pelo cliente, autenticado via token JWT próprio no path, não por cookie).
+const PUBLIC_PREFIXES = ["/orcamento/"];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get("tenant_token")?.value;
 
   // Authenticated user on login page -> redirect to dashboard

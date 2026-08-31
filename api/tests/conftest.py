@@ -162,9 +162,19 @@ def app(test_session_factory):
             try:
                 yield session
             finally:
-                # SET LOCAL is transaction-scoped; rolling back also keeps a
-                # failed request from poisoning the connection pool.
                 await session.rollback()
+                if USE_POSTGRES:
+                    # Par do `set_tenant_context` (is_local=false/session-scoped)
+                    # abaixo em `_current_user_test` — mesmo RESET que
+                    # `app/core/dependencies.py::require_session` faz em produção,
+                    # senão o GUC de tenant vaza pra próxima request que reusar
+                    # essa conexão do pool.
+                    from sqlalchemy import text
+
+                    try:
+                        await session.execute(text("RESET app.current_company_id"))
+                    except Exception:
+                        await session.rollback()
 
     from typing import Annotated
 
@@ -188,12 +198,16 @@ def app(test_session_factory):
 
         cid = int(claims["company_id"])
         if USE_POSTGRES:
-            from sqlalchemy import text
+            # is_local=false (session-scoped), igual `app/core/rls.py::set_tenant_context`
+            # em produção — is_local=true (SET LOCAL, transaction-scoped) some no
+            # primeiro `commit()` do meio de uma request (comum: services fazem
+            # `commit()` e depois `session.refresh()`/mais uma query), e a policy
+            # RLS falha com "invalid input syntax for type integer: ''" a partir
+            # da 2ª query em diante. O `RESET` em `_test_session` acima é o par
+            # que evita isso vazar pra próxima request que reusar a conexão.
+            from app.core.rls import set_tenant_context
 
-            await session.execute(
-                text("SELECT set_config('app.current_company_id', :cid, true)"),
-                {"cid": str(cid)},
-            )
+            await set_tenant_context(session, cid)
 
         return AuthenticatedUser(
             id=int(claims["sub"]),

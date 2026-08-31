@@ -1,5 +1,38 @@
 # Memória do projeto
 
+## 2026-08-31 — Link público sem login: JWT com claim de tenant, não tabela de token
+
+Decisão: o aceite de orçamento pelo cliente (`/orcamento/[token]`, módulo comercial) usa um JWT
+assinado com `sub=quote_id`+`company_id` como o link inteiro — não uma coluna `token` na tabela
+com lookup direto, nem uma tabela de tokens à parte com expiração/revogação própria. Quem trava
+a decisão é o `status` do registro (`Quote.status`), não o token: decidir uma vez, ou a data de
+validade vencer, faz a mesma URL passar a devolver `422` pra sempre, mesmo dentro da janela de
+expiração do JWT.
+
+Motivos:
+
+- RLS exige o `company_id` **antes** de qualquer query (`set_tenant_context` tem que rodar
+  primeiro — ver `app/core/rls.py`). Um token opaco exigiria descobrir o tenant primeiro (não
+  dá, RLS bloqueia a busca) ou abrir uma exceção de RLS só pra essa tabela — o JWT resolve isso
+  de graça: o `company_id` vem confiável de um claim já assinado, sem precisar de uma query
+  prévia sem tenant.
+- Sem tabela de token = sem worker de limpeza de token expirado, sem índice extra, sem
+  preocupação de colisão/geração de valor aleatório.
+- O mesmo padrão já existia pra convite de usuário (`create_invite_token`) e SSO do erpsolid
+  (`create_erpsolid_sso_token`) em `app/core/security.py` — reaproveitar em vez de inventar um
+  mecanismo de token novo.
+
+Como aplicar: qualquer link público futuro que precise identificar um tenant sem sessão de
+`User` (não só aceite de cliente — qualquer "manda um link, quem recebe não tem login")
+deveria seguir o mesmo molde: `create_<algo>_token`/`decode_<algo>_token` com `type` próprio em
+`app/core/security.py`, router dedicado que chama `set_tenant_context` manualmente antes de
+qualquer query (ver `app/domain/commercial/public_router.py`, mesma ideia de
+`timeclock/mobile_auth.py::require_employee_session`), e a trava de "só decide uma vez" no
+`status` do registro-alvo, não no token. Rota nova assim também precisa entrar em
+`PUBLIC_PREFIXES` no `middleware.ts` do `web/` — e esse arquivo fica fora dos volumes montados
+no `docker-compose.yml` do serviço `web`, então a mudança só pega com rebuild da imagem, não
+com restart. Ver [comercial.md](comercial.md).
+
 ## 2026-07-04 — Portal do Colaborador: namespace de token separado por design
 
 Decisão: o `Employee` (cadastro de RH) nunca ganhou uma extensão do token `access` de

@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/app-layout";
+import { CommercialFunnelCard, type CommercialFunnel } from "@/components/commercial-funnel-card";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { currentTenantUser, tenantFetch } from "@/lib/api";
 import { redirect } from "next/navigation";
@@ -46,7 +47,18 @@ export default async function DashboardPage() {
     } catch {
       // API may not be available yet
     }
-    return <AppLayout user={user}><DashboardShell user={user} metrics={metrics} /></AppLayout>;
+    let funnel: CommercialFunnel | null = null;
+    try {
+      funnel = await tenantFetch<CommercialFunnel>("/commercial/funnel");
+    } catch {
+      // usuário pode não ter permissão commercial.view
+    }
+    return (
+      <AppLayout user={user}>
+        <DashboardShell user={user} metrics={metrics} />
+        {funnel && <CommercialFunnelCard funnel={funnel} />}
+      </AppLayout>
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "unauthorized") redirect("/login");
     throw error;
