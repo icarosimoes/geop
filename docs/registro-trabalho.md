@@ -1291,3 +1291,92 @@ CSP/manifest, já corrigidos acima), dois bugs — um em cada ponta:
 `ruff check`/`ruff format --check`/`mypy` limpos, suíte completa (589 testes) contra
 banco de teste isolado, `tsc --noEmit` limpo, e verificação manual via `curl` real pro
 CSP/manifest (não só leitura de código).
+
+## 2026-08-31 — Login com Google (OAuth2) no email_client e 500 real em produção
+
+### Incidente de produção: 500 em DELETE de conta/regra de e-mail (PR #24)
+
+Usuário reportou (via console do browser) `DELETE
+https://geop.solidsd.com.br/api/email-client/accounts/1` devolvendo 500.
+Investigado direto na origem — SSH na VPS (`ssh root@95.111.250.4`, ver
+`docs/infra/runbook-producao.md`), `docker service logs registro_api` — em vez
+de tentar adivinhar pelo código. Traceback real:
+
+```text
+asyncpg.pgproto.pgproto.timestamp_encode
+TypeError: can't subtract offset-naive and offset-aware datetimes
+```
+
+Causa: `account.deleted_at = datetime.now(UTC)` grava datetime **com tzinfo**
+numa coluna `TIMESTAMP WITHOUT TIME ZONE` — asyncpg recusa no commit. Mesma
+causa raiz do incidente já documentado do erpsolid mais acima nesta página; o
+`email_client` não tinha pego a convenção quando foi implementado. Mesmo bug
+em mais dois pontos do mesmo arquivo: `delete_alert_rule` (mesmo sintoma) e
+`sync_account` → `last_synced_at` (não derruba o `POST /sync`, porque a
+resposta já tinha sido montada antes do `session.commit()` do router — mas a
+conta nunca registrava a data real da última sincronização, falha silenciosa
+do ponto de vista do usuário). Fix: `.replace(tzinfo=None)` nos três pontos,
+mesmo padrão já usado em `_imap_fetch`/`_pop3_fetch` para `received_at`.
+
+3 testes novos (`test_email_client_accounts.py`) — o domínio inteiro não tinha
+nenhuma cobertura pra delete de conta/regra nem pro `last_synced_at`.
+Confirmado que os 3 falham reproduzindo o erro exato do log de produção
+contra o código sem o fix, e passam depois — só nesse ponto o fix foi
+considerado validado. Deploy: push em `main` disparou `publish.yml`
+automaticamente; confirmado via SSH que as duas réplicas do `registro_api`
+subiram a imagem nova (`sha-95998bfd`) antes de reportar concluído.
+
+### Login com Google (OAuth2) para contas Gmail (branch `feat/gmail-oauth-email-sync`, não mesclada)
+
+Investigando o "não está sincronizando" da conta G7Bahia (ver entrada anterior
+desta página), o usuário pediu especificamente OAuth2 em vez de senha de app,
+mesmo sabendo do escopo maior. Planejado em modo de planejamento (ver
+`docs/oportunidades-legado-operacao.md`-style de decisão) antes de codificar,
+dado o tamanho: migration nova, fluxo de autorização completo, troca de LOGIN
+por XOAUTH2, renovação automática de token, tela nova no frontend.
+
+- **Fluxo**: `POST /email-client/oauth/start` gera um state JWT curto (10min,
+  assinado com `JWT_SECRET`, `type=email_oauth_state` — mesmo padrão de
+  `create_erpsolid_sso_token`, dispensa storage de sessão pendente) e devolve
+  a `authorize_url` do Google. `GET /email-client/oauth/callback` é público
+  (chega direto do redirect do browser, sem cookie de sessão — precisa setar
+  `app.current_company_id` manualmente a partir do `state`, já que não passa
+  por `current_user`), troca o code por tokens, busca o e-mail via userinfo, e
+  grava a `EmailAccount`.
+- **Upsert por e-mail**: se já existe uma conta ativa com o mesmo e-mail do
+  Google (o caso real da G7Bahia), o callback atualiza essa linha pra oauth em
+  vez de duplicar — reconectar não exige excluir a conta quebrada antes.
+- **XOAUTH2 no IMAP**: `_imap_fetch` aceita `access_token` além de `password`;
+  com token, `conn.authenticate("XOAUTH2", ...)` em vez de `conn.login(...)`.
+  Escopo desta entrega: só Gmail, só IMAP (POP3 e Microsoft continuam por
+  senha/senha de app — documentado como não-escopo, não esquecido).
+- **Renovação preguiçosa**: sem job periódico no projeto (celery/apscheduler
+  não existem aqui), o token é renovado sob demanda em `sync_account` (margem
+  de 60s) antes do fetch — a troca com o Google é async via httpx, feita antes
+  de entrar no `run_in_executor` que roda o fetch IMAP síncrono.
+- Migration `20260831_0068`: `auth_type`, `oauth_access_token_enc`,
+  `oauth_refresh_token_enc`, `oauth_token_expires_at`; `password_enc` vira
+  nullable. Datas gravadas naive UTC desde o início (aprendido do incidente
+  documentado acima, antes de repetir o erro).
+- Frontend: aba Gmail em "Adicionar conta" vira só "Nome da conta" + botão
+  "Conectar com Google"; toast + refetch de contas ao voltar do redirect.
+  `EmailAccount` deixava de ser um tipo duplicado entre `page.tsx` e
+  `email-client.tsx` (já tinha causado o bug de CSP/manifest do PR #21) — agora
+  só um, exportado e importado.
+- Setup do Google Cloud documentado em `docs/integracoes/gmail-oauth-setup.md`
+  (usuário ainda precisa criar o app OAuth lá — não é algo que dá pra
+  automatizar por aqui). Inclui a limitação do modo Testing (até 100 usuários
+  de teste sem passar pela verificação do Google).
+
+**Verificação real, não só testes**: fluxo de erro (`?oauth=error&reason=denied`)
+e o modal do Gmail (campos manuais somem, só resta o botão) verificados num
+browser de verdade via driver Playwright (`web/.claude/skills/run-web`) —
+screenshot confirma toast "Autorização cancelada." e a URL limpa depois do
+redirect. `/oauth/start` testado contra o backend real com credenciais Google
+fake, confirmando a `authorize_url` montada corretamente (client_id, scope,
+state). 604 testes (17 novos) passando, `ruff`/`mypy`/`tsc` limpos.
+
+**Nota de segurança**: o usuário colou a senha real da conta Google
+(`redacaog7bahia@gmail.com`) no chat durante a investigação — orientado a
+trocá-la imediatamente; nunca fica salva em nenhum arquivo/commit deste
+repositório.
