@@ -1380,3 +1380,64 @@ state). 604 testes (17 novos) passando, `ruff`/`mypy`/`tsc` limpos.
 (`redacaog7bahia@gmail.com`) no chat durante a investigação — orientado a
 trocá-la imediatamente; nunca fica salva em nenhum arquivo/commit deste
 repositório.
+
+### Merge na main e deploy em produção (PRs #27–#30)
+
+Branch mesclada na `main` (`3889ca9d`) e enviada direto (`git push origin
+main`, sem PR — pedido explícito do usuário). Configurar e validar o OAuth do
+Gmail em produção de ponta a ponta expôs quatro problemas, cada um investigado
+e corrigido na hora, direto contra a VPS via SSH:
+
+- **`docker-stack.yml` sem as variáveis novas (PR #27)**: o merge só tinha
+  adicionado `GOOGLE_OAUTH_CLIENT_ID`/`SECRET`/`REDIRECT_URI` no
+  `config.py` e no `docker-compose.yml` de dev — o stack do Swarm nunca leria
+  essas vars em produção. Corrigido: secret externo `google_oauth_client_secret`
+  + as duas env vars no serviço `api`, documentado em
+  `docs/infra/deploy-swarm.md`.
+
+- **`docker-stack.yml` com a org errada na imagem (PR #28)**: ao aplicar o PR
+  #27 via `docker stack deploy`, o Swarm tentou puxar
+  `ghcr.io/icarosimoes/registro/api:sha-...` — nome antigo, de antes da troca
+  de domínio/org pra "geop" em 14/08/2026 (as imagens reais são publicadas em
+  `ghcr.io/icarosimoes/geop/...`). Pull falhou com `not found`, e o **Swarm fez
+  rollback automático** pro spec anterior sozinho — zero downtime, todos os
+  serviços seguiram `N/N` saudáveis. Bug pré-existente desde a troca de
+  domínio, nunca detectado porque o CI/CD de rotina só faz
+  `docker service update --image` por serviço (usa `${{ github.repository }}`
+  corretamente), nunca um `docker stack deploy` completo do arquivo. Corrigido
+  com `sed` trocando `registro` por `geop` nas 4 linhas de imagem.
+
+  Também notado nesse ponto: o `IMAGE_TAG` do `.env.prod` da VPS estava
+  desatualizado (apontava pra uma imagem mais antiga que a rodando de fato,
+  já atualizada via `docker service update` incremental do CI). Um
+  `docker stack deploy` ingênuo teria **rebaixado** API/web/admin/colaborador
+  — corrigido pra bater com o SHA realmente em produção antes de aplicar.
+
+- **Client OAuth criado como "Computador" em vez de "Aplicativo da Web" (PR
+  #29)**: o primeiro client criado no Google Cloud Console foi do tipo
+  errado — esse tipo não expõe URIs de redirecionamento HTTPS customizadas,
+  então qualquer login retornava `Erro 400: redirect_uri_mismatch`. Corrigido
+  criando um client novo do tipo certo. Como secrets do Swarm são imutáveis,
+  em vez de tentar sobrescrever o secret antigo criei
+  `google_oauth_client_secret_v2` e apontei o `docker-stack.yml` pra ele —
+  convenção de rotação documentada em `docs/infra/deploy-swarm.md` (próxima
+  vez: `_v3`). Secret órfão removido do Swarm depois do deploy confirmado.
+
+- **`SCOPE` sem escopo de identidade → 401 no userinfo (PR #30)**: com
+  URI e client corretos, o consentimento completava mas o callback falhava
+  com "Falha ao buscar informações da conta Google". Log real da API (`docker
+  service logs registro_api`) mostrou o motivo exato: o token exchange
+  funcionava, mas `GET oauth2/v2/userinfo` devolvia `401 UNAUTHENTICATED`
+  ("missing required authentication credential"). Causa: `SCOPE` pedia só
+  `https://mail.google.com/` (necessário pro XOAUTH2 no IMAP) — esse endpoint
+  de userinfo exige que o token também carregue escopo de identidade
+  (`email`/`openid`/`profile`), senão o Google rejeita a chamada mesmo com um
+  token válido pro Gmail. Fix: `SCOPE = "https://mail.google.com/ email"`.
+
+**Como foi validado**: cada um dos quatro problemas foi diagnosticado direto
+nos logs/estado reais da VPS (não por leitura de código), corrigido em PR
+próprio com CI verde, e o fluxo completo testado de ponta a ponta em produção
+com uma conta Gmail real (`redacaog7bahia@gmail.com`, adicionada como usuário
+de teste na tela de consentimento) até confirmar `?oauth=connected`. Backups
+de `docker-stack.yml`/`.env.prod` mantidos na VPS (`*.bak-<timestamp>`) antes
+de cada alteração.
