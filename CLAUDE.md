@@ -44,7 +44,9 @@ docs/          → documentação técnica (fonte de verdade)
 - **Auth**: JWT HS256. Access token (30min, type=access) + Refresh token (7d, type=refresh). Frontend guarda ambos em cookies httpOnly.
 - **Rate limiting**: slowapi nos endpoints sensíveis (login, refresh).
 - **Testes**: pytest + pytest-asyncio. Rodar com `.venv/bin/python -m pytest tests/ -v`.
-- **Linter**: ruff (line-length=100). Rodar com `.venv/bin/python -m ruff check app/`.
+- **Linter e formatação**: ruff (line-length=100). O CI roda `ruff check .` **e** `ruff format --check .` como passos separados — `ruff check app/` sozinho não é suficiente, já causou push com CI vermelho (`ruff format` só falha em `ruff format --check .`, silenciosamente, se você só rodar `ruff check`). Às vezes os dois discordam sobre a forma "certa" de uma linha (ex.: `ruff format` prefere juntar uma f-string concatenada numa linha só, mas o resultado estoura os 100 caracteres pro `ruff check`) — nesse caso não dá pra satisfazer os dois só reformatando; reestruture o código (variável separada, múltiplas chamadas menores) até a linha caber curta nos dois.
+- **Checagem de tipos**: mypy roda no CI (`mypy app/ --ignore-missing-imports`) como job separado do ruff. Rodar sempre antes de abrir PR, e principalmente depois de mudar o tipo de um campo/retorno usado em mais de um domínio (ex.: tornar `AuditEvent.user_id` opcional quebrou silenciosamente `contracts/service.py`, que assumia `int` não-opcional, sem que `ruff` acusasse nada).
+- **Antes de abrir PR, reproduzir o CI localmente** (não só uma parte dele): `ruff check .`, `ruff format --check .`, `mypy app/ --ignore-missing-imports`, `alembic upgrade head && alembic check`, `pytest -v` (dentro de `api/`); `npx tsc --noEmit` (dentro de `web/` **e** de `admin/` — o CI só cobre `web/`, mas `admin/` quebra do mesmo jeito em produção).
 - **Commit messages**: em português, descritivos. Co-authored-by Claude quando aplicável.
 - **Documentação**: toda doc de desenvolvimento vai em `/docs`, sem exceção.
 
