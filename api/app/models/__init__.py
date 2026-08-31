@@ -1,4 +1,12 @@
 from app.models.base import Base
+from app.models.commercial import (
+    Customer,
+    Quote,
+    QuoteItem,
+    Sale,
+    SalesInvoice,
+    SalesPayment,
+)
 from app.models.email_client import EmailAccount, EmailAlertRule, EmailMessage
 from app.models.employees import (
     Employee,
@@ -103,6 +111,7 @@ __all__ = [
     "CheckSuiteItem",
     "Company",
     "CompanySetting",
+    "Customer",
     "Employee",
     "EmployeeCredential",
     "EmployeeExternalId",
@@ -131,7 +140,12 @@ __all__ = [
     "Procedure",
     "PunchAdjustmentRequest",
     "PunchExcusal",
+    "Quote",
+    "QuoteItem",
     "Role",
+    "Sale",
+    "SalesInvoice",
+    "SalesPayment",
     "ScheduleEntry",
     "Shift",
     "ShiftHandoff",

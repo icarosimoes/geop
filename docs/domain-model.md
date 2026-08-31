@@ -39,6 +39,8 @@ Company
   ├── Supplier ──► SupplierContact
   ├── Contract ──► ContractAmendment
   │     └── ContractApprovalStep (fluxo sequential por aprovador)
+  ├── Customer ──► Quote ──► QuoteItem
+  │     └── Sale ──► SalesInvoice ──► SalesPayment (venda ao cliente, aceite por link público)
   ├── ModuleRecord (genérico: inspeções, obra, manutenção, mural)
   ├── TimeClockDevice ──► TimePunch (relógio físico, webhook Control iD)
   ├── EmployeeCredential (PIN do Portal do Colaborador, 1:1 com Employee)
@@ -71,6 +73,7 @@ Company
 | Estoque e materiais | `stock_items`, `stock_movements` | itens com quantity/min_quantity/unit/category/location. Movimentações (entrada/saída/ajuste) vinculáveis a `work_orders`. Saída valida estoque. Permissões: `stock.view/create/edit/delete` |
 | Pendências de turno | `shift_handoffs` | comunicação entre turnos com fluxo pendente → lido → resolvido. Direcionável por turno (morning/afternoon/night) e data. Vínculo opcional com `shift_reports`. Confirmação de leitura e resolução com timestamps. Permissões: `handoff.view/create/edit/delete` |
 | Contratos | `suppliers`, `supplier_contacts`, `contracts`, `contract_amendments`, `contract_approval_steps` | fornecedores com contatos múltiplos; contratos com ciclo de vida (rascunho → em_aprovacao → ativo → suspenso/encerrado); fluxo de aprovação sequential por etapas; aditivos (prazo/valor/objeto/outros) que atualizam campos do contrato; integração financeira (custo/orçamento/pagamento). Anexos via sistema genérico (`entity_type="contract"`). Permissões: `contract.view/create/edit/delete/approve` |
+| Comercial (venda ao cliente) | `customers`, `quotes`, `quote_items`, `sales`, `sales_invoices`, `sales_payments` | pipeline cliente → orçamento (itens produto/serviço, totais calculados) → aceite por link público sem login (JWT `quote_acceptance`, cria a venda automaticamente) → venda (entrega/instalação como estágios) → faturamento (N faturas por venda) → cobrança (recebimentos parciais, fatura quita sozinha). Não confundir com "Comercial e cobrança" (linha acima) — aquele é a fatura de assinatura SaaS do GEOP pro tenant; este é a venda do tenant pro cliente dele. Permissões: `commercial.view/create/edit/delete`. Ver [comercial.md](comercial.md) |
 | Notificações | `notifications`, `notification_preferences` | por tenant e usuário, `title`, `body`, `category`, `entity_type`/`entity_id` (link opcional ao registro), `read_at` para leitura, `email_sent_at` para tracking de entrega. Preferências por módulo (in_app/email) em `notification_preferences`. Destinatários por módulo em `company_settings` (chave `notification_recipients`) |
 | Anexos | `attachments` | por tenant, `entity_type`/`entity_id` polimórfico, `filename`, `content_type`, `size_bytes`, `storage_key` (MinIO/S3), `uploaded_by_user_id` (inclui `entity_type="employee_payslip"`) |
 | Ponto eletrônico (relógio físico) | `time_clock_devices`, `time_clock_enrollments`, `time_punches` | dispositivo autenticado por `webhook_token` (não JWT), `TimeClockEnrollment.external_id` mapeia matrícula do relógio → `employee_id`. `TimePunch.source` ∈ {`device`, `manual`, `mobile`} |
@@ -84,7 +87,7 @@ Company
 
 - IDs legados são preservados enquanto o MySQL for a fonte de verdade.
 - Como IDs novos podem colidir com dados fictícios, a identidade V1 é preservada por `company_id` + `legacy_id`. O campo `legacy_id` é nullable — registros criados pelo GEOP ficam com valor null; registros importados da V1 mantêm o ID original.
-- `company_id` deve participar de toda consulta de negócio. Além do filtro ORM (application-level), o PostgreSQL aplica RLS (Row-Level Security) com policies `tenant_isolation` em todas as tabelas com `company_id`. O GUC `app.current_company_id` é setado via `SET LOCAL` na dependency `current_user` — rotas platform (sem GUC) operam como superuser com `BYPASSRLS`.
+- `company_id` deve participar de toda consulta de negócio. Além do filtro ORM (application-level), o PostgreSQL aplica RLS (Row-Level Security) com policies `tenant_isolation` em todas as tabelas com `company_id`. O GUC `app.current_company_id` é setado via `set_tenant_context()` (`app/core/rls.py`, `SELECT set_config(..., is_local=false)` — escopo de **sessão**, não de transação; corrigido de um `SET LOCAL` que somia no primeiro `commit()` da request, ver [registro-trabalho.md](registro-trabalho.md#2026-08-31--timeline-nos-chamados-de-suporte-e-dois-bugs-de-rls-a-mais-achados-testando)) e `RESET` no `finally` de `require_session` antes da conexão voltar pro pool. Rotas platform (sem GUC) operam como superuser com `BYPASSRLS`.
 - `deleted_at` significa exclusão lógica; registros apagados não autenticam nem aparecem por padrão.
 - Anexos exigem inventário de caminho físico, metadados e política de acesso antes do corte.
 - Dinheiro, se surgir em módulos futuros, usa centavos inteiros ou `Decimal`, nunca `float`.

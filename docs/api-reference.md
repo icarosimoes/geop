@@ -186,6 +186,29 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `DELETE` | `/contracts/{id}` | `contract.delete` | soft delete de contrato |
 | `POST` | `/contracts/{id}/amendments` | `contract.edit` | registra aditivo (atualiza end_date/total_value no contrato) |
 | `POST` | `/contracts/{id}/approve` | `contract.approve` | aprovador decide sua etapa (`{approved, comment?}`) |
+| `GET` | `/commercial/customers` | `commercial.view` | clientes paginados (filtro: search, active_only) |
+| `GET` | `/commercial/customers/options` | `commercial.view` | lista simplificada para autocomplete |
+| `GET` | `/commercial/customers/{id}` | `commercial.view` | detalhe do cliente |
+| `POST` | `/commercial/customers` | `commercial.create` | cria cliente |
+| `PATCH` | `/commercial/customers/{id}` | `commercial.edit` | atualiza cliente |
+| `DELETE` | `/commercial/customers/{id}` | `commercial.delete` | soft delete de cliente |
+| `GET` | `/commercial/quotes` | `commercial.view` | orçamentos paginados (filtros: search, status, customer_id) |
+| `GET` | `/commercial/quotes/{id}` | `commercial.view` | detalhe com itens; inclui `acceptance_url` quando `status="enviado"` |
+| `POST` | `/commercial/quotes` | `commercial.create` | cria orçamento com itens |
+| `PATCH` | `/commercial/quotes/{id}` | `commercial.edit` | atualiza — só permitido em `rascunho` (`422` fora disso) |
+| `DELETE` | `/commercial/quotes/{id}` | `commercial.delete` | soft delete — bloqueado se `status="aceito"` (`422`) |
+| `POST` | `/commercial/quotes/{id}/send` | `commercial.edit` | envia orçamento (gera `acceptance_url`, exige ≥1 item) |
+| `POST` | `/commercial/quotes/{id}/cancel` | `commercial.edit` | cancela orçamento em rascunho/enviado |
+| `GET` | `/commercial/sales` | `commercial.view` | vendas paginadas (filtros: search, status, installation_status) |
+| `GET` | `/commercial/sales/{id}` | `commercial.view` | detalhe da venda com faturas embutidas |
+| `PATCH` | `/commercial/sales/{id}` | `commercial.edit` | atualiza status/entrega/instalação da venda |
+| `POST` | `/commercial/sales/{id}/invoices` | `commercial.edit` | cria fatura para a venda |
+| `PATCH` | `/commercial/invoices/{id}` | `commercial.edit` | atualiza fatura |
+| `POST` | `/commercial/invoices/{id}/payments` | `commercial.edit` | registra recebimento (quita a fatura automaticamente) |
+| `GET` | `/commercial/funnel` | `commercial.view` | agregados de orçado/aprovado/entregue/faturado/recebido |
+| `GET` | `/public/quotes/{token}` | pública (token JWT no path) | visualização do orçamento pelo cliente, sem login |
+| `POST` | `/public/quotes/{token}/accept` | pública (token JWT no path) | cliente aprova o orçamento — cria a venda |
+| `POST` | `/public/quotes/{token}/reject` | pública (token JWT no path) | cliente recusa o orçamento |
 
 ### Login
 
@@ -243,7 +266,7 @@ Cada domínio possui um `service.py` com a lógica de negócio separada do route
 
 ## Contrato de listas
 
-Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports` e `/work-diaries`.
+Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports`, `/work-diaries`, `/commercial/customers`, `/commercial/quotes` e `/commercial/sales`.
 
 ### Timeline
 

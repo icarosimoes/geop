@@ -167,7 +167,7 @@
 ### Alta — bloqueiam produção
 
 1. ~~**Structured logging com structlog**~~ — ✅ `app/core/logging.py` configura structlog com contextvars (company_id, user_id, request_id). Middleware em `main.py` limpa/vincula contexto por request. `auth.py` vincula company_id/user_id ao autenticar. Todos os 5 módulos que usavam `logging.getLogger` migrados para `structlog.get_logger()`. JSON em produção, console colorido em dev.
-2. ~~**Testes de integração contra PostgreSQL real**~~ — ✅ `conftest.py` detecta `DATABASE_URL` ou `TEST_DATABASE_URL` e usa PostgreSQL quando disponível (SQLite como fallback local). Em PostgreSQL, `_current_user_test` seta `SET LOCAL app.current_company_id` para exercitar RLS. CI já roda com PostgreSQL 17 + Alembic migrations. `docker-compose.test.yml` com PostgreSQL tmpfs para testes locais. `aiosqlite` adicionado a dev dependencies.
+2. ~~**Testes de integração contra PostgreSQL real**~~ — ✅ `conftest.py` detecta `DATABASE_URL` ou `TEST_DATABASE_URL` e usa PostgreSQL quando disponível (SQLite como fallback local). Em PostgreSQL, `_current_user_test` chama `set_tenant_context()` (`is_local=false`, escopo de sessão) pra exercitar RLS, com `RESET` no teardown de `_test_session` — igual `require_session` em produção; corrigido em 2026-08-31 de um `SET LOCAL` que somia no primeiro `commit()` do meio de uma request (ver [mapa.md](mapa.md#limitações-conhecidas)). CI já roda com PostgreSQL 17 + Alembic migrations. `docker-compose.test.yml` com PostgreSQL tmpfs para testes locais. `aiosqlite` adicionado a dev dependencies.
 3. ~~**CI mais robusto**~~ — ✅ CI reforçado: `pip-audit --strict` para CVEs em dependências, cobertura mínima subida para 60%, `alembic heads` para detectar branches divergentes, coverage XML como artifact.
 
 ### Média — valor operacional
@@ -533,3 +533,43 @@ Levantamento adicional em `docs/aero-main` (System Settings, Support Tickets, Da
 
 - **System Settings do legado** já tem equivalente funcional (`CompanySetting`, chave/valor em JSON por tenant, usado por Evolution/Brevo/categorias/ponto/estabelecimento). Única lacuna real (auditoria por alteração de configuração) é pequena e não prioritária.
 - **Dashboard Builder/Widgets do legado** (engine plugável com ~13 resolvers) — o GEOP já cobre o valor principal com `/dashboard/metrics` fixo. Generalizar para widgets configuráveis fica para quando houver demanda real de dashboard customizável por cliente, não antes dos itens acima.
+
+## P17 — Módulo comercial: orçamento, venda, instalação, faturamento e cobrança (2026-08-31)
+
+Pedido direto do usuário (não do inventário do legado): rastrear o que foi orçado, aprovado,
+entregue, faturado e recebido, com aceite do orçamento pelo cliente sem precisar de login.
+Detalhamento completo em [comercial.md](comercial.md).
+
+- [x] **Pipeline cliente → orçamento → venda → faturamento → cobrança** — 6 tabelas novas
+  (`customers`, `quotes`, `quote_items`, `sales`, `sales_invoices`, `sales_payments`, RLS
+  `ENABLE`+`FORCE`, migration `20260831_0075`), permissões `commercial.view/create/edit/delete`.
+  Orçamento com itens produto/serviço e totais recalculados automaticamente; aceite por link
+  público assinado (JWT `quote_acceptance`, sem login, sem tabela de token — o estado do
+  `Quote` é a única trava) cria a venda sozinho; venda rastreia entrega/instalação como
+  estágios (não duplica `work_orders`); faturamento admite N faturas por venda; cobrança com
+  recebimento parcial, fatura quita sozinha quando a soma bate. Frontend:
+  `/cadastros/clientes`, `/comercial/orcamentos`, `/comercial/vendas`, página pública
+  `/orcamento/[token]` (liberada em `middleware.ts`), card "Funil comercial" no dashboard. 6
+  testes em `test_commercial.py`, incluindo isolamento cross-tenant do link público.
+  `SalesInvoice`/`SalesPayment` (não `Invoice`/`Payment`) para não colidir com
+  `app.models.platform.Invoice` (fatura de assinatura SaaS do GEOP, domínio diferente — ver
+  nota em [domain-model.md](domain-model.md)). Campos `erpsolid_external_id` preparados em
+  `Sale`/`SalesInvoice`/`SalesPayment` para push futuro, nada conectado ainda.
+- [x] **Dois bugs pré-existentes achados e corrigidos no caminho** — `AuditEvent.diff` quebrava
+  a INSERT com `TypeError: Object of type date is not JSON serializable` assim que um diff
+  continha `date`/`Decimal` cru (ex.: editar `Sale.delivered_at`); `compute_diff`/`record_event`
+  não tinham serializer JSON-safe. E `tests/conftest.py` setava o GUC de RLS com `is_local=true`
+  (`SET LOCAL`), mesma classe de bug já corrigida em produção em 2026-08-31 (ver entrada de
+  "Timeline nos chamados de suporte" acima) mas nunca replicada no harness de teste — corrigido
+  pra `is_local=false` + `RESET` no teardown, igual `set_tenant_context`/`require_session`.
+  Sozinho, esse segundo fix derrubou a suíte de 123 falhas pra 65 (restantes são dados órfãos
+  de execuções anteriores contra o Postgres de dev compartilhado — ver P11.5 acima e
+  [mapa.md](mapa.md#limitações-conhecidas) — não regressão desta mudança).
+- [ ] **E-mail automático ao cliente no envio do orçamento** — hoje o link fica só na tela pra
+  copiar manualmente; a integração Brevo já existe (`app/integrations/brevo.py`), plugar em
+  `send_quote`.
+- [ ] **PDF do orçamento/venda**.
+- [ ] **Rate limit no endpoint público de aceite** (`/public/quotes/*`) — os demais endpoints
+  sensíveis do projeto (login, refresh) usam slowapi; este não tem ainda.
+- [ ] **Integração com ERP Solid** (push de venda/fatura/recebimento) — campos
+  `erpsolid_external_id` já existem, seguir o padrão de `app/domain/integrations_erpsolid/`.
