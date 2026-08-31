@@ -3,7 +3,7 @@
 import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
-  FileText, Home, LayoutList, Link2, Mail, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
+  FileText, Home, Link2, Mail, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
   Receipt, Settings, ShieldCheck, Timer, Truck, Umbrella, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,8 +19,7 @@ const navOperation = [
   { slug: "ordens-servico", label: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
   { slug: "reunioes", label: "Reuniões", icon: Users, href: "/reunioes" },
   { slug: "relatorios-turno", label: "Relatórios de turno", icon: FileText, href: "/relatorios-turno" },
-  { slug: "inspecoes", label: "Inspeções", icon: ClipboardCheck, href: "/inspecoes" },
-  { slug: "conferencias", label: "Conferência de Discrepâncias", icon: LayoutList, href: "/conferencias" },
+  { slug: "inspecoes", label: "Checklists", icon: ClipboardCheck, href: "/inspecoes" },
   { slug: "preventivas", label: "Preventivas", icon: Timer, href: "/preventivas" },
   { slug: "solicitacoes-fiscais", label: "Solicitações Fiscais", icon: Receipt, href: "/solicitacoes-fiscais" },
   { slug: "contratos", label: "Contratos", icon: FileSignature, href: "/contratos" },
@@ -88,7 +87,7 @@ export function AppLayout({ user, children }: { user: TenantUser; children: Reac
           </button>
         </div>
         <nav className="nav-list">
-          <p className="nav-section">{collapsed ? "" : "Operação"}</p>
+          <p className="nav-section" />
           {navOperation.map(({ slug, label, icon: Icon, href }) => (
             <Link key={slug} href={href} className={`nav-item ${currentSlug === slug ? "active" : ""}`} title={collapsed ? label : undefined} onClick={() => setMobileMenu(false)}>
               <Icon size={19} aria-hidden="true" />
