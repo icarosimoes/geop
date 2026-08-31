@@ -1046,3 +1046,20 @@ GET    /discrepancy-reports/{id}/pdf (discrepancy_report.view)   → PDF (report
 Pendências conhecidas: sem catálogo de códigos por tenant (`first_code`/`second_code` são string livre até 40 caracteres); sem exportação Excel; sem uso de timeline/anexos.
 
 Frontend: `/conferencias` — listagem paginada com filtro por data/status, formulário com grade de locais (adicionar/remover linha) e busca de responsáveis (`UserPicker`, mesmo padrão ARIA combobox de `operational-module.tsx`). Proxy de download do PDF em `web/app/api/discrepancy-reports/[id]/pdf/route.ts` (mesmo padrão de `work-orders`).
+
+### OAuth2 do Google para contas Gmail (`/email-client/oauth`) (2026-08-31)
+
+Gmail bloqueia login IMAP com senha normal desde 2022 — contas Gmail no email_client autenticam via OAuth2 (XOAUTH2) em vez de usuário+senha. Setup do app OAuth no Google Cloud: [gmail-oauth-setup.md](integracoes/gmail-oauth-setup.md).
+
+```
+POST /email-client/oauth/start    (settings.edit) { name } → { authorize_url }; 400 oauth_not_configured se GOOGLE_OAUTH_CLIENT_ID/REDIRECT_URI vazios
+GET  /email-client/oauth/callback (público — autenticado só pelo `state` assinado, igual /auth/sso/exchange) → redirect 302 pra {REGISTRO_WEB_URL}/email?oauth=connected|error&reason=...
+```
+
+`state` é um JWT curto (10 min, assinado com `JWT_SECRET`, `type=email_oauth_state`) carregando `company_id`/`user_id`/`account_name` — dispensa qualquer storage de sessão pendente no servidor. O callback é público (chega direto do redirect do Google, sem cookie de sessão): seta `app.current_company_id` manualmente a partir do `state` antes de qualquer query, já que não passa por `current_user`.
+
+**Upsert por e-mail**: se já existe uma `EmailAccount` ativa no tenant com o mesmo e-mail do Google autorizado (ex.: uma conta cadastrada por senha que parou de autenticar), o callback atualiza essa mesma linha para `auth_type=oauth` em vez de criar uma duplicata — é o caminho de "reconectar" uma conta quebrada, sem precisar excluí-la antes.
+
+Renovação de access token é preguiçosa (sem job periódico no projeto): acontece dentro de `sync_account`, antes do fetch, sempre que `oauth_token_expires_at` estiver a menos de 60s de expirar.
+
+Escopo desta entrega: só Gmail, só IMAP (POP3 e Microsoft continuam por senha/senha de app). Frontend: aba "Gmail" em `/email` → Contas mostra só "Nome da conta" + botão "Conectar com Google" (sem campos de host/usuário/senha).

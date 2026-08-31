@@ -1,21 +1,7 @@
 import { AppLayout } from "@/components/app-layout";
 import { currentTenantUser, tenantFetch } from "@/lib/api";
 import { redirect } from "next/navigation";
-import { EmailClient } from "./email-client";
-
-type EmailAccount = {
-  id: number;
-  name: string;
-  provider: string;
-  protocol: "imap" | "pop3";
-  imap_host: string;
-  imap_port: number;
-  imap_ssl: boolean;
-  username: string;
-  active: boolean;
-  last_synced_at: string | null;
-  created_at: string;
-};
+import { EmailClient, type EmailAccount } from "./email-client";
 
 type MessageListItem = {
   id: number;

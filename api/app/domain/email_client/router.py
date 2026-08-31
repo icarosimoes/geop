@@ -2,15 +2,25 @@
 
 from typing import Annotated
 
+import jwt
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_event
+from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
+from app.core.security import create_email_oauth_state_token, decode_email_oauth_state_token
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.email_client import schemas, service
 from app.domain.settings.router import get_company_setting
+from app.integrations import google_oauth
+from app.integrations.google_oauth import GoogleOAuthError
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/email-client", tags=["email-client"])
 
@@ -92,7 +102,16 @@ async def test_account_connection(
     account = await service.get_account(session, company_id=user.company_id, account_id=account_id)
     if not account:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
-    password = service._decrypt(account.password_enc)
+    if account.auth_type == "oauth":
+        # Testar conexão de uma conta OAuth é só garantir que o token continua
+        # válido/renovável — a sincronização de verdade já faz esse teste na prática.
+        try:
+            await service._ensure_google_token_fresh(session, account)
+            await session.commit()
+            return {"ok": True}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+    password = service._decrypt(account.password_enc or "")
     result = await service.test_connection(
         host=account.imap_host,
         port=account.imap_port,
@@ -102,6 +121,100 @@ async def test_account_connection(
         protocol=getattr(account, "protocol", "imap") or "imap",
     )
     return result
+
+
+# ── OAuth2 (Google) ──
+
+
+@router.post("/oauth/start", response_model=schemas.OAuthStartResponse)
+async def oauth_start(
+    body: schemas.OAuthStartRequest,
+    user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> schemas.OAuthStartResponse:
+    if not settings.google_oauth_client_id or not settings.google_oauth_redirect_uri:
+        raise HTTPException(status_code=400, detail={"code": "oauth_not_configured"})
+
+    state = create_email_oauth_state_token(
+        company_id=user.company_id,
+        user_id=user.id,
+        account_name=body.name,
+        secret=settings.jwt_secret,
+    )
+    authorize_url = google_oauth.build_authorize_url(
+        client_id=settings.google_oauth_client_id,
+        redirect_uri=settings.google_oauth_redirect_uri,
+        state=state,
+    )
+    return schemas.OAuthStartResponse(authorize_url=authorize_url)
+
+
+@router.get("/oauth/callback", include_in_schema=False)
+async def oauth_callback(
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    """Callback do consentimento do Google. Endpoint público (chega direto do
+    redirect do browser, sem cookie de sessão) — autenticado só pelo `state`
+    assinado, mesmo padrão de /auth/sso/exchange."""
+    web_url = settings.registro_web_url
+
+    if error:
+        return RedirectResponse(f"{web_url}/email?oauth=error&reason=denied")
+    if not code or not state:
+        return RedirectResponse(f"{web_url}/email?oauth=error&reason=invalid_request")
+
+    try:
+        claims = decode_email_oauth_state_token(state, settings.jwt_secret)
+    except jwt.InvalidTokenError:
+        return RedirectResponse(f"{web_url}/email?oauth=error&reason=invalid_state")
+
+    # Endpoint público: chega direto do redirect do Google, sem passar por
+    # current_user (que normalmente seta isso a partir do JWT de sessão) — sem
+    # isso, o RLS bloquearia silenciosamente o select/insert do EmailAccount.
+    await session.execute(
+        text("SELECT set_config('app.current_company_id', :cid, true)"),
+        {"cid": str(claims["company_id"])},
+    )
+
+    try:
+        tokens = await google_oauth.exchange_code(
+            code=code,
+            client_id=settings.google_oauth_client_id,
+            client_secret=settings.google_oauth_client_secret,
+            redirect_uri=settings.google_oauth_redirect_uri,
+        )
+        userinfo = await google_oauth.fetch_userinfo(tokens["access_token"])
+        google_email = userinfo["email"]
+    except (GoogleOAuthError, KeyError) as exc:
+        logger.error("email_oauth_callback_error", error=str(exc))
+        return RedirectResponse(f"{web_url}/email?oauth=error&reason=exchange_failed")
+
+    try:
+        account, created = await service.upsert_oauth_account(
+            session,
+            company_id=claims["company_id"],
+            google_email=google_email,
+            account_name=claims["account_name"],
+            tokens=tokens,
+        )
+    except ValueError as exc:
+        logger.error("email_oauth_callback_error", error=str(exc))
+        return RedirectResponse(f"{web_url}/email?oauth=error&reason=no_refresh_token")
+
+    await record_event(
+        session,
+        company_id=claims["company_id"],
+        user_id=claims["user_id"],
+        event_type="create" if created else "update",
+        entity_type="email_account",
+        entity_id=account.id,
+    )
+    await session.commit()
+    return RedirectResponse(f"{web_url}/email?oauth=connected")
 
 
 # ── Mensagens ──

@@ -217,3 +217,19 @@ A integração Chess Hotel, que antes criava solicitações via `POST /integrati
 
 - nomes informados em “Notificar” não correspondem a IDs e não disparam notificações;
 - alterações específicas do formulário fiscal (campos do payload como taxpayerDoc, invoiceNumber) ainda não aparecem como diff detalhado na timeline — o diff registra a mudança do objeto `payload` como um todo.
+
+## E-mail — conta Gmail via OAuth (`/email`) (2026-08-31)
+
+O modal "Adicionar conta" (`web/app/email/email-client.tsx`) foge do padrão de
+formulário-com-submit único das outras abas: quando a aba **Gmail** está
+selecionada, os campos de host/usuário/senha somem — só resta "Nome da conta" e
+um botão "Conectar com Google" que sai do app inteiro (`window.location.href`
+pra tela de consentimento do Google) em vez de fazer `POST` ao próprio GEOP.
+Abas Microsoft/IMAP/POP3 continuam com o formulário manual normal.
+
+A volta acontece via redirect do **backend** (não um route handler do
+Next.js): `GET /email-client/oauth/callback` responde com um 302 direto pra
+`/email?oauth=connected|error&reason=...`. O componente lê esse query param num
+`useEffect` (não `useSearchParams`, pra não exigir Suspense boundary só por
+causa de um toast pós-redirect), mostra o feedback e limpa a URL com
+`history.replaceState`. Ver [gmail-oauth-setup.md](integracoes/gmail-oauth-setup.md).

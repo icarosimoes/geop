@@ -216,6 +216,38 @@ def decode_erpsolid_sso_token(token: str, secret: str) -> dict[str, Any]:
     return payload
 
 
+def create_email_oauth_state_token(
+    *,
+    company_id: int,
+    user_id: int,
+    account_name: str,
+    secret: str,
+    seconds: int = 600,
+) -> str:
+    """State do fluxo OAuth2 do Google (email_client): assinado com o jwt_secret
+    normal (não é handoff entre sistemas diferentes, é o próprio GEOP se
+    autenticando através do redirect do browser) — dispensa storage de sessão
+    pendente no servidor. TTL curto: cobre só o tempo do usuário na tela de
+    consentimento do Google, não uma sessão."""
+    now = datetime.now(UTC)
+    payload = {
+        "company_id": company_id,
+        "user_id": user_id,
+        "account_name": account_name,
+        "type": "email_oauth_state",
+        "iat": now,
+        "exp": now + timedelta(seconds=seconds),
+    }
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
+
+
+def decode_email_oauth_state_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "email_oauth_state":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload
+
+
 def create_employee_session_token(
     *,
     employee_id: int,

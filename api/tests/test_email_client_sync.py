@@ -49,7 +49,7 @@ def test_imap_fetch_uses_uid_commands_not_sequence_numbers():
     ]
 
     with patch("imaplib.IMAP4_SSL", return_value=fake_conn):
-        messages, error = _imap_fetch(_account(), "senha", max_messages=50)
+        messages, error = _imap_fetch(_account(), 50, password="senha")
 
     assert error is None
     assert not fake_conn.search.called, "não deve usar SEARCH por número de sequência"
@@ -73,7 +73,31 @@ def test_imap_fetch_reports_search_failure():
     fake_conn.uid.return_value = ("NO", [b"search failed"])
 
     with patch("imaplib.IMAP4_SSL", return_value=fake_conn):
-        messages, error = _imap_fetch(_account(), "senha", max_messages=50)
+        messages, error = _imap_fetch(_account(), 50, password="senha")
 
     assert messages == []
     assert error == "IMAP search falhou"
+
+
+def test_imap_fetch_uses_xoauth2_when_access_token_given():
+    """Contas Google (auth_type=oauth) autenticam via XOAUTH2, não LOGIN — ver
+    upsert_oauth_account/_ensure_google_token_fresh em service.py."""
+    fake_conn = MagicMock()
+    fake_conn.authenticate.return_value = ("OK", [b"authenticated"])
+    fake_conn.select.return_value = ("OK", [b"1"])
+    fake_conn.uid.side_effect = [
+        ("OK", [b"101"]),
+        ("OK", [(b"101 (RFC822 {123}", RAW_EMAIL), b")"]),
+    ]
+
+    with patch("imaplib.IMAP4_SSL", return_value=fake_conn):
+        messages, error = _imap_fetch(_account(), 50, access_token="fake-access-token")
+
+    assert error is None
+    assert not fake_conn.login.called, "conta oauth não deve usar LOGIN"
+    assert fake_conn.authenticate.called
+    mechanism, callback = fake_conn.authenticate.call_args.args
+    assert mechanism == "XOAUTH2"
+    auth_string = callback(None).decode()
+    assert auth_string == "user=user@exemplo.com\x01auth=Bearer fake-access-token\x01\x01"
+    assert len(messages) == 1
