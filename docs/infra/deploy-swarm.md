@@ -64,12 +64,18 @@ Google (Gmail OAuth) do email_client estiver em uso — ver
 [gmail-oauth-setup.md](../integracoes/gmail-oauth-setup.md). Sem eles,
 `POST /email-client/oauth/start` responde `400 oauth_not_configured` e o resto do
 email_client continua funcionando normalmente. O client secret **não** vai no
-`.env.prod` — é um Docker secret separado (`google_oauth_client_secret`), criado uma
+`.env.prod` — é um Docker secret separado (`google_oauth_client_secret_v2`), criado uma
 única vez:
 
 ```bash
-printf '%s' "<client secret do Google Cloud Console>" | docker secret create google_oauth_client_secret -
+printf '%s' "<client secret do Google Cloud Console>" | docker secret create google_oauth_client_secret_v2 -
 ```
+
+> O sufixo `_v2` existe porque secrets do Swarm são imutáveis — ao rotacionar o client
+> secret (ex.: client OAuth recriado do zero em 30/08/2026 por ter sido criado como
+> "Computador" em vez de "Aplicativo da Web"), criou-se um secret novo em vez de tentar
+> sobrescrever o antigo. Próxima rotação: criar `_v3`, apontar o `docker-stack.yml` pra
+> ele, remover o secret anterior depois do deploy.
 
 A API é publicada em `api.geop.solidsd.com.br`; seus endpoints permanecem sob `/api/v1`.
 
