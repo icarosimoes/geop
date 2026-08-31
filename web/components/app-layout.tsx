@@ -4,7 +4,7 @@ import {
   BarChart3, Bell, BookOpen, Building2, CalendarClock, CalendarDays, ChevronDown,
   ClipboardCheck, ClipboardList, Clock, Cpu, FileClock, FileSignature, FileSpreadsheet,
   FileText, Home, Link2, Mail, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
-  Receipt, Settings, ShieldCheck, Timer, Truck, Umbrella, UserCog, Users, Wallet, X,
+  Settings, ShieldCheck, Timer, Truck, Umbrella, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -21,7 +21,6 @@ const navOperation = [
   { slug: "relatorios-turno", label: "Relatórios de turno", icon: FileText, href: "/relatorios-turno" },
   { slug: "inspecoes", label: "Checklists", icon: ClipboardCheck, href: "/inspecoes" },
   { slug: "preventivas", label: "Preventivas", icon: Timer, href: "/preventivas" },
-  { slug: "solicitacoes-fiscais", label: "Solicitações Fiscais", icon: Receipt, href: "/solicitacoes-fiscais" },
   { slug: "contratos", label: "Contratos", icon: FileSignature, href: "/contratos" },
   { slug: "relatorios", label: "Relatórios", icon: BarChart3, href: "/relatorios" },
   { slug: "mural", label: "Mural de avisos", icon: Bell, href: "/mural" },

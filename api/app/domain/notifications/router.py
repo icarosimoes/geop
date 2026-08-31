@@ -20,7 +20,6 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 VALID_MODULES = [
     "work_orders",
-    "fiscal_requests",
     "meetings",
     "shift_reports",
     "procedures",

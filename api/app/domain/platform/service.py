@@ -185,7 +185,7 @@ async def provision_tenant_with_admin(
     passar pelo fluxo manual do painel de plataforma.
 
     Combina `create_tenant()` com o bloco de bootstrap de role/admin usado em
-    `scripts/seed_demo_hotel_exemplo.py:105-157`."""
+    `scripts/seed_demo_hotel_exemplo.py:104-156`."""
     if document:
         existing = await session.scalar(
             select(Company.id).where(Company.document == document, Company.deleted_at.is_(None))

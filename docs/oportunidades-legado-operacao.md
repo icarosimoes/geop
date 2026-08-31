@@ -19,9 +19,8 @@ Registrar as capacidades úteis encontradas em `docs/aero-main` e orientar a evo
 ### 1. Conferência operacional de discrepâncias
 
 **Prioridade:** alta  
-**Estado:** primeiro vertical slice entregue (2026-08-28) — domínio `discrepancy_reports`.  
-**Entregue:** migration (tabela + RLS + permissões), model, schemas Pydantic, service, router (CRUD + PDF via reportlab), tela `/conferencias` (listagem paginada com filtro por data/status, formulário com grade de locais e busca de responsáveis), 8 testes cobrindo CRUD, resumo por código, local duplicado, fechamento, isolamento cross-tenant e permissão.  
-**Pendente:** códigos configuráveis por tenant (a v1 aceita string livre até 40 caracteres, sem catálogo); caminho de reabertura de conferência fechada (hoje `closed` bloqueia qualquer PATCH, inclusive voltar o status); exportação em Excel; timeline/anexos (o domínio ainda não usa `record_event` para anexos nem os serviços de attachment existentes).
+**Estado:** primeiro vertical slice entregue (2026-08-28) — domínio `discrepancy_reports` — e removido por completo em seguida (2026-08-31), decisão explícita do usuário. Ver [backlog.md](backlog.md#p15--oportunidades-do-legado-e-gestão-operacional-2026-08-28) e [registro-trabalho.md](registro-trabalho.md#remoção-de-operação-conferência-de-discrepâncias-e-fusão-inspeções--checklists).  
+**Entregue (e depois removido):** migration (tabela + RLS + permissões), model, schemas Pydantic, service, router (CRUD + PDF via reportlab), tela `/conferencias` (listagem paginada com filtro por data/status, formulário com grade de locais e busca de responsáveis), 8 testes cobrindo CRUD, resumo por código, local duplicado, fechamento, isolamento cross-tenant e permissão.
 
 A conferência registra, para cada unidade/local, duas classificações operacionais, observações e o responsável pela preparação, conferência e recebimento. No legado, a grade era específica para apartamentos; no GEOP, o modelo deve aceitar qualquer `Location` ou unidade operacional e usar códigos configuráveis por tenant.
 

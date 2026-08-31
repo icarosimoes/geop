@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
 from app.domain.auth.repository import AuthenticatedUser
-from app.domain.reports.schemas import FiscalRequestSlaReport, WorkOrderReport
-from app.domain.reports.service import build_fiscal_sla_report, build_work_orders_report
+from app.domain.reports.schemas import WorkOrderReport
+from app.domain.reports.service import build_work_orders_report
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -21,14 +21,3 @@ async def work_orders_report_endpoint(
 ) -> WorkOrderReport:
     data = await build_work_orders_report(session, user.company_id, date_from, date_to)
     return WorkOrderReport(**data)
-
-
-@router.get("/fiscal-requests-sla", response_model=FiscalRequestSlaReport)
-async def fiscal_requests_sla_report_endpoint(
-    user: Annotated[AuthenticatedUser, require_permission("report.view")],
-    session: Annotated[AsyncSession, Depends(require_session)],
-    date_from: Annotated[str | None, Query()] = None,
-    date_to: Annotated[str | None, Query()] = None,
-) -> FiscalRequestSlaReport:
-    data = await build_fiscal_sla_report(session, user.company_id, date_from, date_to)
-    return FiscalRequestSlaReport(**data)

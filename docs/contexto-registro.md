@@ -2,7 +2,7 @@
 
 ## O que e
 
-O **GEOP** (Gestao Operacional) e um SaaS de gestao operacional multitenant. Ele centraliza as rotinas do dia a dia de uma operacao com equipes e turnos — ordens de servico (ocorrencias e manutencao corretiva/preventiva em uma unica tela, com Kanban e visao em lista), solicitacoes fiscais, inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo. Hoje e usado principalmente por hoteis, mas nao e um sistema exclusivo de hotelaria — o modelo serve qualquer operacao organizada por setores e turnos.
+O **GEOP** (Gestao Operacional) e um SaaS de gestao operacional multitenant. Ele centraliza as rotinas do dia a dia de uma operacao com equipes e turnos — ordens de servico (ocorrencias e manutencao corretiva/preventiva em uma unica tela, com Kanban e visao em lista), inspecoes, reunioes, passagem de turno, checklists, estoque e diario de obra — em uma unica plataforma web acessivel de qualquer dispositivo. Hoje e usado principalmente por hoteis, mas nao e um sistema exclusivo de hotelaria — o modelo serve qualquer operacao organizada por setores e turnos.
 
 O sistema substitui um ERP legado (Laravel/Vue) por uma stack moderna, nascendo multitenant para atender multiplos clientes com isolamento completo de dados.
 
@@ -10,7 +10,6 @@ O sistema substitui um ERP legado (Laravel/Vue) por uma stack moderna, nascendo 
 
 - **Gestores operacionais** que precisam acompanhar a operacao em tempo real: o que esta pendente, quem e responsavel, qual o prazo.
 - **Equipes operacionais** (recepcao, governanca, manutencao, A&B, seguranca, ou equivalentes de outros segmentos) que abrem e tratam ordens de servico, passam turno e executam checklists.
-- **Financeiro/fiscal** que recebe solicitacoes de notas fiscais com SLA controlado.
 - **Operadores da plataforma** (admin SaaS) que gerenciam tenants, planos e assinaturas.
 
 ## Problema que resolve

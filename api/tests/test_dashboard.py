@@ -19,7 +19,6 @@ async def test_get_metrics(client):
     data = r.json()
     assert "open_occurrences" in data
     assert "my_occurrences" in data
-    assert "open_fiscal" in data
     assert "completed_month" in data
     assert "active_users" in data
     assert "active_sectors" in data
@@ -33,7 +32,6 @@ async def test_get_metrics_kpis_structure(client):
     assert r.status_code == 200
     kpis = r.json()["kpis"]
     assert "work_orders" in kpis
-    assert "fiscal_requests" in kpis
     assert "trend" in kpis
     assert isinstance(kpis["trend"], list)
 
@@ -43,12 +41,6 @@ async def test_get_metrics_kpis_structure(client):
     assert "by_status" in wo
     assert "by_priority" in wo
     assert "overdue" in wo
-
-    # Fiscal request KPIs
-    fr = kpis["fiscal_requests"]
-    assert "by_status" in fr
-    assert "by_type" in fr
-    assert "overdue" in fr
 
 
 @pytest.mark.asyncio

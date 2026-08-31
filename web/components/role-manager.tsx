@@ -21,8 +21,6 @@ type RoleItem = {
 
 const MODULE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
-  fiscal_request: "Solicitações Fiscais",
-  fiscal: "Solicitações Fiscais",
   user: "Usuários",
   users: "Usuários",
   admin: "Usuários",
@@ -53,7 +51,7 @@ const MODULE_LABELS: Record<string, string> = {
 };
 
 const MODULE_ORDER = [
-  "dashboard", "fiscal_request", "fiscal",
+  "dashboard",
   "user", "users", "admin", "registry", "registries",
   "module", "modules", "procedure", "procedures",
   "meeting", "meetings", "shift_report", "shift_reports",

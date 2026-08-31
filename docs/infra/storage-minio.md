@@ -10,7 +10,6 @@ Usuário → API (FastAPI) → MinIO (S3)
                         registro-attachments/
                         ├── {company_id}/
                         │   ├── work_order/{entity_id}/{uuid}.pdf
-                        │   ├── fiscal_request/{entity_id}/{uuid}.jpg
                         │   ├── procedure/{entity_id}/{uuid}.pdf
                         │   └── module_record/{entity_id}/{uuid}.png
                         └── ...
@@ -66,9 +65,10 @@ A API conecta ao MinIO via `http://minio:9000` (rede interna). O bucket é criad
 ### Tipos de entidade suportados
 
 - `work_order` — Ordens de serviço (absorveu Ocorrências em 2026-07-14)
-- `fiscal_request` — Solicitações fiscais
 - `procedure` — Procedimentos
 - `module_record` — Registros de módulo (inspeções, diário, etc.)
+- `employee_payslip` — Contracheques
+- `contract` — Contratos
 
 ### Tipos de arquivo permitidos
 

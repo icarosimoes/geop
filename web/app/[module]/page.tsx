@@ -17,60 +17,7 @@ export default async function ModulePage({ params, searchParams }: { params: Pro
     const user = await currentTenantUser();
     let hydratedDefinition = definition;
 
-    if (module === "solicitacoes-fiscais") {
-      type FiscalRequestItem = {
-        id: number;
-        protocol: string;
-        request_type: string;
-        title?: string | null;
-        apartment: string | null;
-        requester: string;
-        description?: string | null;
-        reservation_number?: string | null;
-        sla_deadline?: string | null;
-        sla_status?: string | null;
-        status: string;
-        payload: Record<string, unknown>;
-        created_at: string;
-        updated_at: string;
-      };
-      type FiscalRequestPage = { items: FiscalRequestItem[]; total: number; page: number; page_size: number };
-      try {
-        const page = Math.max(1, parseInt(query.page ?? "1", 10) || 1);
-        const pageSize = 20;
-        const search = query.search ?? "";
-        const params = new URLSearchParams();
-        params.set("page", String(page));
-        params.set("page_size", String(pageSize));
-        if (search) params.set("search", search);
-        const response = await tenantFetch<FiscalRequestPage>(`/fiscal-requests?${params}`);
-        hydratedDefinition = {
-          ...definition,
-          source: "api",
-          records: response.items.map((item) => ({
-            ...item.payload,
-            id: item.id,
-            title: item.title || `${item.request_type}${item.apartment ? ` · UH ${item.apartment}` : ""}`,
-            category: item.request_type,
-            owner: item.requester,
-            status: item.status,
-            requestType: item.request_type,
-            apartment: item.apartment ?? undefined,
-            reservationNumber: item.reservation_number ?? (item.payload.reservationNumber as string | undefined),
-            slaDeadline: item.sla_deadline ?? undefined,
-            slaStatus: item.sla_status ?? undefined,
-            description: item.description || String(item.payload.observations ?? item.payload.description ?? ""),
-            updatedAt: new Intl.DateTimeFormat("pt-BR", {
-              dateStyle: "short",
-              timeStyle: "short",
-            }).format(new Date(item.updated_at)),
-          })),
-          serverPagination: { total: response.total, page: response.page, pageSize: response.page_size, search },
-        };
-      } catch (error) {
-        if (error instanceof Error && error.message === "unauthorized") throw error;
-      }
-    } else if (module === "usuarios") {
+    if (module === "usuarios") {
       type UserItem = {
         id: number;
         name: string;

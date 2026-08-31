@@ -36,7 +36,7 @@ Tabela global (não tenant-scoped). 33 permissões + wildcard `*`.
 
 Formato do código: `{módulo}.{ação}` — ex: `work_order.create`, `user.delete`.
 
-Módulos: `work_order`, `fiscal_request`, `user`, `registry`, `module`, `procedure`, `settings`, `meeting`, `shift_report`, `system`.
+Módulos: `work_order`, `user`, `registry`, `module`, `procedure`, `settings`, `meeting`, `shift_report`, `system`.
 
 ## Perfis pré-definidos (seed)
 
@@ -52,6 +52,8 @@ Criados automaticamente por empresa via migration `20260621_0039`, com os códig
 | `financeiro` | Financeiro | `fiscal_request.*`, `settings.view`, `occurrence.view` |
 
 **2026-07-14 — fusão de Ocorrências em Ordens de Serviço:** a migration `20260713_0061` removeu todas as permissões `occurrence.*` de `permissions`/`role_permissions` (a tabela `occurrences` foi dropada). Papéis que tinham `occurrence.*` concedido (como `recepcao`, `governanca`, `manutencao`, `financeiro` acima) **não ganharam `work_order.*` automaticamente** — só perderam o acesso antigo. `admin`/`gerente` (com `*` ou quase todas as permissões) não são afetados. Isso é uma limitação conhecida e aceita (não havia estado de tenant a preservar na fusão); se um tenant relatar que um papel customizado perdeu acesso a Ordens de Serviço, a correção é conceder `work_order.*` manualmente via `/roles`.
+
+**2026-08-31 — Solicitações Fiscais removida:** a migration `20260831_0074` removeu as 4 permissões `fiscal_request.*` de `permissions`/`role_permissions` (a tabela `fiscal_requests` foi dropada). `recepcao` e `financeiro` (únicos papéis do seed com `fiscal_request.*`) perderam esse acesso sem substituição — não há mais domínio equivalente. `admin`/`gerente` não são afetados.
 
 ## Fluxo de convite por e-mail
 

@@ -329,13 +329,6 @@ td strong { font-weight: 600; }
 @keyframes field-lookup-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .notify-chip { display: inline-flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-pill); font-size: var(--font-sm); font-weight: 600; color: var(--blue); background: var(--blue-soft); }
 
-/* ─── Solicitações Fiscais ─── */
-.fiscal-type-selector { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 2px; }
-.fiscal-type-option { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--field-bg); cursor: pointer; font-size: var(--font-base); font-weight: 600; color: var(--ink); transition: border-color var(--transition), background var(--transition); }
-.fiscal-type-option:hover { border-color: var(--blue); background: var(--blue-soft); }
-.fiscal-type-option.selected { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
-.fiscal-type-option input[type="radio"] { accent-color: var(--blue); }
-
 .drop-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 100px; padding: var(--sp-5); border: 2px dashed var(--line); border-radius: var(--radius-md); background: #fafbfd; color: var(--muted); cursor: pointer; text-align: center; font-size: var(--font-base); transition: border-color var(--transition), background var(--transition); }
 .drop-zone:hover { border-color: #a9c4ed; background: var(--blue-soft); }
 .drop-zone.active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
@@ -347,26 +340,6 @@ td strong { font-weight: 600; }
 .attachment-name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .attachment-remove { position: absolute; top: var(--sp-1); right: var(--sp-1); width: 22px; height: 22px; border: 0; border-radius: 50%; display: grid; place-items: center; color: white; background: rgba(178, 54, 54, .8); cursor: pointer; z-index: 2; transition: background var(--transition); }
 .attachment-remove:hover { background: var(--red); }
-
-.sla-badge { display: inline-flex; align-items: center; gap: 5px; padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; color: var(--green); background: #e7f6ef; white-space: nowrap; }
-.sla-warning { color: var(--yellow); background: var(--yellow-soft); }
-.sla-critical { color: var(--red); background: var(--red-soft); }
-
-.fiscal-field-group { display: grid; gap: var(--sp-4); padding: var(--sp-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: #fafbfd; }
-.fiscal-field-group label { display: grid; gap: var(--sp-2); color: var(--label); font-size: var(--font-sm); font-weight: 700; }
-.fiscal-field-group input, .fiscal-field-group textarea { width: 100%; min-height: var(--input-height); padding: var(--sp-3); border: 1px solid var(--field-border); border-radius: var(--radius-md); background: white; }
-.fiscal-field-group textarea { resize: vertical; }
-
-.fiscal-request-form { padding: var(--sp-5); display: grid; gap: var(--sp-4); }
-.fiscal-request-form > label { display: grid; gap: var(--sp-2); color: var(--label); font-size: var(--font-sm); font-weight: 700; }
-.fiscal-request-form input, .fiscal-request-form select, .fiscal-request-form textarea { width: 100%; min-height: var(--input-height); padding: var(--sp-3); border: 1px solid var(--field-border); border-radius: var(--radius-md); background: var(--field-bg); }
-.fiscal-request-form textarea { resize: vertical; }
-.fiscal-request-form > footer { padding-top: var(--sp-1); display: flex; justify-content: flex-end; gap: var(--sp-2); }
-.fiscal-request-form > footer button { height: var(--btn-height); padding: 0 var(--sp-5); border: 1px solid var(--line); border-radius: var(--radius-md); background: white; cursor: pointer; transition: background var(--transition); }
-.fiscal-request-form > footer button[type="submit"] { color: white; border-color: var(--blue); background: var(--blue); font-weight: 700; }
-.fiscal-request-form > footer button[type="submit"]:disabled { opacity: .5; cursor: not-allowed; }
-
-.fiscal-modal { width: min(720px, 100%); }
 
 .drawer-attachments { margin-top: var(--sp-1); }
 .drawer-attachments .attachment-preview { cursor: pointer; transition: border-color var(--transition); }
@@ -507,4 +480,4 @@ tfoot .col-num, tfoot strong { color: var(--navy); }
 
 /* ─── Responsive (module content) ─── */
 @media (max-width: 980px) { .notice-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 620px) { .module-heading { align-items: stretch; flex-direction: column; }.module-toolbar { align-items: stretch; flex-wrap: wrap; }.module-toolbar label { flex-basis: 100%; }.module-toolbar select { flex: 1; }.module-toolbar button { font-size: 0; }.module-toolbar button svg { margin: auto; }.notice-grid { grid-template-columns: 1fr; }.form-grid { grid-template-columns: 1fr; }.module-pagination > span { display: none; }.module-pagination { justify-content: center; }.module-panel { border-radius: var(--radius-md); } .fiscal-type-selector { flex-direction: column; } .attachment-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); } .kanban-container { flex-direction: column; } .kanban-column { max-width: 100%; min-width: 100%; } .kanban-toolbar { flex-direction: column; align-items: stretch; } .kanban-search { max-width: 100%; } }
+@media (max-width: 620px) { .module-heading { align-items: stretch; flex-direction: column; }.module-toolbar { align-items: stretch; flex-wrap: wrap; }.module-toolbar label { flex-basis: 100%; }.module-toolbar select { flex: 1; }.module-toolbar button { font-size: 0; }.module-toolbar button svg { margin: auto; }.notice-grid { grid-template-columns: 1fr; }.form-grid { grid-template-columns: 1fr; }.module-pagination > span { display: none; }.module-pagination { justify-content: center; }.module-panel { border-radius: var(--radius-md); } .attachment-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); } .kanban-container { flex-direction: column; } .kanban-column { max-width: 100%; min-width: 100%; } .kanban-toolbar { flex-direction: column; align-items: stretch; } .kanban-search { max-width: 100%; } }

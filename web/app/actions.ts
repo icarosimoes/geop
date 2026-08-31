@@ -168,52 +168,6 @@ export async function fetchMySupportRequestsAction(): Promise<SupportRequestReco
   return response.json();
 }
 
-export interface FiscalRequestPayload {
-  request_type: string;
-  title: string;
-  apartment?: string;
-  requester: string;
-  description?: string;
-  status?: string;
-  payload?: Record<string, unknown>;
-}
-
-export async function createFiscalRequestAction(body: FiscalRequestPayload): Promise<MutationResult> {
-  const response = await authedFetch("/fiscal-requests", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao criar solicitação." };
-  }
-  return { ok: true, data: await response.json() };
-}
-
-export async function updateFiscalRequestAction(
-  id: number,
-  body: Partial<FiscalRequestPayload>,
-): Promise<MutationResult> {
-  const response = await authedFetch(`/fiscal-requests/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao atualizar solicitação." };
-  }
-  return { ok: true, data: await response.json() };
-}
-
-export async function deleteFiscalRequestAction(id: number): Promise<MutationResult> {
-  const response = await authedFetch(`/fiscal-requests/${id}`, { method: "DELETE" });
-  if (!response.ok) {
-    if (response.status === 401) throw new Error("unauthorized");
-    return { ok: false, error: "Erro ao excluir solicitacao." };
-  }
-  return { ok: true };
-}
-
 export interface UserPayload {
   name: string;
   email: string;

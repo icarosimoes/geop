@@ -6,7 +6,6 @@ import {
   FileClock,
   MoreHorizontal,
   Plus,
-  Receipt,
   Search,
   ShieldCheck,
   Users,
@@ -31,7 +30,6 @@ type Ticket = {
 type TrendDay = {
   date: string;
   work_orders: number;
-  fiscal_requests: number;
 };
 
 type WorkOrderKpis = {
@@ -46,23 +44,14 @@ type WorkOrderKpis = {
   completed_week: number;
 };
 
-type FiscalRequestKpis = {
-  by_status: Record<string, number>;
-  by_type: Record<string, number>;
-  sla_compliance_pct: number | null;
-  overdue: number;
-};
-
 type DashboardKpis = {
   work_orders: WorkOrderKpis;
-  fiscal_requests: FiscalRequestKpis;
   trend: TrendDay[];
 };
 
 type DashboardMetricsData = {
   open_occurrences: number;
   my_occurrences: number;
-  open_fiscal: number;
   completed_month: number;
   active_users: number;
   active_sectors: number;
@@ -144,10 +133,7 @@ function BarChart({ data, max, color = "blue" }: { data: Record<string, number>;
 }
 
 function TrendChart({ trend }: { trend: TrendDay[] }) {
-  const maxVal = Math.max(
-    ...trend.flatMap((d) => [d.work_orders, d.fiscal_requests]),
-    1,
-  );
+  const maxVal = Math.max(...trend.map((d) => d.work_orders), 1);
   const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   return (
@@ -156,14 +142,12 @@ function TrendChart({ trend }: { trend: TrendDay[] }) {
         <h3>Últimos 7 dias</h3>
         <div className="kpi-trend-legend">
           <span><i style={{ background: "var(--blue)" }} /> OS</span>
-          <span><i style={{ background: "var(--green)" }} /> Fiscais</span>
         </div>
       </div>
       <div className="kpi-trend-chart">
         {trend.map((day) => (
           <div key={day.date} className="kpi-trend-day">
             <div className="kpi-trend-bar blue" style={{ height: `${(day.work_orders / maxVal) * 100}%` }} />
-            <div className="kpi-trend-bar green" style={{ height: `${(day.fiscal_requests / maxVal) * 100}%` }} />
           </div>
         ))}
       </div>
@@ -204,7 +188,6 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
 
   const openOccurrences = metrics?.open_occurrences ?? 0;
   const myOccurrences = metrics?.my_occurrences ?? 0;
-  const openFiscal = metrics?.open_fiscal ?? 0;
   const completedMonth = metrics?.completed_month ?? 0;
   const activeUsers = metrics?.active_users ?? 0;
   const activeSectors = metrics?.active_sectors ?? 0;
@@ -233,7 +216,6 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
 
       <section className="metrics-grid" aria-label="Indicadores principais">
         <article className="metric-card accent-blue"><span>OS abertas</span><strong>{openOccurrences}</strong><small>{myOccurrences} aguardam sua análise</small><FileClock /></article>
-        <article className="metric-card accent-orange"><span>Solicitações fiscais</span><strong>{openFiscal}</strong><small>pendentes de resolução</small><Receipt /></article>
         <article className="metric-card accent-green"><span>Concluídos no mês</span><strong>{completedMonth}</strong><small>ocorrências finalizadas</small><ShieldCheck /></article>
         <article className="metric-card accent-purple"><span>Equipe ativa</span><strong>{activeUsers}</strong><small>{activeSectors} setores em operação</small><Users /></article>
       </section>
@@ -268,31 +250,6 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
                 )}
                 color="blue"
               />
-            </div>
-
-            <div className="kpi-panel">
-              <h3>Solicitações Fiscais</h3>
-              <div className="kpi-stat-grid">
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Abertas</span>
-                  <span className="kpi-stat-value accent-orange">{Object.entries(kpis.fiscal_requests.by_status).filter(([k]) => k !== "Concluído").reduce((s, [, v]) => s + v, 0)}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Atrasadas (SLA)</span>
-                  <span className={`kpi-stat-value ${kpis.fiscal_requests.overdue > 0 ? "accent-red" : "accent-green"}`}>{kpis.fiscal_requests.overdue}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">SLA cumprido</span>
-                  <span className={`kpi-stat-value ${(kpis.fiscal_requests.sla_compliance_pct ?? 0) >= 80 ? "accent-green" : "accent-orange"}`}>{kpis.fiscal_requests.sla_compliance_pct != null ? `${kpis.fiscal_requests.sla_compliance_pct}%` : "—"}</span>
-                </div>
-                <div className="kpi-stat">
-                  <span className="kpi-stat-label">Concluídas</span>
-                  <span className="kpi-stat-value accent-green">{kpis.fiscal_requests.by_status["Concluído"] ?? 0}</span>
-                </div>
-              </div>
-              {Object.keys(kpis.fiscal_requests.by_type).length > 0 && (
-                <BarChart data={kpis.fiscal_requests.by_type} color="purple" />
-              )}
             </div>
           </div>
 
@@ -332,10 +289,9 @@ export function DashboardShell({ user, metrics }: { user?: TenantUser; metrics?:
 
         <aside className="right-column">
           <section className="panel progress-panel">
-            <div className="panel-heading"><div><h2>Resumo</h2><p>{openOccurrences + openFiscal} itens abertos</p></div></div>
+            <div className="panel-heading"><div><h2>Resumo</h2><p>{openOccurrences} itens abertos</p></div></div>
             <div className="summary-stats">
               <div><span>OS abertas</span><strong>{openOccurrences}</strong></div>
-              <div><span>Solicitações fiscais</span><strong>{openFiscal}</strong></div>
               <div><span>Concluídos (mês)</span><strong>{completedMonth}</strong></div>
               {kpis && <>
                 <div><span>OS ativas</span><strong>{kpis.work_orders.total - (kpis.work_orders.by_status.validada ?? 0)}</strong></div>

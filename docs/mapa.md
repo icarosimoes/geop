@@ -15,7 +15,6 @@
 | Swarm | produção ativa em `geop.solidsd.com.br`, `api.geop.solidsd.com.br` e `painel.geop.solidsd.com.br` | GHCR + Traefik + secrets externos |
 | Cache | Redis com TTL, invalidação por tenant e readiness | dashboard e permissões |
 | ACL | 35 permissões, roles por empresa, wildcard `*` | seed + CRUD via `/roles` |
-| Solicitações fiscais | CRUD via API + SLA + anexos MinIO | `fiscal_requests` isolada por tenant |
 | Inspeções/Obra | check suites, inspection suites, vistorias V2, auditorias, diário de obra | tabelas dedicadas com RLS |
 | Reuniões | tabela dedicada com participantes, pautas e ata PDF | `meetings` + filhas |
 | Relatórios de turno | tabela dedicada com filtro por data e turno | `shift_reports` |
@@ -95,7 +94,6 @@ Login: `demo@aerohotel.local` / `Registro@123` (tenant Aero Hotel, admin com wil
 - Espelho de ponto (`/ponto/espelho`): grade diária com batidas, crédito/débito, hora extra 50%/100% (considerando feriados cadastrados) e adicional noturno com hora reduzida da CLT, exportável em Excel/PDF por funcionário; filtro por Setor gera um card por funcionário ativo do setor — ver [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06)
 - Feriados (`/ponto/feriados`): CRUD simples por tenant, usado no cálculo de HE 100% — ver [escala-de-trabalho.md](escala-de-trabalho.md#feriados-2026-07-06)
 - Hora extra paga em dinheiro (toggle em `/configuracoes` → Ponto): salário individual do funcionário ou salário-base por cargo, valor em R$ da HE 50%/100% no espelho de ponto, banco de horas para de bancar a HE quando ligado — ver [escala-de-trabalho.md](escala-de-trabalho.md#hora-extra-paga-em-dinheiro-2026-07-06)
-- Conferência de discrepâncias (`/conferencias`): comparação de duas verificações por local, resumo por código, responsáveis e exportação em PDF — primeiro vertical slice das oportunidades do legado, ver [oportunidades-legado-operacao.md](oportunidades-legado-operacao.md)
 
 ### Planejado / pendente de produção
 

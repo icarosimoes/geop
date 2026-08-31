@@ -232,7 +232,6 @@ async def brevo_test_send(
 
 VALID_MODULES = [
     "work_orders",
-    "fiscal_requests",
     "meetings",
     "shift_reports",
     "procedures",

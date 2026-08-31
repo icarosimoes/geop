@@ -38,7 +38,6 @@ from app.domain.contracts.service import (
     create_supplier_contact,
 )
 from app.domain.employees.service import create_employee
-from app.domain.fiscal_requests.service import create_fiscal_request
 from app.domain.handoffs.service import create_handoff
 from app.domain.inspection_suites.service import create_inspection_suite
 from app.domain.maintenance.service import create_record as create_maintenance_record
@@ -314,28 +313,7 @@ async def main() -> None:
             )
         print("ordens de serviço (origem ocorrência) criadas")
 
-        # 6. Solicitações fiscais
-        for req_type, title, status in [
-            ("nota_fiscal", "Emissão de nota fiscal - hospedagem 08/07", "Em andamento"),
-            ("cancelamento", "Cancelamento de reserva 4021", "Concluído"),
-            ("nota_fiscal", "Emissão de nota fiscal - evento corporativo", "Em espera"),
-            ("segunda_via", "Segunda via de recibo - quarto 118", "Em andamento"),
-        ]:
-            await create_fiscal_request(
-                session,
-                company_id,
-                actor_id,
-                request_type=req_type,
-                title=title,
-                apartment="118",
-                requester=ADMIN_NAME,
-                description=f"Solicitação fictícia: {title}.",
-                status=status,
-                payload={},
-            )
-        print("solicitações fiscais criadas")
-
-        # 7. Ordens de serviço (manutenção corretiva, com prioridade/SLA)
+        # 6. Ordens de serviço (manutenção corretiva, com prioridade/SLA)
         for title, priority, category in [
             ("Reparo de vazamento - quarto 204", "alta", "Hidráulica"),
             ("Manutenção do ar-condicionado - quarto 310", "media", "Refrigeração"),
@@ -360,7 +338,7 @@ async def main() -> None:
             )
         print("ordens de serviço criadas")
 
-        # 8. Fornecedores, centros de custo e contratos
+        # 7. Fornecedores, centros de custo e contratos
         fornecedor1 = await create_supplier(
             session,
             company_id,
@@ -447,7 +425,7 @@ async def main() -> None:
         )
         print("fornecedores, centros de custo e contratos criados")
 
-        # 9. Reuniões
+        # 8. Reuniões
         await create_meeting(
             session,
             company_id,
@@ -466,7 +444,7 @@ async def main() -> None:
         )
         print("reuniões criadas")
 
-        # 10. Relatórios de turno e passagens de plantão
+        # 9. Relatórios de turno e passagens de plantão
         await create_shift_report(
             session,
             company_id,
@@ -500,7 +478,7 @@ async def main() -> None:
             )
         print("relatórios de turno e passagens de plantão criados")
 
-        # 11. Estoque
+        # 10. Estoque
         item1 = await create_stock_item(
             session,
             company_id,
@@ -535,7 +513,7 @@ async def main() -> None:
         )
         print("estoque criado")
 
-        # 12. Manutenção preventiva
+        # 11. Manutenção preventiva
         await create_maintenance_record(
             session,
             company_id,
@@ -579,7 +557,7 @@ async def main() -> None:
         )
         print("manutenção preventiva criada")
 
-        # 13. Checklists e diários de obra
+        # 12. Checklists e diários de obra
         await create_checklist_template(
             session,
             company_id,
@@ -620,7 +598,7 @@ async def main() -> None:
         )
         print("checklists e diário de obra criados")
 
-        # 14. Vistorias e checklists de suíte
+        # 13. Vistorias e checklists de suíte
         suite = await create_inspection_suite(
             session,
             company_id,
@@ -664,7 +642,7 @@ async def main() -> None:
         )
         print("vistorias e checklists de suíte criados")
 
-        # 15. Auditoria operacional
+        # 14. Auditoria operacional
         await create_audit_report(
             session,
             company_id,
@@ -691,7 +669,7 @@ async def main() -> None:
         )
         print("relatório de auditoria criado")
 
-        # 16. Procedimentos e mural de avisos
+        # 15. Procedimentos e mural de avisos
         for name, link in [
             ("Manual de check-in", "https://hotelexemplo.com.br/manuais/checkin.pdf"),
             (
@@ -714,7 +692,7 @@ async def main() -> None:
         )
         print("procedimentos e mural criados")
 
-        # 17. Notificações de exemplo para o usuário admin
+        # 16. Notificações de exemplo para o usuário admin
         for title, body in [
             ("Nova ordem de serviço atribuída a você", "Reparo de vazamento - quarto 204"),
             (

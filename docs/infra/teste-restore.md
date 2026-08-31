@@ -92,8 +92,6 @@ SELECT 'users', COUNT(*) FROM users WHERE deleted_at IS NULL
 UNION ALL
 SELECT 'work_orders', COUNT(*) FROM work_orders WHERE deleted_at IS NULL
 UNION ALL
-SELECT 'fiscal_requests', COUNT(*) FROM fiscal_requests WHERE deleted_at IS NULL
-UNION ALL
 SELECT 'registries', COUNT(*) FROM registries WHERE deleted_at IS NULL
 UNION ALL
 SELECT 'audit_events', COUNT(*) FROM audit_events

@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
-from app.models import FiscalRequest, Sector, User, WorkOrder
+from app.models import Sector, User, WorkOrder
 
 TTL_METRICS = 300
 TTL_RECENT = 180
@@ -38,16 +38,6 @@ async def get_metrics(
                 *base,
                 WorkOrder.status.notin_(WO_DONE_STATUSES),
                 WorkOrder.assigned_user_id == user_id,
-            )
-        )
-        or 0
-    )
-
-    open_fiscal = (
-        await session.scalar(
-            select(func.count(FiscalRequest.id)).where(
-                FiscalRequest.company_id == company_id,
-                FiscalRequest.status != "Concluído",
             )
         )
         or 0
@@ -92,7 +82,6 @@ async def get_metrics(
     result = {
         "open_occurrences": open_occurrences,
         "my_occurrences": my_occurrences,
-        "open_fiscal": open_fiscal,
         "completed_month": completed_month,
         "active_users": active_users,
         "active_sectors": active_sectors,
@@ -148,16 +137,6 @@ async def _recent_all(session: AsyncSession, company_id: int) -> list[dict]:
              LEFT JOIN users u ON u.id = sr.owner_user_id
              WHERE sr.company_id = :cid AND sr.deleted_at IS NULL
              ORDER BY sr.updated_at DESC LIMIT 5)
-            UNION ALL
-            (SELECT fr.id, COALESCE(fr.title, fr.request_type) AS title,
-                    'Solicitações Fiscais' AS module,
-                    COALESCE(fr.request_type, 'Fiscal') AS area,
-                    COALESCE(fr.requester, 'Não atribuído') AS owner,
-                    COALESCE(fr.status, 'Em andamento') AS status,
-                    fr.updated_at
-             FROM fiscal_requests fr
-             WHERE fr.company_id = :cid
-             ORDER BY fr.updated_at DESC LIMIT 5)
             UNION ALL
             (SELECT mr.id, mr.title, 'Inspeções' AS module,
                     COALESCE(mr.category, 'Geral') AS area,
@@ -224,7 +203,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
     week_ago = now - timedelta(days=7)
 
     wo_base = [WorkOrder.company_id == company_id, WorkOrder.deleted_at.is_(None)]
-    fr_base = [FiscalRequest.company_id == company_id]
 
     # --- Work Orders ---
     wo_total = await session.scalar(select(func.count(WorkOrder.id)).where(*wo_base)) or 0
@@ -335,64 +313,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
         or 0
     )
 
-    # --- Fiscal Requests ---
-    fr_by_status = dict(
-        (
-            await session.execute(
-                select(FiscalRequest.status, func.count(FiscalRequest.id))
-                .where(*fr_base)
-                .group_by(FiscalRequest.status)
-            )
-        ).all()
-    )
-
-    fr_by_type = dict(
-        (
-            await session.execute(
-                select(FiscalRequest.request_type, func.count(FiscalRequest.id))
-                .where(*fr_base)
-                .group_by(FiscalRequest.request_type)
-                .order_by(func.count(FiscalRequest.id).desc())
-                .limit(8)
-            )
-        ).all()
-    )
-
-    fr_sla_total = (
-        await session.scalar(
-            select(func.count(FiscalRequest.id)).where(
-                *fr_base,
-                FiscalRequest.sla_deadline.isnot(None),
-                FiscalRequest.status == "Concluído",
-            )
-        )
-        or 0
-    )
-    fr_sla_met = (
-        await session.scalar(
-            select(func.count(FiscalRequest.id)).where(
-                *fr_base,
-                FiscalRequest.sla_deadline.isnot(None),
-                FiscalRequest.status == "Concluído",
-                FiscalRequest.updated_at <= FiscalRequest.sla_deadline,
-            )
-        )
-        or 0
-    )
-    fr_sla_compliance = round(fr_sla_met / fr_sla_total * 100) if fr_sla_total > 0 else None
-
-    fr_overdue = (
-        await session.scalar(
-            select(func.count(FiscalRequest.id)).where(
-                *fr_base,
-                FiscalRequest.sla_deadline.isnot(None),
-                FiscalRequest.sla_deadline < now,
-                FiscalRequest.status != "Concluído",
-            )
-        )
-        or 0
-    )
-
     # --- Weekly trend (last 7 days) ---
     trend = []
     for i in range(6, -1, -1):
@@ -410,21 +330,10 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
             )
             or 0
         )
-        fr_day = (
-            await session.scalar(
-                select(func.count(FiscalRequest.id)).where(
-                    *fr_base,
-                    FiscalRequest.created_at >= day_start,
-                    FiscalRequest.created_at < day_end,
-                )
-            )
-            or 0
-        )
         trend.append(
             {
                 "date": day.isoformat(),
                 "work_orders": wo_day,
-                "fiscal_requests": fr_day,
             }
         )
 
@@ -439,12 +348,6 @@ async def _compute_kpis(session: AsyncSession, company_id: int) -> dict:
             "overdue": wo_overdue,
             "created_week": wo_created_week,
             "completed_week": wo_completed_week,
-        },
-        "fiscal_requests": {
-            "by_status": fr_by_status,
-            "by_type": fr_by_type,
-            "sla_compliance_pct": fr_sla_compliance,
-            "overdue": fr_overdue,
         },
         "trend": trend,
     }

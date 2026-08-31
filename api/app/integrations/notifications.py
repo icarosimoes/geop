@@ -18,7 +18,6 @@ logger = structlog.get_logger()
 
 ENTITY_TO_MODULE: dict[str, str] = {
     "work_order": "work_orders",
-    "fiscal_request": "fiscal_requests",
     "meeting": "meetings",
     "shift_report": "shift_reports",
     "procedure": "procedures",

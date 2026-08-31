@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 type DashboardMetrics = {
   open_occurrences: number;
   my_occurrences: number;
-  open_fiscal: number;
   completed_month: number;
   active_users: number;
   active_sectors: number;
@@ -31,16 +30,9 @@ type DashboardMetrics = {
       created_week: number;
       completed_week: number;
     };
-    fiscal_requests: {
-      by_status: Record<string, number>;
-      by_type: Record<string, number>;
-      sla_compliance_pct: number | null;
-      overdue: number;
-    };
     trend: Array<{
       date: string;
       work_orders: number;
-      fiscal_requests: number;
     }>;
   };
 };

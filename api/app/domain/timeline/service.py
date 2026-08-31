@@ -9,7 +9,6 @@ from app.integrations.notifications import notify_record_event
 from app.models import (
     AuditEvent,
     Employee,
-    FiscalRequest,
     Meeting,
     ModuleRecord,
     Procedure,
@@ -21,7 +20,6 @@ from app.models import (
 
 VALID_ENTITY_TYPES = {
     "work_order",
-    "fiscal_request",
     "procedure",
     "meeting",
     "shift_report",
@@ -35,7 +33,6 @@ VALID_ENTITY_TYPES = {
 
 ENTITY_MODEL_MAP: dict[str, Any] = {
     "work_order": WorkOrder,
-    "fiscal_request": FiscalRequest,
     "procedure": Procedure,
     "meeting": Meeting,
     "shift_report": ShiftReport,
@@ -191,7 +188,6 @@ async def add_comment(
 
     module_labels = {
         "work_order": "Ordens de Serviço",
-        "fiscal_request": "Solicitações Fiscais",
     }
     module_label = module_labels.get(entity_type, entity_type)
 
@@ -214,26 +210,6 @@ async def add_comment(
                 owner_user_id=record.assigned_user_id,
                 created_by_user_id=record.created_by_user_id,
                 notify_user_ids=record.notify_user_ids,
-                detail=message,
-            )
-    elif entity_type == "fiscal_request":
-        record = await session.scalar(
-            select(FiscalRequest).where(
-                FiscalRequest.id == entity_id,
-                FiscalRequest.company_id == company_id,
-            )
-        )
-        if record:
-            await notify_record_event(
-                session,
-                company_id=company_id,
-                actor_name=user_name,
-                actor_email=user_email,
-                event="comment",
-                title=record.title or record.request_type,
-                module=module_label,
-                owner_user_id=record.responsible_user_id,
-                created_by_user_id=record.requester_user_id,
                 detail=message,
             )
 
