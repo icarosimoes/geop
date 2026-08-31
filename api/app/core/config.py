@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     asaas_webhook_token: str = ""
     asaas_webhook_token_file: str | None = None
     sentry_dsn: str = ""
+    # OAuth2 do Google (email_client): opt-in por tenant/conta — sem isso configurado,
+    # POST /email-client/oauth/start responde "oauth_not_configured", auth por
+    # usuário+senha continua funcionando normalmente.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_client_secret_file: str | None = None
+    google_oauth_redirect_uri: str = ""
 
     @field_validator("web_origins", mode="before")
     @classmethod
@@ -94,6 +101,10 @@ def get_settings() -> Settings:
     if settings.asaas_webhook_token_file:
         settings.asaas_webhook_token = (
             Path(settings.asaas_webhook_token_file).read_text(encoding="utf-8").strip()
+        )
+    if settings.google_oauth_client_secret_file:
+        settings.google_oauth_client_secret = (
+            Path(settings.google_oauth_client_secret_file).read_text(encoding="utf-8").strip()
         )
     insecure_default = "registro-development-only-change-me"
     if settings.environment == "production" and (

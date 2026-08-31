@@ -34,7 +34,15 @@ class EmailAccount(Base, TenantMixin, TimestampMixin):
     imap_port: Mapped[int] = mapped_column(Integer, default=993)
     imap_ssl: Mapped[bool] = mapped_column(Boolean, default=True)
     username: Mapped[str] = mapped_column(String(255))
-    password_enc: Mapped[str] = mapped_column(Text)  # criptografado na camada de serviço
+    password_enc: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # criptografado na camada de serviço
+    # password | oauth — determina se sync_account usa password_enc (LOGIN) ou os
+    # campos oauth_* abaixo (XOAUTH2), ver service.py
+    auth_type: Mapped[str] = mapped_column(String(10), default="password")
+    oauth_access_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oauth_refresh_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oauth_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

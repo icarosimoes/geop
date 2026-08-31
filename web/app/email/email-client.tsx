@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
+import { useState, useCallback, useEffect, useTransition } from "react";
 import {
   Mail, RefreshCw, Plus, Trash2, Edit2, Bell, BellOff, Check,
   ChevronRight, X, Eye, EyeOff, AlertCircle, Inbox, Settings,
   MessageSquare, Filter, Globe, AtSign, Hash,
 } from "lucide-react";
 
-type EmailAccount = {
+export type EmailAccount = {
   id: number;
   name: string;
   provider: string;
   protocol: "imap" | "pop3";
+  auth_type: "password" | "oauth";
   imap_host: string;
   imap_port: number;
   imap_ssl: boolean;
@@ -120,6 +121,33 @@ export function EmailClient({
     setFeedback(msg);
     setTimeout(() => setFeedback(null), 3000);
   }
+
+  // Trata o retorno do fluxo OAuth do Google (redirect do backend após o
+  // consentimento — ver GET /email-client/oauth/callback). Lido do próprio
+  // location em vez de useSearchParams pra não exigir um Suspense boundary
+  // aqui só por causa desse toast pós-redirect.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get("oauth");
+    if (!oauth) return;
+    if (oauth === "connected") {
+      showFeedback("Conta Google conectada.");
+      fetch("/api/email-client/accounts")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => data && setAccounts(data));
+    } else {
+      const reasons: Record<string, string> = {
+        denied: "Autorização cancelada.",
+        invalid_state: "Sessão de autorização expirada, tente novamente.",
+        invalid_request: "Resposta inválida do Google.",
+        exchange_failed: "Falha ao trocar o token com o Google.",
+        no_refresh_token: "O Google não retornou permissão de acesso contínuo — remova o acesso do GEOP em myaccount.google.com/permissions e tente de novo.",
+      };
+      showFeedback(reasons[params.get("reason") ?? ""] ?? "Erro ao conectar com o Google.");
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSync = useCallback(() => {
     startSync(async () => {
@@ -465,7 +493,11 @@ export function EmailClient({
                     </div>
                     <div className="ec-account-info">
                       <p className="ec-account-name">{acc.name}</p>
-                      <p className="ec-account-detail">{acc.username} · {acc.imap_host}:{acc.imap_port} <span className="ec-protocol-badge">{(acc.protocol ?? "imap").toUpperCase()}</span></p>
+                      <p className="ec-account-detail">
+                        {acc.auth_type === "oauth"
+                          ? <>{acc.username} · Conectado via Google <span className="ec-protocol-badge">OAUTH</span></>
+                          : <>{acc.username} · {acc.imap_host}:{acc.imap_port} <span className="ec-protocol-badge">{(acc.protocol ?? "imap").toUpperCase()}</span></>}
+                      </p>
                       <p className="ec-account-sync">
                         {acc.last_synced_at
                           ? `Sincronizado ${formatDate(acc.last_synced_at)}`
@@ -552,8 +584,40 @@ function AccountModal({ onClose, onSaved }: {
     setForm((f) => ({ ...f, imap_host: pre.host, imap_port: pre.port, imap_ssl: pre.ssl, protocol: pre.protocol }));
   }
 
+  async function connectGoogle() {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/email-client/oauth/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          data?.detail?.code === "oauth_not_configured"
+            ? "Login com Google ainda não foi configurado nesta instância do GEOP."
+            : "Erro ao iniciar login com Google."
+        );
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.authorize_url;
+    } catch {
+      setError("Erro de conexão.");
+      setLoading(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (provider === "gmail") {
+      // Enter no campo "Nome da conta" cai aqui — não tem usuário/senha pra
+      // enviar, o fluxo certo é o botão "Conectar com Google".
+      await connectGoogle();
+      return;
+    }
     setLoading(true);
     setError(null);
     const apiProvider = provider === "pop3" ? "imap" : provider; // backend usa "imap" como fallback genérico
@@ -594,7 +658,8 @@ function AccountModal({ onClose, onSaved }: {
           </div>
           {provider === "gmail" && (
             <div className="ec-info-box">
-              Para Gmail, habilite o acesso IMAP nas configurações da conta e use uma <strong>Senha de app</strong> (não a senha normal). Acesse Conta Google → Segurança → Senhas de app.
+              O Gmail bloqueia login IMAP com senha comum — conecte com sua conta Google
+              (abre a tela de autorização do próprio Google, nenhuma senha passa pelo GEOP).
             </div>
           )}
           {provider === "microsoft" && (
@@ -611,19 +676,23 @@ function AccountModal({ onClose, onSaved }: {
             <label>Nome da conta</label>
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Financeiro, Suporte..." />
           </div>
-          <div className="ec-field">
-            <label>E-mail / usuário</label>
-            <input required type="email" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="conta@empresa.com" />
-          </div>
-          <div className="ec-field">
-            <label>Senha {provider === "gmail" ? "(Senha de app)" : ""}</label>
-            <div className="ec-input-row">
-              <input required type={showPass ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••••••" />
-              <button type="button" className="ec-icon-btn" onClick={() => setShowPass((v) => !v)}>
-                {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </div>
+          {provider !== "gmail" && (
+            <>
+              <div className="ec-field">
+                <label>E-mail / usuário</label>
+                <input required type="email" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="conta@empresa.com" />
+              </div>
+              <div className="ec-field">
+                <label>Senha {provider === "microsoft" ? "(ou senha de app)" : ""}</label>
+                <div className="ec-input-row">
+                  <input required type={showPass ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••••••" />
+                  <button type="button" className="ec-icon-btn" onClick={() => setShowPass((v) => !v)}>
+                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           {(provider === "imap" || provider === "pop3") && (
             <div className="ec-field-row">
               <div className="ec-field ec-field-grow">
@@ -646,9 +715,20 @@ function AccountModal({ onClose, onSaved }: {
           {error && <div className="ec-error"><AlertCircle size={14} /> {error}</div>}
           <div className="ec-modal-footer">
             <button type="button" className="ec-btn" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="ec-btn ec-btn-primary" disabled={loading}>
-              {loading ? "Salvando..." : "Salvar conta"}
-            </button>
+            {provider === "gmail" ? (
+              <button
+                type="button"
+                className="ec-btn ec-btn-primary"
+                disabled={loading || !form.name.trim()}
+                onClick={connectGoogle}
+              >
+                {loading ? "Redirecionando..." : "Conectar com Google"}
+              </button>
+            ) : (
+              <button type="submit" className="ec-btn ec-btn-primary" disabled={loading}>
+                {loading ? "Salvando..." : "Salvar conta"}
+              </button>
+            )}
           </div>
         </form>
       </div>

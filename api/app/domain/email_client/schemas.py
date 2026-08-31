@@ -45,6 +45,7 @@ class EmailAccountRead(BaseModel):
     name: str
     provider: str
     protocol: str
+    auth_type: str
     imap_host: str
     imap_port: int
     imap_ssl: bool
@@ -54,6 +55,17 @@ class EmailAccountRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── OAuth2 (Google) ──
+
+
+class OAuthStartRequest(BaseModel):
+    name: str = Field(..., max_length=120)
+
+
+class OAuthStartResponse(BaseModel):
+    authorize_url: str
 
 
 # ── Mensagens ──

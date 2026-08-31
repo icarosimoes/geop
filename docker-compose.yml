@@ -87,6 +87,10 @@ services:
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000}
       # Rastreamento de erros (SDK compatível com Sentry) — opcional, ver docker-compose.observability.yml.example
       SENTRY_DSN: ${SENTRY_DSN_API:-}
+      # OAuth2 do Google (email_client) — opcional, ver docs/integracoes/gmail-oauth-setup.md
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:8000/api/v1/email-client/oauth/callback}
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:

@@ -6,13 +6,14 @@ import email.header
 import imaplib
 import poplib
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parseaddr, parsedate_to_datetime
 
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.domain.email_client.schemas import (
     EmailAccountCreate,
     EmailAccountUpdate,
@@ -101,6 +102,78 @@ async def update_account(
 
 async def delete_account(session: AsyncSession, *, account: EmailAccount) -> None:
     account.deleted_at = datetime.now(UTC)
+
+
+async def upsert_oauth_account(
+    session: AsyncSession,
+    *,
+    company_id: int,
+    google_email: str,
+    account_name: str,
+    tokens: dict,
+) -> tuple[EmailAccount, bool]:
+    """Cria a EmailAccount da conta Google autorizada ou, se já existir uma conta
+    ativa com o mesmo e-mail neste tenant (ex.: uma conta cadastrada por senha que
+    parou de autenticar), atualiza essa mesma linha para OAuth em vez de duplicar —
+    esse é o caminho de "reconectar" uma conta quebrada. Retorna (account, created)."""
+    existing = (
+        await session.execute(
+            select(EmailAccount).where(
+                EmailAccount.company_id == company_id,
+                EmailAccount.username == google_email,
+                EmailAccount.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+    # oauth_token_expires_at é TIMESTAMP WITHOUT TIME ZONE — naive UTC, mesma
+    # convenção já documentada para outros campos de data desta API (asyncpg
+    # rejeita datetime com tzinfo numa coluna sem timezone).
+    expires_at = (datetime.now(UTC) + timedelta(seconds=tokens.get("expires_in", 3600))).replace(
+        tzinfo=None
+    )
+    access_token_enc = _encrypt(tokens["access_token"])
+    # O Google só reemite refresh_token no primeiro consent (prompt=consent garante
+    # isso na autorização inicial); numa reautorização ele pode vir ausente — nesse
+    # caso mantém o refresh_token que já tínhamos.
+    refresh_token = tokens.get("refresh_token")
+
+    if existing:
+        existing.auth_type = "oauth"
+        existing.provider = "gmail"
+        existing.protocol = "imap"
+        existing.imap_host = "imap.gmail.com"
+        existing.imap_port = 993
+        existing.imap_ssl = True
+        existing.password_enc = None
+        existing.oauth_access_token_enc = access_token_enc
+        if refresh_token:
+            existing.oauth_refresh_token_enc = _encrypt(refresh_token)
+        existing.oauth_token_expires_at = expires_at
+        existing.active = True
+        return existing, False
+
+    if not refresh_token:
+        raise ValueError("Google não retornou refresh_token nesta autorização")
+
+    account = EmailAccount(
+        company_id=company_id,
+        name=account_name,
+        provider="gmail",
+        protocol="imap",
+        auth_type="oauth",
+        imap_host="imap.gmail.com",
+        imap_port=993,
+        imap_ssl=True,
+        username=google_email,
+        password_enc=None,
+        oauth_access_token_enc=access_token_enc,
+        oauth_refresh_token_enc=_encrypt(refresh_token),
+        oauth_token_expires_at=expires_at,
+    )
+    session.add(account)
+    await session.flush()
+    return account, True
 
 
 # ── Mensagens ──
@@ -300,6 +373,39 @@ def _format_alert(msg: EmailMessage, account_name: str) -> str:
 # ── Sincronização IMAP / POP3 ──
 
 
+async def _ensure_google_token_fresh(session: AsyncSession, account: EmailAccount) -> str:
+    """Retorna um access_token válido para a conta OAuth, renovando via refresh_token
+    se estiver expirado (ou perto de expirar). Chamado antes do fetch, que roda em
+    thread separada e não pode fazer a chamada HTTP async pro Google."""
+    from app.integrations import google_oauth
+
+    # naive UTC: oauth_token_expires_at é TIMESTAMP WITHOUT TIME ZONE (ver
+    # upsert_oauth_account) — comparar/gravar com datetime aware quebraria aqui.
+    now = datetime.now(UTC).replace(tzinfo=None)
+    margin = timedelta(seconds=60)
+    if (
+        account.oauth_access_token_enc
+        and account.oauth_token_expires_at
+        and account.oauth_token_expires_at - margin > now
+    ):
+        return _decrypt(account.oauth_access_token_enc)
+
+    if not account.oauth_refresh_token_enc:
+        raise ValueError("Conta Google sem refresh_token — reconecte a conta")
+
+    settings = get_settings()
+    tokens = await google_oauth.refresh_access_token(
+        refresh_token=_decrypt(account.oauth_refresh_token_enc),
+        client_id=settings.google_oauth_client_id,
+        client_secret=settings.google_oauth_client_secret,
+    )
+    access_token: str = tokens["access_token"]
+    account.oauth_access_token_enc = _encrypt(access_token)
+    account.oauth_token_expires_at = now + timedelta(seconds=tokens.get("expires_in", 3600))
+    await session.commit()
+    return access_token
+
+
 async def sync_account(
     session: AsyncSession,
     *,
@@ -319,12 +425,18 @@ async def sync_account(
     error_msg: str | None = None
 
     try:
-        password = _decrypt(account.password_enc)
         protocol = getattr(account, "protocol", "imap") or "imap"
-        fetch_fn = _pop3_fetch if protocol == "pop3" else _imap_fetch
+        password: str | None = None
+        access_token: str | None = None
+        if account.auth_type == "oauth":
+            access_token = await _ensure_google_token_fresh(session, account)
+            fetch_fn = _imap_fetch  # OAuth só é suportado via IMAP nesta fase
+        else:
+            password = _decrypt(account.password_enc or "")
+            fetch_fn = _pop3_fetch if protocol == "pop3" else _imap_fetch
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: fetch_fn(account, password, max_messages),
+            lambda: fetch_fn(account, max_messages, password=password, access_token=access_token),
         )
         raw_messages, fetch_error = result
         if fetch_error:
@@ -404,9 +516,14 @@ async def sync_account(
 
 
 def _imap_fetch(
-    account: EmailAccount, password: str, max_messages: int
+    account: EmailAccount,
+    max_messages: int,
+    *,
+    password: str | None = None,
+    access_token: str | None = None,
 ) -> tuple[list[dict], str | None]:
-    """Executa fetch IMAP em thread síncrona."""
+    """Executa fetch IMAP em thread síncrona. Autentica por senha (LOGIN) ou, se
+    `access_token` for passado, por OAuth2 (XOAUTH2 — usado pelas contas Google)."""
     try:
         conn: imaplib.IMAP4
         if account.imap_ssl:
@@ -414,7 +531,11 @@ def _imap_fetch(
         else:
             conn = imaplib.IMAP4(account.imap_host, account.imap_port)
 
-        conn.login(account.username, password)
+        if access_token:
+            auth_string = f"user={account.username}\x01auth=Bearer {access_token}\x01\x01"
+            conn.authenticate("XOAUTH2", lambda _: auth_string.encode())
+        else:
+            conn.login(account.username, password or "")
         conn.select("INBOX")
 
         # UID SEARCH/FETCH (não SEARCH/FETCH por número de sequência): o número de
@@ -486,9 +607,17 @@ def _imap_fetch(
 
 
 def _pop3_fetch(
-    account: EmailAccount, password: str, max_messages: int
+    account: EmailAccount,
+    max_messages: int,
+    *,
+    password: str | None = None,
+    access_token: str | None = None,
 ) -> tuple[list[dict], str | None]:
-    """Executa fetch POP3 em thread síncrona, usando UIDL para deduplicação."""
+    """Executa fetch POP3 em thread síncrona, usando UIDL para deduplicação.
+    OAuth2 (`access_token`) não é suportado neste protocolo nesta fase — contas
+    Google sempre usam IMAP (ver upsert_oauth_account)."""
+    if access_token:
+        return [], "OAuth2 não é suportado via POP3"
     try:
         conn: poplib.POP3
         if account.imap_ssl:
@@ -497,7 +626,7 @@ def _pop3_fetch(
             conn = poplib.POP3(account.imap_host, account.imap_port)
 
         conn.user(account.username)
-        conn.pass_(password)
+        conn.pass_(password or "")
 
         # UIDL mapeia número → uid único persistente
         uidl_resp = conn.uidl()
