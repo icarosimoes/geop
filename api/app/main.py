@@ -24,7 +24,6 @@ from app.domain.check_suites.router import router as check_suites_router
 from app.domain.checklists.router import router as checklists_router
 from app.domain.contracts.router import router as contracts_router
 from app.domain.dashboard.router import router as dashboard_router
-from app.domain.discrepancy_reports.router import router as discrepancy_reports_router
 from app.domain.email_client.router import router as email_client_router
 from app.domain.employees.router import router as employees_router
 from app.domain.fiscal_requests.router import router as fiscal_requests_router
@@ -159,7 +158,6 @@ v1_router.include_router(check_suites_router)
 v1_router.include_router(inspection_suites_router)
 v1_router.include_router(apartment_inspections_router)
 v1_router.include_router(audit_reports_router)
-v1_router.include_router(discrepancy_reports_router)
 v1_router.include_router(work_diaries_router)
 v1_router.include_router(maintenance_router)
 v1_router.include_router(bulletin_router)

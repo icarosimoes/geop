@@ -231,7 +231,6 @@ export function KanbanBoard({
     <>
       <header className="module-heading">
         <div>
-          <p className="eyebrow">Operação</p>
           <h1>{definition.title}</h1>
           <p>{definition.description}</p>
         </div>
@@ -527,13 +526,16 @@ function CreateWorkOrderModal({
   };
 
   return (
-    <div className="modal-layer" onClick={onClose}>
-      <div className="module-panel kanban-create-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="kanban-modal-header">
-          <h2>Nova Ordem de Serviço</h2>
-          <button onClick={onClose} aria-label="Fechar"><X size={20} /></button>
+    <div className="modal-layer" role="presentation" onClick={onClose}>
+      <section className="record-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <div>
+            <span>Ordens de Serviço</span>
+            <h2>Nova Ordem de Serviço</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button>
         </header>
-        <form onSubmit={handleSubmit} className="kanban-create-form">
+        <form onSubmit={handleSubmit}>
           {error && <div className="kanban-form-error">{error}</div>}
           <label>
             Título *
@@ -617,7 +619,7 @@ function CreateWorkOrderModal({
             </button>
           </footer>
         </form>
-      </div>
+      </section>
     </div>
   );
 }
@@ -686,13 +688,16 @@ function EditWorkOrderModal({
   }
 
   return (
-    <div className="modal-layer" onClick={onClose}>
-      <div className="module-panel kanban-create-modal" onClick={(e) => e.stopPropagation()}>
-        <header className="kanban-modal-header">
-          <h2>Editar OS #{record.id}</h2>
-          <button onClick={onClose} aria-label="Fechar"><X size={20} /></button>
+    <div className="modal-layer" role="presentation" onClick={onClose}>
+      <section className="record-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <div>
+            <span>Ordens de Serviço</span>
+            <h2>Editar OS #{record.id}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button>
         </header>
-        <form onSubmit={handleSubmit} className="kanban-create-form">
+        <form onSubmit={handleSubmit}>
           {error && <div className="kanban-form-error">{error}</div>}
           <label>
             Título *
@@ -771,7 +776,7 @@ function EditWorkOrderModal({
             </button>
           </footer>
         </form>
-      </div>
+      </section>
     </div>
   );
 }

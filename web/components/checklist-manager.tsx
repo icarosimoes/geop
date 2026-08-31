@@ -65,7 +65,6 @@ export function ChecklistManager({ templates }: { templates: TemplateRow[] }) {
     <>
       <header className="module-heading">
         <div>
-          <p className="eyebrow">Inspeções</p>
           <h1>Checklists</h1>
           <p>Modelos de checklist para inspeções e verificações recorrentes.</p>
         </div>

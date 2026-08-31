@@ -403,43 +403,6 @@ class AuditReportItem(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
-class DiscrepancyReport(Base, TenantMixin, TimestampMixin):
-    __tablename__ = "discrepancy_reports"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    report_date: Mapped[date] = mapped_column(Date)
-    prepared_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    checked_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    received_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-    )
-    status: Mapped[str] = mapped_column(String(20), default="draft")
-    observations: Mapped[str | None] = mapped_column(Text)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
-
-
-class DiscrepancyReportEntry(Base, TimestampMixin):
-    __tablename__ = "discrepancy_report_entries"
-    __table_args__ = (
-        UniqueConstraint("report_id", "location_id", name="uq_discrepancy_entries_location"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    report_id: Mapped[int] = mapped_column(
-        ForeignKey("discrepancy_reports.id", ondelete="CASCADE"),
-    )
-    location_id: Mapped[int] = mapped_column(
-        ForeignKey("locations.id", ondelete="CASCADE"),
-    )
-    first_code: Mapped[str | None] = mapped_column(String(40))
-    second_code: Mapped[str | None] = mapped_column(String(40))
-    notes: Mapped[str | None] = mapped_column(Text)
-
-
 class WorkDiary(Base, TenantMixin, TimestampMixin):
     __tablename__ = "work_diaries"
 

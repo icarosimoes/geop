@@ -1676,3 +1676,72 @@ do tenant, resposta do admin com mudança de status, leitura da timeline pelos d
 confirmado que `POST /timeline/work_order/{id}/comment` (não relacionado a suporte) também
 voltou a funcionar. Suíte completa: 618 testes passando (612 + 8 novos, menos 2 substituídos —
 mesma falha pré-existente e não relacionada de sempre).
+
+## 2026-08-31 — Padroniza modal de OS; remove Operação/Conferência de Discrepâncias; funde Inspeções em Checklists
+
+Dois pedidos do usuário na mesma sessão, tratados em sequência.
+
+### Modal de Ordem de Serviço no padrão do ERP
+
+O modal "Nova/Editar Ordem de Serviço" (`kanban-board.tsx`) tinha nascido com classes CSS
+próprias (`kanban-create-modal`, `kanban-modal-header`, `kanban-create-form`) em vez do padrão
+usado no resto do app (`contracts-manager.tsx`, `conferencias/manager.tsx` antes de ser
+removida, e outros `manager.tsx`): `<div class="modal-layer" role="presentation"> <section
+class="record-modal" role="dialog" aria-modal="true">`, header com eyebrow + `h2` e botão
+`.icon-button`, footer sem borda extra. Resultado visual próximo, mas com diferenças sutis —
+botão de fechar sem hover, largura fixa em 560px em vez de 620px, footer com uma divisória que
+os outros modais não têm. Troquei os dois modais (criação e edição) pro padrão `record-modal` e
+apaguei as ~10 linhas de CSS que só esses dois modais usavam, em `globals.css`.
+
+### Remoção de "Operação", "Conferência de Discrepâncias" e fusão Inspeções → Checklists
+
+Três pedidos do usuário, esclarecidos por pergunta direta antes de mexer (a remoção de
+"Conferência de Discrepâncias" toca banco de dados — confirmado "remover por completo" antes
+de apagar tabela).
+
+- **Rótulo "Operação"**: removido de todo lugar em que aparecia como texto decorativo — o
+  cabeçalho de seção no menu lateral (`app-layout.tsx`) e o eyebrow acima do `h1` nas páginas de
+  módulo genéricas (`operational-module.tsx`, `kanban-board.tsx`). O padrão de eyebrow em si
+  (`.eyebrow`) é usado em quase toda página do sistema com texto específico de cada área
+  ("Gestão", "Ponto", "Cadastros"...) — não foi tocado, só o texto literal "Operação", que era
+  redundante (repetia a mesma palavra em toda página do bloco operacional sem agregar
+  informação).
+
+- **Conferência de Discrepâncias**: removida por completo, não só do menu.
+  - Web: item do menu, `app/conferencias/` inteiro (page + manager), proxy
+    `app/api/discrepancy-reports/[id]/pdf`, e todos os tipos/`fetch*`/`*Action` em `actions.ts`
+    (`DiscrepancyReport*`, `fetchDiscrepancyReport(s)`, `create/update/deleteDiscrepancyReportAction`,
+    e o helper `apiErrorMessage` que só eles usavam).
+  - API: domínio `app/domain/discrepancy_reports/` inteiro (router/service/schemas/pdf),
+    registro em `main.py`, models `DiscrepancyReport`/`DiscrepancyReportEntry` em
+    `models/operations.py` e `models/__init__.py`, teste `test_discrepancy_reports.py`.
+  - Banco: migration nova `20260831_0073` que dropa `discrepancy_reports` +
+    `discrepancy_report_entries`, a policy RLS e as 4 permissões `discrepancy_report.*` — não
+    reescrevi a migration original (`20260830_0067`, de dois dias antes) porque já tem 5
+    migrations em cima dela na chain (`0068`–`0072`); dropar em uma migration nova evita rasurar
+    `down_revision` de histórico potencialmente já aplicado em outro ambiente. `downgrade()`
+    recria o estado de antes (tabelas + RLS + permissões), sem dados.
+
+- **Inspeções → Checklists**: a página `/inspecoes` tinha duas abas — "Inspeções" (dados
+  fictícios via `/modules/inspecoes`, renderizados por `InspectionViewer` sob o título
+  "Conferências de Suíte") e "Checklists" (`ChecklistManager`, dados reais via
+  `/checklists/templates`). Pedido do usuário: manter só o checklist e usá-lo como nome do item
+  do menu. `inspecoes/page.tsx` perdeu a bifurcação por `tab` e renderiza só o
+  `ChecklistManager`; `inspecoes/tabs.tsx` e `components/inspection-viewer.tsx` apagados (ficaram
+  sem uso); item do menu renomeado de "Inspeções" pra "Checklists" (mesmo `href`, `/inspecoes`,
+  pra não quebrar links salvos); eyebrow do `checklist-manager.tsx` (dizia "Inspeções") removido,
+  já que virou conteúdo de primeiro nível. **Fora do escopo, propositalmente não tocado:** os
+  domínios de API `apartment_inspections`/`inspection_suites`/`check_suites` são features de
+  backend separadas, não usadas por essa página (que sempre foi só dados genéricos do módulo
+  `inspecoes`) — e a entrada `inspecoes` em `lib/module-definitions.ts`, que já não alimentava
+  essa rota (rota estática tem precedência sobre `[module]/page.tsx`).
+
+**Validação:** `ruff check .` e `ruff format --check .` limpos; `mypy app/ --ignore-missing-imports`
+limpo; `alembic upgrade head` rodado do zero contra um Postgres de teste isolado
+(`docker-compose.test.yml`, join temporário de rede pra alcançar o serviço) — chain inteira
+até `20260831_0073` sem erro, `alembic check` sem diffs pendentes; pytest 610/611 (a falha é
+`test_oauth_start_not_configured_by_default`, pré-existente, causada por variáveis de OAuth do
+Gmail já configuradas no ambiente do container de dev — não relacionada); `tsc --noEmit` limpo em
+`web/`. Conferido visualmente contra o stack real (login, sidebar, `/inspecoes`) via
+`web/.claude/skills/run-web` — sem "Operação" no menu, sem "Conferência de Discrepâncias", item
+"Checklists" abrindo a lista de checklists direto, sem abas, sem erros no console.
