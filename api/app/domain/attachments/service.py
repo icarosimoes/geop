@@ -11,7 +11,6 @@ from app.core.storage import (
 from app.models import Attachment
 
 ALLOWED_ENTITY_TYPES = {
-    "fiscal_request",
     "work_order",
     "procedure",
     "module_record",

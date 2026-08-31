@@ -3,15 +3,7 @@
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import type { FiscalRequestSlaReport, WorkOrderReport } from "@/app/relatorios/page";
-
-const SLA_STATE_LABELS: Record<string, string> = {
-  on_time: "No prazo",
-  warning: "Próximo do prazo",
-  overdue: "Atrasado",
-  paused: "Em espera",
-  completed: "Concluído",
-};
+import type { WorkOrderReport } from "@/app/relatorios/page";
 
 function BarChart({ data, color = "blue" }: { data: Record<string, number>; color?: string }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
@@ -60,13 +52,11 @@ export function ReportsShell({
   dateFrom,
   dateTo,
   workOrders,
-  fiscalSla,
   forbidden,
 }: {
   dateFrom: string;
   dateTo: string;
   workOrders: WorkOrderReport | null;
-  fiscalSla: FiscalRequestSlaReport | null;
   forbidden: boolean;
 }) {
   const router = useRouter();
@@ -87,7 +77,7 @@ export function ReportsShell({
         <div>
           <div className="eyebrow">Analytics</div>
           <h1>Relatórios</h1>
-          <p>Ordens de Serviço por período e cumprimento de SLA das solicitações fiscais.</p>
+          <p>Ordens de Serviço por período.</p>
         </div>
       </div>
 
@@ -141,47 +131,6 @@ export function ReportsShell({
             <BarChart data={workOrders?.by_sector ?? {}} color="orange" />
             <h3 style={{ marginTop: "var(--sp-5)" }}>Criadas por dia</h3>
             <TrendBars trend={workOrders?.trend ?? []} color="blue" />
-          </section>
-
-          <section className="kpi-panel">
-            <h3>SLA de Solicitações Fiscais</h3>
-            <div className="kpi-stat-grid">
-              <div className="kpi-stat">
-                <span className="kpi-stat-label">Criadas</span>
-                <span className="kpi-stat-value accent-orange">{fiscalSla?.total ?? 0}</span>
-              </div>
-              <div className="kpi-stat">
-                <span className="kpi-stat-label">Atrasadas (SLA)</span>
-                <span className={`kpi-stat-value ${(fiscalSla?.overdue ?? 0) > 0 ? "accent-red" : "accent-green"}`}>
-                  {fiscalSla?.overdue ?? 0}
-                </span>
-              </div>
-              <div className="kpi-stat">
-                <span className="kpi-stat-label">SLA cumprido</span>
-                <span className={`kpi-stat-value ${(fiscalSla?.sla_compliance_pct ?? 0) >= 80 ? "accent-green" : "accent-orange"}`}>
-                  {fiscalSla?.sla_compliance_pct != null ? `${fiscalSla.sla_compliance_pct}%` : "—"}
-                </span>
-              </div>
-              <div className="kpi-stat">
-                <span className="kpi-stat-label">Tempo médio de resolução</span>
-                <span className="kpi-stat-value">
-                  {fiscalSla?.avg_resolution_hours != null ? `${fiscalSla.avg_resolution_hours}h` : "—"}
-                </span>
-              </div>
-            </div>
-            <h3 style={{ marginTop: "var(--sp-5)" }}>Estado do SLA</h3>
-            <BarChart
-              data={Object.fromEntries(
-                Object.entries(fiscalSla?.sla_states ?? {})
-                  .filter(([, v]) => v > 0)
-                  .map(([k, v]) => [SLA_STATE_LABELS[k] ?? k, v]),
-              )}
-              color="purple"
-            />
-            <h3 style={{ marginTop: "var(--sp-5)" }}>Por tipo</h3>
-            <BarChart data={fiscalSla?.by_type ?? {}} color="green" />
-            <h3 style={{ marginTop: "var(--sp-5)" }}>Criadas por dia</h3>
-            <TrendBars trend={fiscalSla?.trend ?? []} color="orange" />
           </section>
         </div>
       )}

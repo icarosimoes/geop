@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  createFiscalRequestAction, deleteFiscalRequestAction,
-  updateFiscalRequestAction,
   createUserAction, updateUserAction, deleteUserAction, inviteUserAction,
   createRegistryAction, updateRegistryAction, deleteRegistryAction,
   createModuleRecordAction, updateModuleRecordAction, deleteModuleRecordAction,
@@ -22,10 +20,8 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiscalRequestForm, type FiscalSaveData } from "./fiscal-request-form";
 import { HandoffSection } from "./handoff-section";
 import { CompanySettingsSection, BrevoSettingsSection, EvolutionSettingsSection, ProfileForm } from "./settings-sections";
-import { SlaIndicator } from "./sla-indicator";
 
 const pageSize = 5;
 
@@ -135,7 +131,6 @@ function statusClass(status: string) {
 }
 
 const SLUG_TO_ENTITY_TYPE: Record<string, string> = {
-  "solicitacoes-fiscais": "fiscal_request",
   "procedimentos": "procedure",
   "reunioes": "meeting",
   "relatorios-turno": "shift_report",
@@ -158,7 +153,6 @@ export function OperationalModule({
 }) {
   const effectiveBasePath = basePath ?? `/${definition.slug}`;
   const storageKey = `registro:${user.company_id}:${definition.slug}`;
-  const isFiscal = definition.slug === "solicitacoes-fiscais";
   const isUsers = definition.slug === "usuarios";
   const isCadastros = (definition.slug === "cadastros" || definition.slug.startsWith("cadastros/")) && !definition.slug.includes("procedimentos");
   const cadastroCategory: Record<string, string> = {
@@ -169,13 +163,13 @@ export function OperationalModule({
   const isGenericModule = ["inspecoes", "diarios-obra", "manutencao"].includes(definition.slug);
   const isMeetings = definition.slug === "reunioes";
   const isShiftReports = definition.slug === "relatorios-turno";
-  const hasAttachments = isFiscal || isProcedimentos;
+  const hasAttachments = isProcedimentos;
   const isApiBacked = definition.source === "api";
   const entityType = SLUG_TO_ENTITY_TYPE[definition.slug];
   function hasPermission(code: string) {
     return user.permissions.includes("*") || user.permissions.includes(code);
   }
-  const permModule = isFiscal ? "fiscal_request" : isUsers ? "user" : isCadastros ? "registry" : isProcedimentos ? "procedure" : isMeetings ? "meeting" : isShiftReports ? "shift_report" : isGenericModule ? "module" : "module";
+  const permModule = isUsers ? "user" : isCadastros ? "registry" : isProcedimentos ? "procedure" : isMeetings ? "meeting" : isShiftReports ? "shift_report" : isGenericModule ? "module" : "module";
   const canView = hasPermission(`${permModule}.view`);
   const canCreate = hasPermission(`${permModule}.create`);
   const canEdit = hasPermission(`${permModule}.edit`);
@@ -219,13 +213,6 @@ export function OperationalModule({
   useEffect(() => {
     if (canMutate && searchParams.get("new") === "1") setEditing("new");
   }, [canMutate, searchParams]);
-
-  useEffect(() => {
-    const protocol = searchParams.get("protocol");
-    if (!protocol || !isFiscal) return;
-    const record = records.find((item) => `REG-${String(item.id).padStart(6, "0")}` === protocol);
-    if (record) setSelected(record);
-  }, [isFiscal, records, searchParams]);
 
   useEffect(() => {
     if (!selected || !isApiBacked || !entityType) { setTimeline([]); setSelectedAttachments([]); return; }
@@ -493,66 +480,6 @@ export function OperationalModule({
     setEditing(null);
   }
 
-  async function saveFiscalRecord(data: FiscalSaveData) {
-    const current = editing === "new" ? null : editing;
-    const pendingFiles = data.pendingFiles ?? [];
-
-    if (isApiBacked) {
-      const payload: Record<string, unknown> = {};
-      for (const key of ["requestType", "reservationNumber", "invoiceNumber", "checkoutDate", "taxpayerDoc", "taxpayerName", "taxpayerAddress", "taxpayerEmail", "cancellationReason", "correction", "slaDeadline"] as const) {
-        if (data[key]) payload[key] = data[key];
-      }
-      let entityId = current?.id;
-      if (current) {
-        const result = await updateFiscalRequestAction(current.id, {
-          request_type: data.requestType ?? data.category,
-          title: data.title,
-          apartment: data.apartment,
-          requester: data.owner,
-          description: data.description,
-          status: data.status,
-          payload,
-        });
-        if (!result.ok) { setToast(result.error ?? "Erro ao atualizar."); return; }
-      } else {
-        const result = await createFiscalRequestAction({
-          request_type: data.requestType ?? data.category ?? "",
-          title: data.title ?? "",
-          apartment: data.apartment,
-          requester: data.owner ?? user.name,
-          description: data.description,
-          status: data.status ?? "Em andamento",
-          payload,
-        });
-        if (!result.ok) { setToast(result.error ?? "Erro ao criar."); return; }
-        entityId = (result.data as Record<string, number>)?.id;
-      }
-      if (entityId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          await uploadAttachmentAction("fiscal_request", entityId, file);
-        }
-      }
-      setEditing(null);
-      setToast(`${definition.singular} ${current ? "atualizada" : "criada"} com sucesso.`);
-      window.setTimeout(() => setToast(""), 2600);
-      router.refresh();
-      return;
-    }
-
-    const now = formatNow();
-    const entry: HistoryEntry = current
-      ? { type: "change", user: user.name, date: now, changes: diffChanges(current, { title: data.title ?? "", category: data.category ?? "", owner: data.owner ?? "", status: data.status ?? "", description: data.description ?? "" }) }
-      : { type: "create", user: user.name, date: now, message: `Criou ${definition.singular}` };
-    const prevHistory = current?.history ?? [];
-    const record: ModuleRecord = {
-      id: current?.id ?? Math.max(0, ...records.map((item) => item.id)) + 1,
-      ...data, updatedAt: now, history: [...prevHistory, entry],
-    } as ModuleRecord;
-    const next = current ? records.map((item) => item.id === current.id ? record : item) : [record, ...records];
-    persist(next, `${definition.singular} ${current ? "atualizada" : "criada"} com sucesso.`);
-    setEditing(null);
-  }
-
   async function addComment(record: ModuleRecord, message: string) {
     if (!message.trim()) return;
     if (isApiBacked && entityType) {
@@ -575,8 +502,7 @@ export function OperationalModule({
     if (!window.confirm(`Excluir "${record.title}"? Esta ação não pode ser desfeita.`)) return;
     if (isApiBacked) {
       let result: { ok: boolean; error?: string };
-      if (isFiscal) result = await deleteFiscalRequestAction(record.id);
-      else if (isUsers) result = await deleteUserAction(record.id);
+      if (isUsers) result = await deleteUserAction(record.id);
       else if (isCadastros) result = await deleteRegistryAction(record.id, fixedCategory ?? record.category);
       else if (isProcedimentos) result = await deleteProcedureAction(record.id);
       else if (isMeetings) { const { deleteMeetingAction } = await import("@/app/actions"); result = await deleteMeetingAction(record.id); }
@@ -607,12 +533,12 @@ export function OperationalModule({
 
       {definition.layout === "company" ? <CompanySettingsSection/> : definition.layout === "settings" ? <SettingsForm storageKey={storageKey} onSaved={() => setToast("Configurações salvas com sucesso.")}/> : definition.layout === "profile" ? <ProfileForm user={user} onSaved={(msg) => { setToast(msg); window.setTimeout(() => setToast(""), 2600); }}/> : <section className="module-panel">
         <div className="module-toolbar"><label><Search size={18}/><input value={query} onChange={(event) => handleServerSearch(event.target.value)} placeholder={`Buscar em ${definition.title.toLocaleLowerCase("pt-BR")}`}/></label>{!sp ? <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}>{statuses.map((item) => <option key={item}>{item}</option>)}</select> : null}{!isApiBacked && !sp ? <button onClick={() => { setRecords(definition.records); localStorage.removeItem(storageKey); setToast("Dados fictícios restaurados."); }} title="Restaurar dados"><RefreshCw size={17}/></button> : null}<button onClick={exportCsv}><Download size={17}/> Exportar</button></div>
-        {!ready ? <div className="module-state">Carregando registros…</div> : !visible.length ? <div className="module-state"><Search size={30}/><strong>Nenhum resultado</strong><span>Ajuste os filtros ou crie um novo registro.</span></div> : definition.layout === "cards" ? <div className="notice-grid">{visible.map((record) => <article key={record.id} onClick={() => (isUsers || isCadastros) ? setEditing(record) : setSelected(record)}><span>{record.category}</span><h2>{record.title}</h2><p>{record.description}</p><footer><small>{record.owner} · {record.updatedAt}</small><i className={statusClass(record.status)}>{record.status}</i></footer></article>)}</div> : <div className="module-table-wrap"><table><thead><tr><th>ID</th><th>{definition.singular}</th>{isFiscal && <th>UH</th>}{!fixedCategory && <th>Categoria</th>}<th>Responsável</th><th>Status</th>{isFiscal && <th>SLA</th>}<th>Atualização</th>{canMutate ? <th>Ações</th> : null}</tr></thead><tbody>{visible.map((record) => <tr key={record.id} onClick={() => (isUsers || isCadastros) ? setEditing(record) : setSelected(record)}><td className="protocol">#{record.id}</td><td><strong>{record.title}</strong></td>{isFiscal && <td>{record.apartment ?? "—"}</td>}{!fixedCategory && <td>{record.category}</td>}<td>{record.owner}</td><td><span className={statusClass(record.status)}>{record.status}</span></td>{isFiscal && <td>{record.slaDeadline ? <SlaIndicator deadline={record.slaDeadline}/> : "—"}</td>}<td className="muted">{record.updatedAt}</td>{canMutate ? <td><div className="row-actions">{canEdit ? <button onClick={(event) => { event.stopPropagation(); setEditing(record); }} aria-label="Editar"><Pencil size={16}/></button> : null}{canDelete ? <button onClick={(event) => { event.stopPropagation(); remove(record); }} aria-label="Excluir"><Trash2 size={16}/></button> : null}</div></td> : null}</tr>)}</tbody></table></div>}
+        {!ready ? <div className="module-state">Carregando registros…</div> : !visible.length ? <div className="module-state"><Search size={30}/><strong>Nenhum resultado</strong><span>Ajuste os filtros ou crie um novo registro.</span></div> : definition.layout === "cards" ? <div className="notice-grid">{visible.map((record) => <article key={record.id} onClick={() => (isUsers || isCadastros) ? setEditing(record) : setSelected(record)}><span>{record.category}</span><h2>{record.title}</h2><p>{record.description}</p><footer><small>{record.owner} · {record.updatedAt}</small><i className={statusClass(record.status)}>{record.status}</i></footer></article>)}</div> : <div className="module-table-wrap"><table><thead><tr><th>ID</th><th>{definition.singular}</th>{!fixedCategory && <th>Categoria</th>}<th>Responsável</th><th>Status</th><th>Atualização</th>{canMutate ? <th>Ações</th> : null}</tr></thead><tbody>{visible.map((record) => <tr key={record.id} onClick={() => (isUsers || isCadastros) ? setEditing(record) : setSelected(record)}><td className="protocol">#{record.id}</td><td><strong>{record.title}</strong></td>{!fixedCategory && <td>{record.category}</td>}<td>{record.owner}</td><td><span className={statusClass(record.status)}>{record.status}</span></td><td className="muted">{record.updatedAt}</td>{canMutate ? <td><div className="row-actions">{canEdit ? <button onClick={(event) => { event.stopPropagation(); setEditing(record); }} aria-label="Editar"><Pencil size={16}/></button> : null}{canDelete ? <button onClick={(event) => { event.stopPropagation(); remove(record); }} aria-label="Excluir"><Trash2 size={16}/></button> : null}</div></td> : null}</tr>)}</tbody></table></div>}
         <footer className="module-pagination"><span>{totalItems} registro(s)</span><div><button disabled={page <= 1} onClick={() => handleServerPage(page - 1)}><ChevronLeft/></button><span>Pagina {Math.min(page, pages)} de {pages}</span><button disabled={page >= pages} onClick={() => handleServerPage(page + 1)}><ChevronRight/></button></div></footer>
       </section>}
 
-    {editing ? <div className="modal-layer" role="presentation"><section className={`record-modal${editing !== "new" && editing.history?.length ? " has-timeline" : ""}${isFiscal ? " fiscal-modal" : ""}`} role="dialog" aria-modal="true"><header><div><span>{editing === "new" ? "Novo registro" : `#${editing.id}`}</span><h2>{editing === "new" ? definition.action : `Editar ${definition.singular}`}</h2></div><button className="icon-button" onClick={() => setEditing(null)}><X/></button></header>
-      {isFiscal ? <FiscalRequestForm record={editing} userName={user.name} existingAttachments={editing !== "new" ? selectedAttachments : []} onSave={saveFiscalRecord} onCancel={() => setEditing(null)} onDeleteAttachment={(id) => { deleteAttachmentAction(id); setSelectedAttachments((prev) => prev.filter((a) => a.id !== id)); }}/> : <form action={saveRecord}>
+    {editing ? <div className="modal-layer" role="presentation"><section className={`record-modal${editing !== "new" && editing.history?.length ? " has-timeline" : ""}`} role="dialog" aria-modal="true"><header><div><span>{editing === "new" ? "Novo registro" : `#${editing.id}`}</span><h2>{editing === "new" ? definition.action : `Editar ${definition.singular}`}</h2></div><button className="icon-button" onClick={() => setEditing(null)}><X/></button></header>
+      <form action={saveRecord}>
       {isUsers ? <>
         <label>Nome<input name="title" required defaultValue={editing === "new" ? "" : editing.title}/></label>
         <label>E-mail<input name="owner" type="email" required defaultValue={editing === "new" ? "" : editing.owner}/></label>
@@ -725,7 +651,7 @@ export function OperationalModule({
         <label>Descrição<textarea name="description" rows={4} defaultValue={editing === "new" ? "" : editing.description}/></label>
       </>}
       <footer><button type="button" onClick={() => setEditing(null)}>Cancelar</button><button type="submit">Salvar</button></footer>
-    </form>}
+    </form>
       {!isUsers && editing !== "new" && editing.history?.length ? <div className="modal-timeline"><h3><MessageSquare size={15}/>Tratativa</h3><div className="timeline-thread">{editing.history.map((entry, i) => {
         const entryInitials = entry.user.split(" ").slice(0, 2).map((p) => p[0]).join("").toUpperCase();
         return <article key={i} className={`thread-entry thread-${entry.type}`}>
@@ -745,18 +671,6 @@ export function OperationalModule({
         <div><dt>Status</dt><dd><span className={statusClass(selected.status)}>{selected.status}</span></dd></div>
         <div><dt>Responsável</dt><dd>{selected.owner}</dd></div>
         {selected.notifyUsers && selected.notifyUsers.length > 0 && <div><dt>Notificar</dt><dd><div className="notify-chips">{selected.notifyUsers.map((name, i) => <span key={i} className="notify-chip">{name}</span>)}</div></dd></div>}
-        {isFiscal && selected.slaDeadline && <div><dt>SLA</dt><dd><SlaIndicator deadline={selected.slaDeadline}/></dd></div>}
-        {isFiscal && selected.apartment && <div><dt>UH (Apartamento)</dt><dd>{selected.apartment}</dd></div>}
-        {isFiscal && selected.requestType && <div><dt>Tipo da solicitação</dt><dd>{selected.requestType}</dd></div>}
-        {isFiscal && selected.reservationNumber && <div><dt>Número da reserva</dt><dd>{selected.reservationNumber}</dd></div>}
-        {isFiscal && selected.invoiceNumber && <div><dt>Número da nota</dt><dd>{selected.invoiceNumber}</dd></div>}
-        {isFiscal && selected.checkoutDate && <div><dt>Data do check-out</dt><dd>{selected.checkoutDate}</dd></div>}
-        {isFiscal && selected.taxpayerDoc && <div><dt>CPF / CNPJ</dt><dd>{selected.taxpayerDoc}</dd></div>}
-        {isFiscal && selected.taxpayerName && <div><dt>Nome do tomador</dt><dd>{selected.taxpayerName}</dd></div>}
-        {isFiscal && selected.taxpayerAddress && <div><dt>Endereço do tomador</dt><dd>{selected.taxpayerAddress}</dd></div>}
-        {isFiscal && selected.taxpayerEmail && <div><dt>E-mail do tomador</dt><dd>{selected.taxpayerEmail}</dd></div>}
-        {isFiscal && selected.cancellationReason && <div><dt>Motivo do cancelamento</dt><dd>{selected.cancellationReason}</dd></div>}
-        {isFiscal && selected.correction && <div><dt>Correção necessária</dt><dd>{selected.correction}</dd></div>}
         <div><dt>Atualização</dt><dd>{selected.updatedAt}</dd></div>
         {isProcedimentos && selected.description && <div><dt>Link</dt><dd><a href={selected.description} target="_blank" rel="noopener noreferrer">{selected.description}</a></dd></div>}
         {!isProcedimentos && <div><dt>Descrição</dt><dd>{selected.description || "Nenhuma descrição informada."}</dd></div>}

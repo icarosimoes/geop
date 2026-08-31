@@ -26,7 +26,6 @@ class RecentActivity(BaseModel):
 class TrendDay(BaseModel):
     date: str
     work_orders: int
-    fiscal_requests: int
 
 
 class WorkOrderKpis(BaseModel):
@@ -41,23 +40,14 @@ class WorkOrderKpis(BaseModel):
     completed_week: int
 
 
-class FiscalRequestKpis(BaseModel):
-    by_status: dict[str, int]
-    by_type: dict[str, int]
-    sla_compliance_pct: int | None
-    overdue: int
-
-
 class DashboardKpis(BaseModel):
     work_orders: WorkOrderKpis
-    fiscal_requests: FiscalRequestKpis
     trend: list[TrendDay]
 
 
 class DashboardMetrics(BaseModel):
     open_occurrences: int
     my_occurrences: int
-    open_fiscal: int
     completed_month: int
     active_users: int
     active_sectors: int
@@ -74,7 +64,6 @@ async def get_metrics_endpoint(
     return DashboardMetrics(
         open_occurrences=data["open_occurrences"],
         my_occurrences=data["my_occurrences"],
-        open_fiscal=data["open_fiscal"],
         completed_month=data["completed_month"],
         active_users=data["active_users"],
         active_sectors=data["active_sectors"],

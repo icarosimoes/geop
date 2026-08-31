@@ -26,7 +26,6 @@ from app.domain.contracts.router import router as contracts_router
 from app.domain.dashboard.router import router as dashboard_router
 from app.domain.email_client.router import router as email_client_router
 from app.domain.employees.router import router as employees_router
-from app.domain.fiscal_requests.router import router as fiscal_requests_router
 from app.domain.handoffs.router import router as handoffs_router
 from app.domain.health.router import router as health_router
 from app.domain.inspection_suites.router import router as inspection_suites_router
@@ -140,7 +139,6 @@ v1_router.include_router(auth_router)
 v1_router.include_router(dashboard_router)
 v1_router.include_router(email_client_router)
 v1_router.include_router(employees_router)
-v1_router.include_router(fiscal_requests_router)
 v1_router.include_router(reports_router)
 v1_router.include_router(users_router)
 v1_router.include_router(registries_router)

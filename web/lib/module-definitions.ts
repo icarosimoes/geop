@@ -94,10 +94,6 @@ export type ModuleDefinition = {
 
 const today = "19/06/2026";
 
-const slaIn24h = new Date(Date.now() + 24 * 3_600_000).toISOString();
-const slaIn18h = new Date(Date.now() + 18 * 3_600_000).toISOString();
-const slaExpired = new Date(Date.now() - 4 * 3_600_000).toISOString();
-
 export const moduleDefinitions: Record<string, ModuleDefinition> = {
   reunioes: {
     slug: "reunioes", title: "Reuniões", singular: "reunião", action: "Agendar reunião",
@@ -228,17 +224,8 @@ export const moduleDefinitions: Record<string, ModuleDefinition> = {
     description: "Registre pendências para o próximo turno com confirmação de leitura e resolução.",
     records: [],
   },
-  "solicitacoes-fiscais": {
-    slug: "solicitacoes-fiscais", title: "Solicitações Fiscais", singular: "solicitação", action: "Nova solicitação",
-    description: "Solicitações da recepção para o financeiro sobre emissão e problemas com notas fiscais.",
-    records: [
-      { id: 1, title: "NF travada no check-out UH 412", category: "Nota travada / erro no sistema", owner: "Julia Santos", status: "Em andamento", updatedAt: "há 2h", requestType: "Nota travada / erro no sistema", apartment: "412", invoiceNumber: "NF-2847", slaDeadline: slaIn24h },
-      { id: 2, title: "Correção CNPJ empresa conveniada", category: "Dados do tomador incorretos", owner: "Pedro Alves", status: "Aguardando", updatedAt: "há 4h", requestType: "Dados do tomador incorretos", apartment: "305", reservationNumber: "RES-8821", taxpayerDoc: "12.345.678/0001-90", slaDeadline: slaIn18h },
-      { id: 3, title: "Nota pós check-out UH 201", category: "Nota solicitada após check-out", owner: "Marina Costa", status: "Concluído", updatedAt: "ontem", requestType: "Nota solicitada após check-out", apartment: "201", reservationNumber: "RES-8799", checkoutDate: "18/06/2026", slaDeadline: slaExpired },
-    ],
-  },
 };
 
 export const navigationModules = [
-  "ordens-servico", "reunioes", "relatorios-turno", "inspecoes", "preventivas", "estoque", "solicitacoes-fiscais",
+  "ordens-servico", "reunioes", "relatorios-turno", "inspecoes", "preventivas", "estoque",
 ];

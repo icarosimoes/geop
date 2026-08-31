@@ -62,8 +62,6 @@ module = [
   "app.domain.check_suites.service",
   "app.domain.checklists.service",
   "app.domain.dashboard.service",
-  "app.domain.fiscal_requests.router",
-  "app.domain.fiscal_requests.service",
   "app.domain.handoffs.service",
   "app.domain.health.router",
   "app.domain.inspection_suites.service",

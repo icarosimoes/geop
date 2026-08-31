@@ -20,7 +20,7 @@ SaaS multitenant de gestão operacional. Atende hotelaria e outros segmentos ope
 api/           → FastAPI backend
   app/
     core/      → config, database, security, auth, audit, rate_limit, dependencies
-    domain/    → domínios de negócio (auth, occurrences, fiscal_requests, users, ...)
+    domain/    → domínios de negócio (auth, occurrences, users, ...)
       {domínio}/
         router.py   → endpoints HTTP (fino, só parsing e resposta)
         service.py  → lógica de negócio (queries, regras, notificações)
@@ -64,4 +64,4 @@ docker logs geop-api-1 --tail 30  # debug
 
 ## Domínios implementados
 
-auth, dashboard, occurrences, fiscal_requests, users, registries, modules, procedures, notifications, timeline, settings, platform, health
+auth, dashboard, occurrences, users, registries, modules, procedures, notifications, timeline, settings, platform, health

@@ -14,17 +14,6 @@ export type WorkOrderReport = {
   trend: ReportTrendDay[];
 };
 
-export type FiscalRequestSlaReport = {
-  total: number;
-  by_status: Record<string, number>;
-  by_type: Record<string, number>;
-  sla_compliance_pct: number | null;
-  avg_resolution_hours: number | null;
-  sla_states: Record<string, number>;
-  overdue: number;
-  trend: ReportTrendDay[];
-};
-
 export default async function RelatoriosPage({
   searchParams,
 }: {
@@ -41,13 +30,9 @@ export default async function RelatoriosPage({
   try {
     const user = await currentTenantUser();
     let workOrders: WorkOrderReport | null = null;
-    let fiscalSla: FiscalRequestSlaReport | null = null;
     let forbidden = false;
     try {
-      [workOrders, fiscalSla] = await Promise.all([
-        tenantFetch<WorkOrderReport>(`/reports/work-orders${suffix}`),
-        tenantFetch<FiscalRequestSlaReport>(`/reports/fiscal-requests-sla${suffix}`),
-      ]);
+      workOrders = await tenantFetch<WorkOrderReport>(`/reports/work-orders${suffix}`);
     } catch (error) {
       if (error instanceof Error && error.message === "unauthorized") throw error;
       forbidden = true;
@@ -58,7 +43,6 @@ export default async function RelatoriosPage({
           dateFrom={dateFrom}
           dateTo={dateTo}
           workOrders={workOrders}
-          fiscalSla={fiscalSla}
           forbidden={forbidden}
         />
       </AppLayout>

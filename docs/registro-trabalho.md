@@ -1745,3 +1745,79 @@ Gmail já configuradas no ambiente do container de dev — não relacionada); `t
 `web/`. Conferido visualmente contra o stack real (login, sidebar, `/inspecoes`) via
 `web/.claude/skills/run-web` — sem "Operação" no menu, sem "Conferência de Discrepâncias", item
 "Checklists" abrindo a lista de checklists direto, sem abas, sem erros no console.
+
+## 2026-08-31 — Remoção de Solicitações Fiscais
+
+Continuação da mesma sessão da limpeza de "Conferência de Discrepâncias" acima. Usuário pediu
+pra remover Solicitações Fiscais também; dado que é um domínio bem mais antigo e maduro que o
+de Discrepâncias (existe desde a migration `20260620_0003`, quase no início do projeto, com
+dados reais possivelmente em produção), confirmei explicitamente antes de mexer no banco —
+resposta: remover tudo, código e tabelas.
+
+Solicitações Fiscais acabou muito mais entranhado no resto do sistema do que Discrepâncias
+(que era um vertical slice isolado e recente): dashboard, relatórios, timeline, anexos e
+notificações tinham código específico do domínio, não só o CRUD próprio.
+
+- **API**: domínio `app/domain/fiscal_requests/` inteiro apagado (router/service/schemas),
+  removido de `main.py`. Model `FiscalRequest` removido de `models/operations.py` e
+  `models/__init__.py`. Ajustes em domínios que referenciavam `fiscal_request(s)`:
+  `dashboard/router.py`+`service.py` (KPIs `FiscalRequestKpis`, campo `open_fiscal`, query raw
+  de atividades recentes, tendência semanal), `reports/service.py`+`schemas.py`+`router.py`
+  (endpoint `GET /reports/fiscal-requests-sla` removido inteiro, junto com
+  `build_fiscal_sla_report`), `timeline/service.py` (`VALID_ENTITY_TYPES`,
+  `ENTITY_MODEL_MAP`, branch de notificação em `add_comment`), `attachments/service.py`
+  (`ALLOWED_ENTITY_TYPES`), `notifications/router.py` e `settings/router.py`
+  (`VALID_MODULES`), `integrations/notifications.py` (`ENTITY_TO_MODULE`).
+- **Testes**: `test_fiscal_requests.py` (CRUD) e `test_cross_tenant_crud.py` (era dedicado só a
+  fiscal, apagado por completo) removidos; `test_dashboard.py`, `test_cross_tenant.py` e
+  `test_negative_paths.py` (bloco `TestFiscalRequestsNegative` inteiro) tiveram as partes de
+  fiscal removidas.
+- **Banco**: migration nova `20260831_0074` dropa `fiscal_requests`, a policy RLS e as 4
+  permissões `fiscal_request.*` — mesma lógica da `20260831_0073` (não reescreve a migration
+  original de 2026-06-20, já com dezenas de migrations em cima na chain). `role_permissions`
+  não precisou de `DELETE` manual: FK `ON DELETE CASCADE` já limpa sozinha. `downgrade()`
+  recria a tabela no formato atual (não reproduz artefatos legados do MySQL, tipo as FKs
+  `*_ibfk_*` duplicadas que ainda existem na tabela real — não fazem parte do model
+  SQLAlchemy, então não precisam voltar).
+- **Web**: item de menu (`app-layout.tsx`), `fiscal-request-form.tsx` apagado,
+  `sla-indicator.tsx` também apagado por ter ficado sem nenhum consumidor depois da remoção
+  (só era usado ali). `operational-module.tsx` perdeu toda a bifurcação `isFiscal` (era o
+  arquivo mais espalhado: função `saveFiscalRecord` inteira, colunas de tabela UH/SLA, campos
+  do drawer de detalhe, classe `fiscal-modal`). `app/[module]/page.tsx` perdeu o branch
+  `solicitacoes-fiscais`; `module-definitions.ts` perdeu a entrada e a saída de
+  `navigationModules` (e as constantes `slaIn24h`/`slaIn18h`/`slaExpired`, que só alimentavam
+  os dados fictícios daquele módulo). `actions.ts` perdeu `FiscalRequestPayload` e as 3
+  server actions. `dashboard-shell.tsx`/`dashboard/page.tsx` perderam o card, o painel de KPI
+  e a série "Fiscais" do gráfico de tendência (virou single-series). `reports-shell.tsx`/
+  `relatorios/page.tsx` perderam a seção de SLA fiscal inteira. `role-manager.tsx` perdeu as
+  entradas `fiscal_request`/`fiscal` de `MODULE_LABELS`/`MODULE_ORDER`. CSS órfão removido de
+  `globals.css` (`.fiscal-type-*`, `.fiscal-field-group`, `.fiscal-request-form`,
+  `.fiscal-modal`, e `.sla-badge`/`.sla-warning`/`.sla-critical`, que só o `SlaIndicator`
+  apagado usava).
+- **Deixado de propósito sem remover**: `app/core/sla.py` (`calculate_business_deadline`,
+  `pause_sla`/`resume_sla`, `compute_sla_status`) e `validate_cpf_cnpj`/`validate_cnpj`/
+  `validate_email_basic` em `app/core/validators.py` ficaram órfãos — eram consumidos só por
+  `fiscal_requests` — mas são utilitários genéricos (não amarrados ao domínio) e continuam com
+  testes passando (`test_sla.py`, `test_validators.py`). Removê-los é uma decisão maior que
+  "remover Solicitações Fiscais"; fica pra uma limpeza futura se ninguém reaproveitar.
+- **Documentação**: `domain-model.md`, `api-reference.md` (seção inteira de endpoints +
+  SLA inteligente + validação de campos fiscais + exemplo de dashboard), `web-rotas-ui.md`
+  (seção "Solicitações fiscais" inteira), `mapa.md`, `backlog.md` (nova entrada, histórico
+  preservado), `usuarios-perfis.md` (módulo removido da lista + nota sobre papéis
+  `recepcao`/`financeiro` perdendo `fiscal_request.*`), `contexto-registro.md` (persona
+  "Financeiro/fiscal" removida), `oportunidades-legado-operacao.md`, `infra/storage-minio.md`
+  e `infra/teste-restore.md` (query de contagem que já estava quebrada — `fiscal_requests`
+  nunca teve coluna `deleted_at`, era hard delete) atualizados para não referenciar mais o
+  domínio. `CLAUDE.md` (lista de domínios implementados). ADRs e docs de migração
+  (`adr/002-rls-isolamento-multitenant.md`, `migracao-postgresql.md`) preservados como estão —
+  são snapshots históricos de migrations específicas (já citavam até `occurrences`, dropada
+  desde 2026-07-14, sem terem sido atualizados por isso).
+
+**Validação:** `ruff check .` e `ruff format --check .` limpos; `mypy app/ --ignore-missing-imports`
+limpo (achou uma seção órfã em `pyproject.toml` apontando pro domínio apagado, removida);
+`alembic upgrade head` (contra o Postgres de dev, não um banco isolado) até `20260831_0074` sem
+erro, `alembic check` sem diffs pendentes. `pytest tests/ -v`: 123 falhas antes e depois da
+mudança, mesmo conjunto exato de testes (confirmado rodando a suíte com `git stash` pra
+comparar contra o `main` sem as alterações) — é a contaminação de dados do banco de dev já
+registrada no backlog (P11.5: suíte roda contra o banco de dev, sem `TEST_DATABASE_URL`), não
+regressão desta mudança. `npx tsc --noEmit` limpo em `web/` e `admin/`.

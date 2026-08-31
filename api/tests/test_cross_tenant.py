@@ -85,7 +85,6 @@ ENDPOINTS_GET = [
     "/api/v1/work-orders",
     "/api/v1/users",
     "/api/v1/registries",
-    "/api/v1/fiscal-requests",
     "/api/v1/notifications",
     "/api/v1/modules/reunioes",
     "/api/v1/procedures",
@@ -99,15 +98,6 @@ ENDPOINTS_POST = [
             "name": "Ghost",
             "email": "ghost@test.com",
             "password": "test1234",
-        },
-    ),
-    (
-        "/api/v1/fiscal-requests",
-        {
-            "request_type": "Test",
-            "title": "T",
-            "requester": "X",
-            "payload": {},
         },
     ),
     ("/api/v1/modules/reunioes", {"title": "Meeting"}),

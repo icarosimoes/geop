@@ -10,8 +10,6 @@
 | `/reunioes` | lista e CRUD | CRUD via API + mutações server-side | API `meetings` (tabela dedicada) isolada por tenant |
 | `/relatorios-turno` | lista e CRUD + pendências inline | CRUD via API + seção HandoffSection integrada | API `shift-reports` + `handoffs` isolada por tenant |
 | `/inspecoes` | tela dedicada com abas | Inspeções: CRUD com checklist 30 itens + payload completo. Checklists: CRUD de templates com itens | API `modules/inspecoes` + `checklists/templates` |
-| `/conferencias` | lista e CRUD com grade de locais | conferência de discrepâncias por local, filtro por data/status, exportação PDF | API `discrepancy-reports` isolada por tenant |
-| `/solicitacoes-fiscais` | lista, formulário condicional, SLA, anexos e tratativa | CRUD via API + mutações server-side | API `fiscal_requests` isolada por tenant |
 | `/ordens-servico` | Kanban com drag-and-drop, toggle para visão em Lista | CRUD + transições + categorias via select + setor/unidade/prazo/comentários/participantes + export XLSX/PDF + clone. Absorveu `/ocorrencias` em 2026-07-14 (rota removida) | API `work-orders` + `work-orders/categories` + `work-orders/export` isolada por tenant |
 | `/preventivas` | lista e CRUD | CRUD via API + geração automática de OS | API `preventive-plans` isolada por tenant |
 | `/mural` | cartões e CRUD | CRUD via API + mutações server-side | API `bulletin` (tabela dedicada) isolada por tenant |
@@ -56,7 +54,6 @@ Todas as rotas operacionais estão integradas com a API. A tabela abaixo lista o
 | Rota | Endpoint API |
 | --- | --- |
 | `/dashboard` | `GET /dashboard/metrics` |
-| `/solicitacoes-fiscais` | `GET/POST/PATCH/DELETE /fiscal-requests` |
 | `/usuarios` | `GET/POST/PATCH/DELETE /users` + `POST /users/invite` + `POST /users/{id}/avatar` + `GET /roles` + `GET /registries?category=setor` |
 | `/perfis` | `GET/POST/PATCH/DELETE /roles` + `GET /roles/permissions` |
 | `/definir-senha` | `POST /auth/set-password` |
@@ -211,23 +208,6 @@ Botão flutuante de ajuda (`web/components/help-button.tsx`), visível em todas 
 - **Meus chamados**: lista os chamados do próprio usuário (`GET /support/requests`), cada um clicável — expande e mostra a timeline completa do chamado (`GET /timeline/support_request/{id}`, mesmo componente de thread usado no resto do sistema) com campo de resposta (`POST /timeline/support_request/{id}/comment`).
 
 No painel admin (`admin/app/(app)/support-requests`), cada chamado tem um botão "Ver tratativa" que expande a mesma timeline (`GET /platform/support-requests/{id}/timeline`) e um campo de resposta que aciona `PATCH /platform/support-requests/{id}` com `response_message` — a resposta vira automaticamente uma linha na timeline, visível dos dois lados.
-
-## Solicitações fiscais
-
-O protótipo atual atende solicitações da recepção para o financeiro: dados incorretos do tomador, nota travada, nota solicitada depois do check-out e cancelamento. O formulário apresenta campos condicionais de reserva, nota, CPF/CNPJ, tomador, correção, cancelamento, check-out, responsável e pessoas a notificar. A lista exibe UH, status e contagem regressiva de SLA.
-
-### Persistência
-
-Solicitações fiscais possuem CRUD completo via API (`POST`, `GET`, `PATCH`, `DELETE /fiscal-requests`). A criação e edição passam por server actions (`createFiscalRequestAction`, `updateFiscalRequestAction`, `deleteFiscalRequestAction`) que chamam a API com o token do cookie `tenant_token`. Após cada mutação, a página revalida via `router.refresh()`.
-
-Campos específicos do tipo de solicitação (tomador, reserva, nota, CPF/CNPJ, correção, cancelamento, etc.) são enviados no campo `payload` como JSON.
-
-A integração Chess Hotel, que antes criava solicitações via `POST /integrations/chess-hotel/tickets`, foi descontinuada — hoje toda solicitação é criada pela própria interface do GEOP.
-
-### Limitações remanescentes
-
-- nomes informados em “Notificar” não correspondem a IDs e não disparam notificações;
-- alterações específicas do formulário fiscal (campos do payload como taxpayerDoc, invoiceNumber) ainda não aparecem como diff detalhado na timeline — o diff registra a mudança do objeto `payload` como um todo.
 
 ## E-mail — conta Gmail via OAuth (`/email`) (2026-08-31)
 

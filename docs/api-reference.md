@@ -12,10 +12,6 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `POST` | `/auth/refresh` | pública (20/min) | renova tokens via refresh token |
 | `GET` | `/auth/me` | Bearer | perfil revalidado no PostgreSQL |
 | `POST` | `/auth/set-password` | pública (5/min) | define senha via token de convite |
-| `GET` | `/fiscal-requests` | `fiscal_request.view` | solicitações fiscais paginadas do tenant |
-| `POST` | `/fiscal-requests` | `fiscal_request.create` | cria solicitação fiscal |
-| `PATCH` | `/fiscal-requests/{id}` | `fiscal_request.edit` | atualiza solicitação fiscal |
-| `DELETE` | `/fiscal-requests/{id}` | `fiscal_request.delete` | exclui solicitação fiscal |
 | `GET` | `/dashboard/metrics` | Tenant Bearer | métricas agregadas do dashboard |
 | `PATCH` | `/users/me` | Tenant Bearer | edição de perfil do próprio usuário |
 | `GET` | `/users` | `user.view` | usuários paginados do tenant |
@@ -225,7 +221,7 @@ Exceder o limite retorna `429 Too Many Requests`.
 
 ### Arquitetura: service layer
 
-Cada domínio possui um `service.py` com a lógica de negócio separada do router. Os routers lidam apenas com parsing HTTP, validação de input e mapeamento de resposta. Os services recebem session e parâmetros tipados, facilitando reuso (ex: `fiscal_requests.service.create_fiscal_request()`) e testes unitários sem dependência de FastAPI.
+Cada domínio possui um `service.py` com a lógica de negócio separada do router. Os routers lidam apenas com parsing HTTP, validação de input e mapeamento de resposta. Os services recebem session e parâmetros tipados, facilitando reuso (ex: `work_orders.service.create_work_order()`) e testes unitários sem dependência de FastAPI.
 
 ### Erros estruturados
 
@@ -247,55 +243,7 @@ Cada domínio possui um `service.py` com a lógica de negócio separada do route
 
 ## Contrato de listas
 
-Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/fiscal-requests`, `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports` e `/work-diaries`.
-
-### Solicitações fiscais
-
-O CRUD de solicitações fiscais está operacional. Todas as rotas exigem Tenant Bearer e isolam por `company_id`.
-
-#### `POST /fiscal-requests`
-
-Cria uma solicitação fiscal autenticada.
-
-```json
-{
-  "request_type": "Dados do tomador incorretos",
-  "title": "Correção CPF hóspede UH 305",
-  "apartment": "305",
-  "requester": "Ícaro Simoes",
-  "description": "CPF informado está incorreto na NF",
-  "status": "Em andamento",
-  "payload": { "taxpayerDoc": "123.456.789-00" }
-}
-```
-
-Responde `201` com o registro criado, incluindo `id`, `protocol` (`REG-{id:06d}`), `created_at` e `updated_at`. O campo `payload` armazena campos adicionais específicos do tipo (tomador, reserva, nota, etc.) como JSON.
-
-#### `PATCH /fiscal-requests/{id}`
-
-Atualiza campos da solicitação. Aceita qualquer subconjunto de `request_type`, `title`, `apartment`, `requester`, `description`, `status` e `payload`. Campos não enviados permanecem inalterados.
-
-#### `DELETE /fiscal-requests/{id}`
-
-Exclui a solicitação. Responde `204` sem corpo. Retorna `404` se o registro não existir ou pertencer a outro tenant.
-
-> A integração Chess Hotel (`/integrations/chess-hotel/*`) foi descontinuada e removida do código. Os registros históricos criados por ela permanecem em `fiscal_requests` (`origin = "chess-hotel"`), mas nenhum endpoint de integração externa existe mais para solicitações fiscais.
-
-#### SLA inteligente
-
-O `sla_deadline` é calculado em **dias úteis** (seg-sex, 8h-18h) na timezone do tenant (`companies.timezone`). O SLA padrão é 24h úteis (≈2,4 dias corridos). O campo `sla_status` é computado a cada consulta:
-
-| Status | Condição |
-| --- | --- |
-| `on_time` | mais de 4h úteis restantes |
-| `warning` | ≤4h restantes |
-| `overdue` | deadline ultrapassado |
-| `paused` | registro em status "Em espera" |
-| `completed` | status "Concluído" ou "Cancelado" |
-
-**Pausa**: quando o status muda para "Em espera", o SLA é congelado. Ao retomar (qualquer outro status), os segundos pausados são acumulados e descontados do deadline efetivo. Múltiplas pausas são somadas.
-
-**Feriados**: `calculate_business_deadline()` aceita um set de datas (`YYYY-MM-DD`) como feriados. Integração com `CompanySetting` para configuração por tenant está preparada.
+Todas as listas paginadas respondem `{items, total, page, page_size}` e aceitam `page`, `page_size` e `search` (quando aplicável). Endpoints que seguem este contrato: `/users`, `/registries`, `/modules/{slug}`, `/procedures`, `/notifications`, `/meetings`, `/shift-reports`, `/work-orders`, `/preventive-plans`, `/checklists/templates`, `/checklists/executions`, `/stock/items`, `/stock/movements`, `/handoffs`, `/maintenance`, `/bulletin`, `/check-suites`, `/inspection-suites`, `/apartment-inspections`, `/audit-reports` e `/work-diaries`.
 
 ### Timeline
 
@@ -305,7 +253,7 @@ A timeline agrega eventos de auditoria de um registro e os apresenta como thread
 
 Retorna todos os eventos do registro em ordem cronológica. Cada item inclui `id`, `event_type`, `user` (nome), `message` (para comentários e anexos), `changes` (para updates) e `created_at`.
 
-Entity types válidos: `work_order`, `fiscal_request`, `procedure`, `meeting`, `shift_report`, `employee`, `support_request`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
+Entity types válidos: `work_order`, `procedure`, `meeting`, `shift_report`, `employee`, `support_request`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
 
 `support_request` tem uma regra de acesso a mais que as outras: além de `company_id`, exige que o `user_id` autenticado seja o dono do chamado (`SupportRequest.user_id`) — outro usuário do mesmo tenant recebe `404`, tanto no `GET` quanto no `POST .../comment`. As demais entity types são visíveis a qualquer usuário autorizado da empresa.
 
@@ -335,22 +283,8 @@ Toda mutação em ordens de serviço, solicitações fiscais, procedimentos e an
 | `work_order` | `create` | POST /work-orders |
 | `work_order` | `update` | PATCH /work-orders/{id}, apenas se houve diff |
 | `work_order` | `delete` | DELETE /work-orders/{id} |
-| `fiscal_request` | `create` | POST /fiscal-requests |
-| `fiscal_request` | `update` | PATCH /fiscal-requests/{id}, apenas se houve diff |
-| `fiscal_request` | `delete` | DELETE /fiscal-requests/{id} |
 | `{entity_type}` | `attachment_add` | POST /attachments — registra filename, content_type e size_bytes |
 | `{entity_type}` | `attachment_remove` | DELETE /attachments/{id} — registra filename |
-
-### Validação de campos fiscais
-
-O `payload` de solicitações fiscais valida automaticamente:
-
-| Campo | Regra |
-| --- | --- |
-| `taxpayerDoc` | CPF (11 dígitos) ou CNPJ (14 dígitos) com verificação de dígitos; normalizado para formato com pontuação |
-| `taxpayerEmail` | formato básico de e-mail; normalizado para lowercase e trim |
-
-Valores inválidos retornam `422`.
 
 ### Dashboard
 
@@ -360,7 +294,6 @@ Valores inválidos retornam `422`.
 {
   "open_occurrences": 12,
   "my_occurrences": 3,
-  "open_fiscal": 4,
   "completed_month": 28,
   "active_users": 26,
   "active_sectors": 5,
@@ -379,14 +312,8 @@ Valores inválidos retornam `422`.
       "created_week": 8,
       "completed_week": 5
     },
-    "fiscal_requests": {
-      "by_status": {"Em andamento": 3, "Concluído": 10},
-      "by_type": {"Nota travada": 5, "Dados incorretos": 3},
-      "sla_compliance_pct": 90,
-      "overdue": 0
-    },
     "trend": [
-      {"date": "2026-06-15", "work_orders": 2, "fiscal_requests": 1}
+      {"date": "2026-06-15", "work_orders": 2}
     ]
   }
 }
@@ -396,14 +323,12 @@ Valores inválidos retornam `422`.
 | --- | --- |
 | `open_occurrences` | ordens de serviço com status diferente de `concluida`/`validada` (nome do campo mantido por compatibilidade após a fusão de Ocorrências em Ordens de Serviço, ver `memoria-projeto.md`) |
 | `my_occurrences` | subconjunto de `open_occurrences` atribuídas (`assigned_user_id`) ao usuário logado |
-| `open_fiscal` | solicitações fiscais com status diferente de "Concluído" |
 | `completed_month` | ordens de serviço concluídas (`completed_at` no mês corrente) |
 | `active_users` | usuários ativos e não excluídos do tenant |
 | `active_sectors` | setores não excluídos do tenant |
 | `recent` | últimas atividades recentes de todos os módulos |
 | `kpis.work_orders` | KPIs de ordens de serviço: total, distribuição por status (inclui o universo antes coberto por Ocorrências)/prioridade/categoria, tempo médio de resolução (horas), SLA compliance (%), atrasadas, criadas/concluídas na semana |
-| `kpis.fiscal_requests` | KPIs de solicitações fiscais: distribuição por status/tipo (top 8), SLA compliance (%), atrasadas |
-| `kpis.trend` | tendência dos últimos 7 dias: contagem diária de OS e fiscais |
+| `kpis.trend` | tendência dos últimos 7 dias: contagem diária de OS |
 
 ### Manutenção preventiva
 
@@ -671,7 +596,7 @@ Marca todas as notificações não lidas do usuário como lidas. Responde `204`.
 
 Lista preferências de notificação do usuário autenticado para todos os módulos válidos. Módulos sem preferência salva retornam `in_app: true, email: true` (default). Responde `[{module, in_app, email}]`.
 
-Módulos válidos: `work_orders`, `fiscal_requests`, `meetings`, `shift_reports`, `procedures`, `inspections`, `maintenance`, `modules`.
+Módulos válidos: `work_orders`, `meetings`, `shift_reports`, `procedures`, `inspections`, `maintenance`, `modules`.
 
 #### `PUT /notifications/preferences/{module}`
 
@@ -704,11 +629,11 @@ Cada notificação inclui o campo `email_sent_at` (datetime ou null) que indica 
 
 Anexos são armazenados no MinIO (S3-compatible) e referenciados na tabela `attachments` com vínculo polimórfico por `entity_type`/`entity_id`.
 
-#### `POST /attachments?entity_type=fiscal_request&entity_id=42`
+#### `POST /attachments?entity_type=work_order&entity_id=42`
 
 Upload multipart. Envia o arquivo no campo `file` do form-data. Query params obrigatórios: `entity_type` e `entity_id`.
 
-Entity types válidos: `fiscal_request`, `work_order`, `procedure`, `module_record`.
+Entity types válidos: `work_order`, `procedure`, `module_record`, `employee_payslip`, `contract`.
 
 Validações:
 - Tamanho máximo: 10MB (configurável via `ATTACHMENT_MAX_SIZE_MB`)
@@ -718,7 +643,7 @@ Validações:
 
 Responde `201` com metadados do anexo (`id`, `filename`, `content_type`, `size_bytes`, `created_at`). Retorna `422` se o arquivo violar alguma regra.
 
-#### `GET /attachments?entity_type=fiscal_request&entity_id=42`
+#### `GET /attachments?entity_type=work_order&entity_id=42`
 
 Lista anexos de uma entidade. Responde `{items, total}`.
 
@@ -739,7 +664,6 @@ O sistema de permissões usa uma factory `require_permission(code)` em `app/core
 | Módulo | Códigos |
 | --- | --- |
 | work_order | `work_order.view`, `.create`, `.edit`, `.delete` |
-| fiscal_request | `fiscal_request.view`, `.create`, `.edit`, `.delete` |
 | user | `user.view`, `.create`, `.edit`, `.delete` |
 | registry | `registry.view`, `.create`, `.edit`, `.delete` |
 | module | `module.view`, `.create`, `.edit`, `.delete` |
@@ -956,11 +880,10 @@ Quando `overtime_paid_in_cash=true`, `GET /timeclock/mirror`/`/mirror/by-sector`
 
 Frontend: toggle e tabela de "salário-base por cargo" em `/configuracoes` (aba "Ponto"); campo "Salário" em `/cadastros/funcionarios`; valor em R$ exibido sob os minutos de HE 50%/100% em `/ponto/espelho`; aviso em `/ponto/banco-de-horas` quando o toggle está ligado.
 
-### Relatórios — ocorrências e SLA de solicitações fiscais (`/reports`) (2026-07-05)
+### Relatórios — ordens de serviço (`/reports`) (2026-07-05)
 
 ```
-GET /reports/work-orders         (report.view) ?date_from&date_to → total, por status, por setor, taxa de conclusão, atrasadas, tendência diária
-GET /reports/fiscal-requests-sla (report.view) ?date_from&date_to → total, por status/tipo, sla_compliance_pct, tempo médio de resolução, breakdown por estado de SLA, tendência diária
+GET /reports/work-orders (report.view) ?date_from&date_to → total, por status, por setor, taxa de conclusão, atrasadas, tendência diária
 ```
 
 Sem `date_from`/`date_to`, usa o mês corrente. Frontend: `/relatorios`. Sem exportação (não há endpoint de export nesta primeira entrega).
@@ -1041,25 +964,6 @@ POST /settings/brevo/test  { to: string }  → { status: "sent", message_id }
 Dispara um e-mail real via `app.integrations.brevo.send_email()` usando a config já salva em `company_settings.brevo` (não aceita credenciais no body — sempre usa o que está persistido). `422 not_configured` se a empresa ainda não salvou nenhuma config; `502 send_failed` (com `status` = código HTTP retornado pela Brevo) se a API rejeitar a chave/remetente — cenário mais comum quando o domínio do remetente não está autenticado (SPF/DKIM) na conta Brevo, algo que a API do GEOP não verifica nem pode automatizar.
 
 Frontend `web/`: seção "Testar envio" em `/configuracoes?tab=integracoes`, só aparece depois que `has_credentials` é `true` (`BrevoSettingsSection` em `web/components/settings-sections.tsx`).
-
-### Conferência de discrepâncias (`/discrepancy-reports`) (2026-08-28)
-
-Primeiro vertical slice das oportunidades identificadas no legado — detalhamento funcional em [oportunidades-legado-operacao.md](oportunidades-legado-operacao.md).
-
-```
-GET    /discrepancy-reports          (discrepancy_report.view)   ?page&page_size&date_from&date_to&status → lista paginada
-GET    /discrepancy-reports/{id}     (discrepancy_report.view)   → detalhe com entries, resumo por código e nomes dos responsáveis
-POST   /discrepancy-reports          (discrepancy_report.create) { report_date, status?, observations?, prepared_by_user_id?, checked_by_user_id?, received_by_user_id?, entries: [{location_id, first_code?, second_code?, notes?}] }
-PATCH  /discrepancy-reports/{id}     (discrepancy_report.edit)   → mesmos campos, todos opcionais; 422 se a conferência já estiver `closed` (nenhum campo é aceito, nem voltar o status)
-DELETE /discrepancy-reports/{id}     (discrepancy_report.delete) → soft delete
-GET    /discrepancy-reports/{id}/pdf (discrepancy_report.view)   → PDF (reportlab) com meta, grade de locais e resumo por código
-```
-
-`entries` não aceita `location_id` repetido nem local de outro tenant (`422` em ambos os casos, validado no service antes de qualquer insert). `entry_count`/`discrepancy_count`/`code_summary` são sempre calculados no servidor a partir das entries — nunca aceitos do payload. `discrepancy_report_entries` não tem `company_id` próprio nem RLS direta; isolamento vem de `report_id` + verificação de tenant no service.
-
-Pendências conhecidas: sem catálogo de códigos por tenant (`first_code`/`second_code` são string livre até 40 caracteres); sem exportação Excel; sem uso de timeline/anexos.
-
-Frontend: `/conferencias` — listagem paginada com filtro por data/status, formulário com grade de locais (adicionar/remover linha) e busca de responsáveis (`UserPicker`, mesmo padrão ARIA combobox de `operational-module.tsx`). Proxy de download do PDF em `web/app/api/discrepancy-reports/[id]/pdf/route.ts` (mesmo padrão de `work-orders`).
 
 ### OAuth2 do Google para contas Gmail (`/email-client/oauth`) (2026-08-31)
 
