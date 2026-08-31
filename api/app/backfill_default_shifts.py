@@ -9,15 +9,15 @@ import asyncio
 
 from sqlalchemy import select
 
-from app.core.database import SessionLocal
+from app.core.database import MigrationSessionLocal
 from app.domain.timeclock.service import ensure_default_shifts
 from app.models import Company
 
 
 async def backfill() -> None:
-    if SessionLocal is None:
+    if MigrationSessionLocal is None:
         raise RuntimeError("DATABASE_URL não configurada")
-    async with SessionLocal() as session:
+    async with MigrationSessionLocal() as session:
         companies = (
             (await session.execute(select(Company).where(Company.deleted_at.is_(None))))
             .scalars()

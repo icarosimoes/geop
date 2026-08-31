@@ -372,7 +372,7 @@ class ContractHistoryItem(BaseModel):
     id: int
     event_type: str
     diff: dict | None
-    user_id: int
+    user_id: int | None
     user_name: str | None
     created_at: datetime
 

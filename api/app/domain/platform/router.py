@@ -10,7 +10,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
-from app.core.dependencies import require_session
+from app.core.dependencies import require_platform_session
 from app.core.rate_limit import limiter
 from app.core.security import (
     create_platform_refresh_token,
@@ -39,6 +39,7 @@ from app.domain.platform.schemas import (
     SubscriptionDetail,
     SubscriptionUpdate,
     SupportRequestResponse,
+    SupportRequestTimelineEntry,
     SupportRequestUpdate,
     TenantCreate,
     TenantDetail,
@@ -46,7 +47,15 @@ from app.domain.platform.schemas import (
     TenantUpdate,
     UsageRecordResponse,
 )
-from app.models import Company, Plan, PlatformAuditLog, PlatformUser, Subscription, User
+from app.models import (
+    Company,
+    Plan,
+    PlatformAuditLog,
+    PlatformUser,
+    Subscription,
+    SupportRequest,
+    User,
+)
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 platform_oauth = OAuth2PasswordBearer(tokenUrl="/api/v1/platform/auth/login")
@@ -54,7 +63,7 @@ platform_oauth = OAuth2PasswordBearer(tokenUrl="/api/v1/platform/auth/login")
 
 async def current_platform_user(
     token: Annotated[str, Depends(platform_oauth)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PlatformUser:
     try:
@@ -84,7 +93,7 @@ async def current_platform_user(
 async def platform_login(
     request: Request,
     payload: PlatformLoginRequest,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PlatformTokenResponse:
     user = await session.scalar(
@@ -136,7 +145,7 @@ class PlatformRefreshRequest(BaseModel):
 async def platform_refresh(
     request: Request,
     body: PlatformRefreshRequest,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PlatformTokenResponse:
     try:
@@ -186,7 +195,7 @@ async def platform_refresh(
 @router.get("/metrics", response_model=PlatformMetricsResponse)
 async def platform_metrics(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlatformMetricsResponse:
     tenants_total, tenants_active = (
         await session.execute(
@@ -225,7 +234,7 @@ async def platform_metrics(
 @router.get("/tenants", response_model=list[TenantSummary])
 async def list_tenants(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> list[TenantSummary]:
     rows = (
         (
@@ -269,7 +278,7 @@ async def list_tenants(
 async def create_tenant(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: TenantCreate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> TenantDetail:
     try:
         company = await service.create_tenant(
@@ -301,7 +310,7 @@ async def create_tenant(
 async def get_tenant(
     tenant_id: int,
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> TenantDetail:
     detail = await service.get_tenant_detail(session, tenant_id)
     if detail is None:
@@ -314,7 +323,7 @@ async def update_tenant(
     tenant_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: TenantUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> TenantDetail:
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
@@ -330,7 +339,7 @@ async def update_tenant(
 async def delete_tenant(
     tenant_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> None:
     deleted = await service.soft_delete_tenant(session, tenant_id, actor_id=admin.id)
     if not deleted:
@@ -342,7 +351,7 @@ async def impersonate_tenant(
     tenant_id: int,
     request: Request,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ImpersonationLinkResponse:
     ticket = await service.create_impersonation_ticket(
@@ -367,7 +376,7 @@ async def impersonate_tenant(
 @router.get("/plans", response_model=list[PlanResponse])
 async def list_plans(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> list[PlanResponse]:
     plans = (await session.execute(select(Plan).order_by(Plan.price_cents))).scalars().all()
     return [PlanResponse.model_validate(plan, from_attributes=True) for plan in plans]
@@ -377,7 +386,7 @@ async def list_plans(
 async def create_plan(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: PlanCreate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlanResponse:
     plan = await service.create_plan(
         session,
@@ -400,7 +409,7 @@ async def update_plan(
     plan_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: PlanUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlanResponse:
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
@@ -415,7 +424,7 @@ async def update_plan(
 async def delete_plan(
     plan_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> None:
     try:
         deleted = await service.soft_delete_plan(session, plan_id, actor_id=admin.id)
@@ -434,7 +443,7 @@ async def delete_plan(
 async def get_subscription(
     subscription_id: int,
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> SubscriptionDetail:
     data = await service.get_subscription_with_invoices(session, subscription_id)
     if data is None:
@@ -447,7 +456,7 @@ async def update_subscription(
     subscription_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: SubscriptionUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> SubscriptionDetail:
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
@@ -472,7 +481,7 @@ async def update_subscription(
 @router.post("/billing/process-expirations", response_model=LifecycleResponse)
 async def process_expirations(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> LifecycleResponse:
     results = await service.process_trial_expirations(session, actor_id=admin.id)
     return LifecycleResponse(
@@ -483,7 +492,7 @@ async def process_expirations(
 @router.post("/billing/process-suspensions", response_model=LifecycleResponse)
 async def process_suspensions(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> LifecycleResponse:
     results = await service.process_suspensions(session, actor_id=admin.id)
     return LifecycleResponse(
@@ -494,7 +503,7 @@ async def process_suspensions(
 @router.post("/billing/reconcile")
 async def reconcile(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     auto_correct: bool = QueryParam(False),
 ) -> dict:
@@ -511,7 +520,7 @@ async def reconcile(
 async def reactivate_subscription(
     subscription_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> SubscriptionDetail:
     sub = await service.reactivate_tenant(session, subscription_id, actor_id=admin.id)
     if sub is None:
@@ -528,7 +537,7 @@ async def reactivate_subscription(
 @router.get("/users", response_model=list[PlatformUserResponse])
 async def list_platform_users(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> list[PlatformUserResponse]:
     users = await service.list_platform_users(session)
     return [PlatformUserResponse.model_validate(u, from_attributes=True) for u in users]
@@ -538,7 +547,7 @@ async def list_platform_users(
 async def create_platform_user(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: PlatformUserCreate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlatformUserResponse:
     user = await service.create_platform_user(
         session,
@@ -556,7 +565,7 @@ async def update_platform_user(
     user_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: PlatformUserUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlatformUserResponse:
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
@@ -571,7 +580,7 @@ async def update_platform_user(
 async def delete_platform_user(
     user_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> None:
     deleted = await service.soft_delete_platform_user(session, user_id, actor_id=admin.id)
     if not deleted:
@@ -586,7 +595,7 @@ async def delete_platform_user(
 @router.get("/support-requests", response_model=list[SupportRequestResponse])
 async def list_support_requests(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> list[SupportRequestResponse]:
     rows = await service.list_support_requests(session)
     return [
@@ -594,10 +603,14 @@ async def list_support_requests(
             id=row["request"].id,
             company_id=row["request"].company_id,
             company_name=row["company_name"],
+            subject=row["request"].subject,
+            priority=row["request"].priority,
             contact_name=row["request"].contact_name,
             contact_whatsapp=row["request"].contact_whatsapp,
             message=row["request"].message,
             status=row["request"].status,
+            response_message=row["request"].response_message,
+            responded_by=row["request"].responded_by,
             created_at=row["request"].created_at,
         )
         for row in rows
@@ -609,10 +622,15 @@ async def update_support_request(
     request_id: int,
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: SupportRequestUpdate,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> SupportRequestResponse:
     req = await service.update_support_request_status(
-        session, request_id, status=payload.status, actor_id=admin.id
+        session,
+        request_id,
+        status=payload.status,
+        actor_id=admin.id,
+        actor_name=admin.name,
+        response_message=payload.response_message,
     )
     if req is None:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
@@ -621,12 +639,37 @@ async def update_support_request(
         id=req.id,
         company_id=req.company_id,
         company_name=company.name if company else None,
+        subject=req.subject,
+        priority=req.priority,
         contact_name=req.contact_name,
         contact_whatsapp=req.contact_whatsapp,
         message=req.message,
         status=req.status,
+        response_message=req.response_message,
+        responded_by=req.responded_by,
         created_at=req.created_at,
     )
+
+
+@router.get(
+    "/support-requests/{request_id}/timeline",
+    response_model=list[SupportRequestTimelineEntry],
+)
+async def get_support_request_timeline(
+    request_id: int,
+    _: Annotated[PlatformUser, Depends(current_platform_user)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
+) -> list[SupportRequestTimelineEntry]:
+    """A tratativa completa do chamado — cada resposta do admin (e cada comentário
+    que o próprio tenant adicionar via `/timeline/support_request/{id}/comment`)
+    aparece aqui na ordem em que aconteceu. Ver `update_support_request_status`."""
+    from app.domain.timeline.service import get_timeline
+
+    req = await session.scalar(select(SupportRequest).where(SupportRequest.id == request_id))
+    if req is None:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    items = await get_timeline(session, req.company_id, "support_request", request_id)
+    return [SupportRequestTimelineEntry(**item) for item in items]
 
 
 # ---------------------------------------------------------------------------
@@ -637,7 +680,7 @@ async def update_support_request(
 @router.get("/usage", response_model=list[UsageRecordResponse])
 async def list_usage(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     limit: int = QueryParam(200, le=1000),
 ) -> list[UsageRecordResponse]:
     rows = await service.list_usage_records(session, limit=limit)
@@ -659,7 +702,7 @@ async def list_usage(
 @router.post("/usage/snapshot")
 async def create_usage_snapshot(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> dict:
     created = await service.snapshot_usage(session)
     return {"created": created}
@@ -673,7 +716,7 @@ async def create_usage_snapshot(
 @router.get("/settings/email", response_model=PlatformEmailRead)
 async def get_platform_email(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlatformEmailRead:
     value = await service.get_platform_email_config(session)
     return PlatformEmailRead(
@@ -687,7 +730,7 @@ async def get_platform_email(
 async def save_platform_email(
     admin: Annotated[PlatformUser, Depends(current_platform_user)],
     payload: PlatformEmailConfig,
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
 ) -> PlatformEmailRead:
     value = await service.save_platform_email_config(
         session,
@@ -727,7 +770,7 @@ class AuditLogPage(BaseModel):
 @router.get("/audit", response_model=AuditLogPage)
 async def list_audit_logs(
     _: Annotated[PlatformUser, Depends(current_platform_user)],
-    session: Annotated[AsyncSession, Depends(require_session)],
+    session: Annotated[AsyncSession, Depends(require_platform_session)],
     page: int = QueryParam(1, ge=1),
     page_size: int = QueryParam(50, ge=1, le=200),
     action: str | None = QueryParam(None),

@@ -130,6 +130,8 @@ interface MutationResult {
 // --- Suporte ---
 
 export interface SupportRequestPayload {
+  subject: string;
+  priority?: "BAIXA" | "MEDIA" | "ALTA";
   contact_name: string;
   contact_whatsapp: string;
   message?: string;
@@ -142,6 +144,28 @@ export async function createSupportRequestAction(body: SupportRequestPayload): P
     return { ok: false, error: "Erro ao enviar pedido de suporte." };
   }
   return { ok: true, data: await response.json() };
+}
+
+export interface SupportRequestRecord {
+  id: number;
+  subject: string | null;
+  priority: string;
+  contact_name: string;
+  contact_whatsapp: string;
+  message: string | null;
+  status: string;
+  response_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchMySupportRequestsAction(): Promise<SupportRequestRecord[]> {
+  const response = await authedFetch("/support/requests");
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return [];
+  }
+  return response.json();
 }
 
 export interface FiscalRequestPayload {

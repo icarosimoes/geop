@@ -299,13 +299,15 @@ O `sla_deadline` é calculado em **dias úteis** (seg-sex, 8h-18h) na timezone d
 
 ### Timeline
 
-A timeline agrega eventos de auditoria de um registro e os apresenta como thread de conversa. Lê da tabela `audit_events` e resolve o nome do ator via join com `users`.
+A timeline agrega eventos de auditoria de um registro e os apresenta como thread de conversa. Lê da tabela `audit_events` e resolve o nome do ator via outer join com `users` — quando não há linha correspondente (ator é um `PlatformUser`, ex.: resposta de chamado de suporte), usa `AuditEvent.actor_name` (migration `20260831_0072`).
 
 #### `GET /timeline/{entity_type}/{entity_id}`
 
 Retorna todos os eventos do registro em ordem cronológica. Cada item inclui `id`, `event_type`, `user` (nome), `message` (para comentários e anexos), `changes` (para updates) e `created_at`.
 
-Entity types válidos: `work_order`, `fiscal_request`, `procedure`, `meeting`, `shift_report`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
+Entity types válidos: `work_order`, `fiscal_request`, `procedure`, `meeting`, `shift_report`, `employee`, `support_request`, `inspecoes`, `diarios-obra`, `manutencao`, `mural`.
+
+`support_request` tem uma regra de acesso a mais que as outras: além de `company_id`, exige que o `user_id` autenticado seja o dono do chamado (`SupportRequest.user_id`) — outro usuário do mesmo tenant recebe `404`, tanto no `GET` quanto no `POST .../comment`. As demais entity types são visíveis a qualquer usuário autorizado da empresa.
 
 Tipos de evento renderizados:
 
@@ -325,6 +327,8 @@ Adiciona comentário ao registro. Body: `{ "message": "texto" }`. Dispara notifi
 ### Auditoria
 
 Toda mutação em ordens de serviço, solicitações fiscais, procedimentos e anexos gera um `AuditEvent` com `company_id`, `user_id`, `entity_type`, `entity_id`, `event_type` e `diff` JSON. O diff registra campo a campo o valor anterior e o novo, apenas quando há mudança. Eventos de create e delete não possuem diff. A tabela `audit_events` é imutável por design (sem `updated_at`/`deleted_at`, `created_at` com `server_default=func.now()`).
+
+`user_id` é opcional desde `20260831_0072`: quando o ator não tem linha em `users` (ex.: `PlatformUser` respondendo um chamado de suporte), fica `None` e `actor_name` guarda o nome pra exibição — `app/core/audit.py::record_event` exige um dos dois. `record_event` retorna o `AuditEvent` criado (com `id`/`created_at` já populados via `flush()`), então callers não precisam reconsultar depois do commit.
 
 | `entity_type` | `event_type` | Quando |
 | --- | --- | --- |
@@ -970,21 +974,31 @@ PATCH  /platform/users/{id}                   → name?, email?, role?, password
 DELETE /platform/users/{id}                   → soft delete + active=false
 
 GET    /platform/support-requests             → pedidos de suporte de todos os tenants, com company_name
-PATCH  /platform/support-requests/{id}        → { status: pending|contacted|resolved }
+PATCH  /platform/support-requests/{id}        → { status: pending|contacted|resolved, response_message? }
 
 GET    /platform/usage?limit=200              → registros de uso por tenant (metric, value, period_start/end)
 POST   /platform/usage/snapshot               → gera um snapshot do dia corrente (usuários ativos e ocorrências do mês) por tenant
+
+GET    /platform/support-requests/{id}/timeline → tratativa completa do chamado (ver abaixo)
 ```
 
 Todas as rotas exigem `PlatformUser` autenticado (`current_platform_user`) e toda mutação é auditada em `PlatformAuditLog`. `SupportRequest` e `UsageRecord` não têm RLS (mesmo padrão de `subscriptions`/`invoices`: tabelas cross-tenant administradas apenas pela plataforma).
 
-Endpoint tenant-facing correspondente para abrir um pedido de suporte:
+**Central de suporte (chamados) — ciclo completo (2026-08-31), com timeline (2026-08-31):** o admin responde um chamado passando `response_message` no `PATCH`; isso seta `responded_by` (id do `PlatformUser`), fica auditado no `PlatformAuditLog`, dispara uma notificação in-app para o `user_id` que abriu o chamado (`create_notification`) **e** grava evento(s) na timeline via `record_event` (`app/core/audit.py`): um `event_type="update"` quando o status muda, e um `event_type="comment"` quando há `response_message` — ambos atribuídos a `actor_name="Suporte · {nome do admin}"`, já que um `PlatformUser` não tem linha em `users` (`AuditEvent.user_id` é opcional desde a migration `20260831_0072` justamente por causa disso).
+
+`support_request` é um `entity_type` válido de timeline (`app/domain/timeline/service.py`), com uma regra que nenhum outro tem: é escopado por **dono do registro** (`SupportRequest.user_id`), não só por empresa — um chamado é pessoal, outro usuário do mesmo tenant recebe 404 tanto pra ler quanto pra comentar (`OWNER_SCOPED_ENTITY_TYPES`). O tenant comenta no próprio chamado pelo endpoint genérico já existente, sem rota nova:
 
 ```
-POST /support/request   (autenticado como usuário do tenant) → { contact_name, contact_whatsapp, message? }
+POST /support/request                              (tenant) → { subject, priority?: BAIXA|MEDIA|ALTA, contact_name, contact_whatsapp, message? }
+GET  /support/requests                              (tenant) → chamados do próprio usuário, com status e response_message
+GET  /timeline/support_request/{id}                 (tenant, dono do chamado) → tratativa completa
+POST /timeline/support_request/{id}/comment         (tenant, dono do chamado) → { message } — vira mais uma linha
+GET  /platform/support-requests/{id}/timeline       (PlatformUser) → mesma tratativa, visão do painel
 ```
 
-Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`), visível em todas as páginas autenticadas do tenant. Não há endpoint de criação manual de `usage_records` além do snapshot — não há Celery no GEOP, então a geração é sob demanda pelo botão "Gerar snapshot de hoje" no admin.
+Acionado pelo botão "Ajuda e suporte" no `web/` (`components/help-button.tsx`) — aba "Meus chamados" expande cada chamado numa thread (reaproveita `fetchTimeline`/`addCommentAction`, os mesmos helpers genéricos de `app/actions.ts` usados por ordens de serviço e outras entidades) com campo de resposta. `admin/support-requests` tem "Ver tratativa" equivalente. Não há endpoint de criação manual de `usage_records` além do snapshot — não há Celery no GEOP, então a geração é sob demanda pelo botão "Gerar snapshot de hoje" no admin.
+
+Fora de escopo: anexos no chamado, múltiplos sistemas de origem. Ver [oportunidades-legado-operacao.md](oportunidades-legado-operacao.md#6-central-de-suporte-chamados).
 
 Frontend admin: `/users`, `/support-requests`, `/usage`.
 

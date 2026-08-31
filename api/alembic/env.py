@@ -12,8 +12,13 @@ if config.config_file_name:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-if settings.database_url:
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+# Migrations precisam da role dona das tabelas (CREATE TABLE, ALTER, CREATE POLICY);
+# `database_url` em produção deve ser uma role restrita sem esses privilégios (ver
+# app/core/config.py). Cai para `database_url` quando `database_migration_url` não
+# estiver configurada (setup de uma role só).
+migration_url = settings.database_migration_url or settings.database_url
+if migration_url:
+    config.set_main_option("sqlalchemy.url", migration_url)
 
 target_metadata = Base.metadata
 

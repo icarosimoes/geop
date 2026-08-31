@@ -6,7 +6,7 @@ import bcrypt
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import MigrationSessionLocal
 from app.models import Company, Permission, Plan, PlatformUser, Role, Subscription, User
 
 
@@ -16,7 +16,7 @@ def password_hash(value: str) -> str:
 
 async def seed() -> None:
     settings = get_settings()
-    if SessionLocal is None:
+    if MigrationSessionLocal is None:
         raise RuntimeError("DATABASE_URL não configurada")
     default_password = os.getenv("SEED_DEFAULT_PASSWORD", "Registro@123")
     platform_password = os.getenv("PLATFORM_ADMIN_PASSWORD", "RegistroAdmin@123")
@@ -25,7 +25,7 @@ async def seed() -> None:
     ):
         raise RuntimeError("senhas de seed devem ser explícitas em produção")
 
-    async with SessionLocal() as session:
+    async with MigrationSessionLocal() as session:
         if await session.scalar(select(Company.id).limit(1)):
             return
 

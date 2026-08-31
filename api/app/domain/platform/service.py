@@ -8,7 +8,9 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import record_event
 from app.core.config import Settings
+from app.core.rls import set_tenant_context
 from app.core.security import create_impersonation_token
 from app.domain.timeclock.service import ensure_default_shifts
 from app.integrations.asaas import AsaasClient, AsaasError
@@ -60,6 +62,9 @@ async def create_impersonation_ticket(
     settings: Settings,
     ip_address: str | None = None,
 ) -> str | None:
+    # Redundante sob `registro_platform` (BYPASSRLS), mantido pelo mesmo motivo
+    # do comentário em update_support_request_status.
+    await set_tenant_context(session, company_id)
     user = await session.scalar(
         select(User)
         .where(User.company_id == company_id, User.active.is_(True), User.deleted_at.is_(None))
@@ -898,20 +903,72 @@ async def update_support_request_status(
     *,
     status: str,
     actor_id: int,
+    actor_name: str,
+    response_message: str | None = None,
 ) -> SupportRequest | None:
     req = await session.scalar(select(SupportRequest).where(SupportRequest.id == request_id))
     if req is None:
         return None
+
+    # `audit_events`/`notifications` têm RLS por tenant e a sessão da plataforma
+    # nunca passa por `current_user` — precisa vir antes de qualquer escrita
+    # nessas tabelas. Redundante sob `registro_platform` (BYPASSRLS — ver
+    # ADR-002), mantido pro caso de rodar algum dia sob uma sessão sem bypass.
+    await set_tenant_context(session, req.company_id)
+
     old_status = req.status
     req.status = status
+    audit_payload: dict[str, Any] = {"from": old_status, "to": status}
+    timeline_actor = f"Suporte · {actor_name}"
+
+    if old_status != status:
+        await record_event(
+            session,
+            company_id=req.company_id,
+            user_id=None,
+            actor_name=timeline_actor,
+            entity_type="support_request",
+            entity_id=req.id,
+            event_type="update",
+            diff={"status": {"from": old_status, "to": status}},
+        )
+
+    if response_message is not None:
+        req.response_message = response_message
+        req.responded_by = actor_id
+        audit_payload["response_message"] = response_message
+        await record_event(
+            session,
+            company_id=req.company_id,
+            user_id=None,
+            actor_name=timeline_actor,
+            entity_type="support_request",
+            entity_id=req.id,
+            event_type="comment",
+            diff={"message": response_message},
+        )
+
     await _log_platform_audit(
         session,
         actor_id=actor_id,
         action="support_request.update_status",
         target_type="support_request",
         target_id=request_id,
-        payload={"from": old_status, "to": status},
+        payload=audit_payload,
     )
+    if response_message is not None and req.user_id is not None:
+        from app.domain.notifications.service import create_notification
+
+        await create_notification(
+            session,
+            company_id=req.company_id,
+            user_id=req.user_id,
+            title="Seu chamado de suporte foi respondido",
+            body=response_message,
+            category="info",
+            entity_type="support_request",
+            entity_id=req.id,
+        )
     await session.commit()
     await session.refresh(req)
     return req

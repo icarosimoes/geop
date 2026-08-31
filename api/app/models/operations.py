@@ -107,7 +107,12 @@ class AuditEvent(Base, TenantMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Nullable: a maioria dos eventos vem de um User do tenant, mas alguns atores
+    # não têm linha em `users` (ex.: admin da plataforma respondendo um chamado de
+    # suporte — é um `PlatformUser`, tabela sem relação com `users`). Nesses casos
+    # `user_id` fica None e `actor_name` guarda o nome pra exibição na timeline.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    actor_name: Mapped[str | None] = mapped_column(String(160))
     entity_type: Mapped[str] = mapped_column(String(80))
     entity_id: Mapped[int] = mapped_column(Integer)
     event_type: Mapped[str] = mapped_column(String(40))

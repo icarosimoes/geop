@@ -256,16 +256,30 @@ class PlatformUserResponse(BaseModel):
 
 class SupportRequestUpdate(BaseModel):
     status: str = Field(min_length=1, max_length=20)
+    response_message: str | None = Field(None, max_length=2000)
+
+
+class SupportRequestTimelineEntry(BaseModel):
+    id: int
+    event_type: str
+    user: str
+    message: str | None = None
+    changes: dict[str, Any] | None = None
+    created_at: datetime
 
 
 class SupportRequestResponse(BaseModel):
     id: int
     company_id: int
     company_name: str | None
+    subject: str | None
+    priority: str
     contact_name: str
     contact_whatsapp: str
     message: str | None
     status: str
+    response_message: str | None
+    responded_by: int | None
     created_at: datetime
 
 

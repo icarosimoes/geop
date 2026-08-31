@@ -6,13 +6,13 @@ import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_event
 from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
+from app.core.rls import set_tenant_context
 from app.core.security import create_email_oauth_state_token, decode_email_oauth_state_token
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.email_client import schemas, service
@@ -175,10 +175,7 @@ async def oauth_callback(
     # Endpoint público: chega direto do redirect do Google, sem passar por
     # current_user (que normalmente seta isso a partir do JWT de sessão) — sem
     # isso, o RLS bloquearia silenciosamente o select/insert do EmailAccount.
-    await session.execute(
-        text("SELECT set_config('app.current_company_id', :cid, true)"),
-        {"cid": str(claims["company_id"])},
-    )
+    await set_tenant_context(session, int(claims["company_id"]))
 
     try:
         tokens = await google_oauth.exchange_code(

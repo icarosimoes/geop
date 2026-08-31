@@ -201,6 +201,17 @@ Visual por tipo:
 
 A timeline é alimentada pela API (`GET /timeline/{entity_type}/{entity_id}`) que lê de `audit_events`. Módulos API-backed consomem a timeline da API; módulos locais (fallback) usam `localStorage`.
 
+**Chamados de suporte (`support_request`, 2026-08-31)**: mesma timeline, com uma particularidade — é escopada por dono do registro, não só por empresa (`SupportRequest.user_id`), então outro usuário do mesmo tenant recebe `404` ao tentar ler ou comentar um chamado que não é seu. O ator de uma resposta do admin da plataforma (`PlatformUser`, sem linha em `users`) aparece como `"Suporte · {nome}"`, resolvido via `AuditEvent.actor_name` em vez do join com `users`.
+
+## Central de Ajuda / Suporte (`HelpButton`) (2026-08-31)
+
+Botão flutuante de ajuda (`web/components/help-button.tsx`), visível em todas as páginas autenticadas do tenant. Modal com duas abas:
+
+- **Novo pedido**: formulário com assunto, prioridade (Baixa/Média/Alta), nome, WhatsApp e mensagem. `POST /support/request`.
+- **Meus chamados**: lista os chamados do próprio usuário (`GET /support/requests`), cada um clicável — expande e mostra a timeline completa do chamado (`GET /timeline/support_request/{id}`, mesmo componente de thread usado no resto do sistema) com campo de resposta (`POST /timeline/support_request/{id}/comment`).
+
+No painel admin (`admin/app/(app)/support-requests`), cada chamado tem um botão "Ver tratativa" que expande a mesma timeline (`GET /platform/support-requests/{id}/timeline`) e um campo de resposta que aciona `PATCH /platform/support-requests/{id}` com `response_message` — a resposta vira automaticamente uma linha na timeline, visível dos dois lados.
+
 ## Solicitações fiscais
 
 O protótipo atual atende solicitações da recepção para o financeiro: dados incorretos do tomador, nota travada, nota solicitada depois do check-out e cancelamento. O formulário apresenta campos condicionais de reserva, nota, CPF/CNPJ, tomador, correção, cancelamento, check-out, responsável e pessoas a notificar. A lista exibe UH, status e contagem regressiva de SLA.

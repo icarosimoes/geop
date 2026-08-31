@@ -15,6 +15,22 @@ class Settings(BaseSettings):
     web_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
     database_url: str | None = None
     database_url_file: str | None = None
+    # Role separada para rodar `alembic upgrade head`: dona das tabelas, usada só na
+    # migration/startup. `database_url` (app em runtime) deve apontar para uma role
+    # restrita (NOSUPERUSER NOBYPASSRLS) — sem isso o RLS fica inerte, já que
+    # superusuário do Postgres ignora RLS incondicionalmente, mesmo com FORCE ROW
+    # LEVEL SECURITY (ver docs/auditoria-2026-07-03.md#c1 e ADR-002). Opcional: sem
+    # configurar, cai para `database_url` (comportamento anterior, uma role só).
+    database_migration_url: str | None = None
+    database_migration_url_file: str | None = None
+    # Role separada para as rotas `/platform/*`: elas leem/escrevem entre tenants
+    # por natureza (billing, assinaturas, métricas de todas as empresas), o que é
+    # incompatível com o GUC de tenant único que `database_url` (restrita) exige.
+    # Precisa de BYPASSRLS (concedido só a essa role — ver migration
+    # `20260831_0070`), nunca da role de tenant nem da role de migration.
+    # Opcional: sem configurar, cai para `database_url`.
+    database_platform_url: str | None = None
+    database_platform_url_file: str | None = None
     database_echo: bool = False
     jwt_secret: str = "registro-development-only-change-me"
     jwt_secret_file: str | None = None
@@ -76,6 +92,14 @@ def get_settings() -> Settings:
     settings = Settings()
     if settings.database_url is None and settings.database_url_file:
         settings.database_url = Path(settings.database_url_file).read_text(encoding="utf-8").strip()
+    if settings.database_migration_url is None and settings.database_migration_url_file:
+        settings.database_migration_url = (
+            Path(settings.database_migration_url_file).read_text(encoding="utf-8").strip()
+        )
+    if settings.database_platform_url is None and settings.database_platform_url_file:
+        settings.database_platform_url = (
+            Path(settings.database_platform_url_file).read_text(encoding="utf-8").strip()
+        )
     if settings.jwt_secret_file:
         settings.jwt_secret = Path(settings.jwt_secret_file).read_text(encoding="utf-8").strip()
     if settings.erpsolid_integration_key_file:

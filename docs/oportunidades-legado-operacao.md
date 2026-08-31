@@ -129,6 +129,36 @@ Isso serve qualquer tenant com alvará, licença, certidão, apólice ou contrat
 
 **Fora de escopo inicial:** aviso por e-mail/WhatsApp além do já existente em `notify_record_event`; assinatura eletrônica; integração com órgãos emissores.
 
+### 6. Central de suporte (chamados)
+
+**Prioridade:** alta (rápido, baixo risco — os dois lados já existem parcialmente)
+**Estado:** entregue (2026-08-31)
+
+O legado tem um domínio de chamados completo (`SupportTicket`): sistema de origem, prioridade (`MEDIA`/`ALTA`/`BAIXA`), status (`ABERTO`/...), assunto, descrição, resposta do time (`response_message`/`responded_by`), histórico (`support_ticket_histories`) e anexos (`support_ticket_attachments`). O GEOP hoje tem só metade do fluxo: `POST /support/request` (tenant manda nome, WhatsApp e mensagem livre) e, do lado do painel, `GET/PATCH /platform/support-requests` (admin lista e troca status, com log em `PlatformAuditLog`). Falta: assunto/prioridade estruturados, o tenant nunca vê a resposta do time nem o status atualizado do próprio chamado (é fire-and-forget), sem histórico por evento e sem anexo.
+
+**Primeiro recorte:**
+
+- adicionar `subject` e `priority` ao pedido existente (reaproveitar `SupportRequest`/`support_requests`, sem criar tabela nova);
+- endpoint `GET /support/requests` para o tenant ver os próprios chamados (id, assunto, prioridade, status, resposta, datas) — hoje não existe nenhuma leitura do lado tenant;
+- expor `response_message`/`responded_by` no `PATCH /platform/support-requests/{id}` e no `SupportRequestResponse`, para a resposta do admin chegar ao tenant;
+- notificação in-app ao tenant quando o chamado for respondido (reaproveitar `notify_record_event`/`create_notification`, já usados no restante do sistema).
+
+**Critérios de aceite:**
+
+- tenant só lê os próprios chamados (`company_id` do usuário autenticado), nunca de outro tenant;
+- resposta do admin fica associada a `responded_by` (usuário da plataforma) e a data;
+- mudança de status/resposta é auditada (reaproveitar `PlatformAuditLog`, já usado em `update_support_request_status`);
+- testes cobrem criação, listagem pelo tenant, resposta pelo admin e isolamento cross-tenant.
+
+**Fora de escopo inicial:** anexos no chamado, múltiplos sistemas de origem (o legado tinha campo `system` porque atendia mais de um produto — o GEOP não precisa disso agora).
+
+**Atualização (2026-08-31):** o "histórico detalhado por campo" deixou de ser fora de escopo — pedido explícito do usuário. Cada tratativa (resposta do admin, mudança de status, comentário do tenant) agora vira uma linha na timeline padrão do GEOP (`support_request` como `entity_type`, escopado por dono do chamado), substituindo o que seria o `support_ticket_histories` do legado sem precisar de tabela nova. Detalhes em [api-reference.md](api-reference.md#timeline) e [web-rotas-ui.md](web-rotas-ui.md#central-de-ajuda--suporte-helpbutton-2026-08-31).
+
+### Achados sem ação necessária
+
+- **System Settings do legado** (`system_settings` + `system_setting_histories`, chave/valor por grupo com segredo e histórico) já tem equivalente funcional no GEOP: `CompanySetting` (`company_settings`, chave/valor em JSON por tenant), usado hoje por Evolution, Brevo, categorias de OS, ponto e dados do estabelecimento. A única lacuna real é auditoria por alteração de configuração (hoje só `company` profile passa por `record_event`; Evolution/Brevo/categorias não), o que é um ajuste pequeno e não um módulo novo — não vira item de prioridade neste doc.
+- **Dashboard Builder / Widgets do legado** (`dashboard_widgets` + ~13 *resolvers* de métrica) é uma engine de dashboard plugável. O GEOP já cobre boa parte do valor com `/dashboard/metrics` fixo (KPIs de OS, ocorrências, fiscais, tendência). Generalizar para widgets configuráveis por tenant é melhoria incremental, não lacuna funcional — avaliar depois dos itens 1-6, se houver demanda real por dashboard customizável por cliente.
+
 ## Decisões de arquitetura
 
 - Não migrar código Laravel diretamente.
@@ -139,4 +169,4 @@ Isso serve qualquer tenant com alvará, licença, certidão, apólice ou contrat
 
 ## Próximo passo técnico
 
-Com o vertical slice de `discrepancy_reports` entregue, o próximo passo é fechar as pendências listadas no item 1 (reabertura de conferência fechada, códigos configuráveis, timeline/anexos) ou avançar para o item 2 (indicadores mensais) ou o item 5 (controle de documentos), a depender de qual tiver mais tração com clientes.
+Ordem definida em 2026-08-31, após levantamento adicional em `docs/aero-main` (System Settings, Support Tickets, Dashboard Builder): **6 (central de suporte) → 2 (indicadores mensais) → 3 (conferência financeira de auditorias) → 5 (controle de documentos)**. O item 6 entra primeiro por ser o menor esforço (os dois lados do fluxo já existem, falta fechar o ciclo). O item 4 (formulários configuráveis, perdas, abastecimento) permanece fora dessa ordem — decisão de arquitetura vigente é não entrar no núcleo sem validação de demanda fora da hotelaria. As pendências do item 1 (reabertura de conferência fechada, códigos configuráveis, timeline/anexos) ficam para depois desta leva.

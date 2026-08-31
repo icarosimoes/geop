@@ -27,7 +27,9 @@ Essas credenciais são somente locais. Em produção o seed exige senhas forneci
 
 O login tenant recebe apenas e-mail e senha. Se o e-mail pertencer a um único tenant, entra direto. Se pertencer a mais de um, a API retorna `422 multi_tenant` com a lista de empresas para o front exibir um seletor; o segundo envio inclui `company_id`. O JWT carrega `company_id`, e a consulta revalida usuário, empresa, status e exclusão lógica. O token administrativo usa outro tipo, outro endpoint e outra tabela; não pode ser usado em `/auth/me`.
 
-O PostgreSQL aplica RLS (Row-Level Security) em 24+ tabelas com `company_id`. O GUC `app.current_company_id` é setado via `SET LOCAL` na dependency `current_user`. Rotas platform (admin) operam como superuser com `BYPASSRLS`.
+O PostgreSQL tem policies RLS (Row-Level Security) declaradas em 24+ tabelas com `company_id`, com `FORCE ROW LEVEL SECURITY`, e o GUC `app.current_company_id` é setado via `SET`/`SELECT set_config(...)` na dependency `current_user`.
+
+> ✅ **RLS corrigido no código e no dev local (2026-08-31)** — achado original em 2026-07-03: a role `registro` (via `POSTGRES_USER`) era superusuário e ignorava RLS incondicionalmente para o app inteiro. Corrigido com três roles: `registro` (só migration), `registro_app` (`NOBYPASSRLS`, runtime de tenant) e `registro_platform` (`BYPASSRLS`, só `/platform/*`) — esta última é exatamente a intenção original deste documento, agora isolada na role certa em vez do app inteiro. Validado de ponta a ponta no dev local (login, isolamento entre tenants, painel admin, impersonação). **Produção ainda roda com a role superusuário única** — o rollout troca credencial de banco em produção e depende de decisão explícita do usuário. Detalhes e runbook em [role-restrita-postgres.md](infra/role-restrita-postgres.md).
 
 ## Painel administrativo
 
@@ -37,7 +39,7 @@ O painel admin foi reescrito no padrão Jarvis/Aloji com Tailwind CSS 4, Lucide 
 - **Empresas**: tabela com busca, badges de status (trial/ativo/inadimplente/suspenso/cancelado), menu de ações por assinatura (suspender/reativar/cancelar), modal de criação de tenant, delete com confirmação.
 - **Planos**: cards com preço formatado em BRL, limites e status ativo/inativo.
 - **Usuários**: CRUD da equipe interna da plataforma (`PlatformUser`), com papéis `super_admin`/`support`/`billing`/`read_only`.
-- **Suporte**: fila de pedidos abertos pelo botão de Ajuda do tenant (`web/`), com filtro por status (pendente/contatado/resolvido).
+- **Suporte**: fila de pedidos abertos pelo botão de Ajuda do tenant (`web/`), com filtro por status (pendente/contatado/resolvido), assunto/prioridade e resposta inline por chamado — a resposta fica visível pro tenant (aba "Meus chamados" do `HelpButton`) e dispara notificação in-app (2026-08-31). Cada chamado tem "Ver tratativa": a timeline completa (resposta, mudança de status, comentários do tenant) na mesma thread que o resto do sistema usa — ver [web-rotas-ui.md](web-rotas-ui.md#central-de-ajuda--suporte-helpbutton-2026-08-31).
 - **Uso**: consumo por tenant (usuários ativos, ocorrências do mês), agregado por métrica; snapshot gerado sob demanda (sem Celery no GEOP).
 - **Configurações**: e-mail transacional (Brevo) usado pela API para convites e avisos do sistema, no mesmo padrão do Aloji — sobrepõe as variáveis de ambiente, sem precisar de redeploy.
 - **Auditoria**: tabela de logs administrativos da plataforma (`platform_audit_logs`).

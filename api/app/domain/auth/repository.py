@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import Integer, String, bindparam, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -43,26 +43,48 @@ async def find_active_users_by_email(
     email: str,
     company_id: int | None = None,
 ) -> list[AuthenticatedUser]:
-    query = (
-        select(User)
-        .join(Company)
-        .options(
-            selectinload(User.company),
-            selectinload(User.role).selectinload(Role.permissions),
+    """Login (passo 1, antes de saber a empresa) precisa achar a quais empresas um
+    e-mail pertence — cross-tenant por natureza, o que sustenta o fluxo
+    `422 multi_tenant`. Isso não dá pra fazer com o GUC de RLS de uma role
+    restrita (não existe um único `company_id` pra setar antes de saber a
+    resposta), então passa pela function `SECURITY DEFINER`
+    `find_login_candidates` (migration `20260831_0071`) em vez de um SELECT
+    direto em `users`.
+
+    A function já devolve nome da empresa, role e permissões prontos (não só a
+    linha de `users`): um `selectinload(Role)` feito depois pela ORM seria uma
+    query separada, fora do bypass da function e sem um único `company_id` pra
+    escopar via RLS (o e-mail pode casar com usuários de mais de uma empresa) —
+    ver docstring da migration.
+    """
+    rows = (
+        (
+            await session.execute(
+                text("SELECT * FROM find_login_candidates(:email, :company_id)").bindparams(
+                    bindparam("email", type_=String),
+                    bindparam("company_id", type_=Integer),
+                ),
+                {"email": email.lower(), "company_id": company_id},
+            )
         )
-        .where(
-            User.email == email.lower(),
-            User.active.is_(True),
-            User.deleted_at.is_(None),
-            Company.status == "active",
-            Company.deleted_at.is_(None),
-        )
+        .mappings()
+        .all()
     )
-    if company_id:
-        query = query.where(User.company_id == company_id)
-    query = query.order_by(User.company_id, User.id)
-    users = (await session.execute(query)).scalars().all()
-    return [map_user(u) for u in users]
+    return [
+        AuthenticatedUser(
+            id=row["id"],
+            name=row["name"],
+            email=row["email"],
+            phone=row["phone"],
+            password_hash=row["password"],
+            company_id=row["company_id"],
+            company_name=row["company_name"],
+            role_id=row["role_id"],
+            role_name=row["role_name"],
+            permissions=sorted(row["permissions"] or []),
+        )
+        for row in rows
+    ]
 
 
 async def find_active_user_by_id(

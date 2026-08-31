@@ -1135,7 +1135,7 @@ async def list_contract_history(
         .all()
     )
 
-    user_ids = list({e.user_id for e in events})
+    user_ids = list({e.user_id for e in events if e.user_id is not None})
     user_names: dict[int, str] = {}
     if user_ids:
         rows = (
@@ -1143,7 +1143,10 @@ async def list_contract_history(
         ).all()
         user_names = {r.id: r.name for r in rows}
 
-    return [HistoryRow(e, user_names.get(e.user_id)) for e in events]
+    return [
+        HistoryRow(e, user_names.get(e.user_id) if e.user_id is not None else e.actor_name)
+        for e in events
+    ]
 
 
 # ---------------------------------------------------------------------------

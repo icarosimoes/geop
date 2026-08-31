@@ -22,7 +22,9 @@ ou cada FK cross-tenant não validado (H2, M3) vira vazamento real, sem rede de 
 
 ## Crítico
 
-### C1. RLS completamente inerte — a API conecta como superusuário do Postgres
+### C1. RLS completamente inerte — a API conecta como superusuário do Postgres — ✅ corrigido em 2026-08-31
+
+> Este achado ficou órfão por quase dois meses: nunca foi linkado no `README.md` nem virou item no `backlog.md`, então continuou sem correção até ser redescoberto de forma independente em 31/08/2026 (durante a implementação de outra entrega, ao validar um fix que dependia de RLS de fato funcionar). Correção completa (três roles, reordenação do GUC nos pontos de auth, function `SECURITY DEFINER` pro login cross-tenant) em [role-restrita-postgres.md](infra/role-restrita-postgres.md) e [ADR-002](adr/002-rls-isolamento-multitenant.md#atualização-2026-08-31--rls-estava-inerte-desde-a-implementação). Validado de ponta a ponta no dev local; rollout em produção ainda pendente de decisão do usuário (troca de credencial de banco).
 
 **Arquivos:** `docker-compose.yml:8,80`, `api/alembic/versions/20260620_0029_rls_policies.py:48-53`
 
