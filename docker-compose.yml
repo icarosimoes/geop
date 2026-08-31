@@ -75,7 +75,17 @@ services:
       ENVIRONMENT: development
       WEB_ORIGINS: http://localhost:3000,http://localhost:3001
       REGISTRO_WEB_URL: ${REGISTRO_WEB_URL:-http://localhost:3000}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://registro:registro@postgres:5432/registro}
+      # Três roles, três propósitos (ver docs/infra/role-restrita-postgres.md e
+      # docs/auditoria-2026-07-03.md#c1): `registro` é dona das tabelas — só
+      # `alembic upgrade head` (rodado pelo comando de startup do container) usa
+      # DATABASE_MIGRATION_URL. `registro_app` (NOBYPASSRLS) é o runtime de
+      # tenant — DATABASE_URL, o que a app de fato usa pra servir request.
+      # `registro_platform` (BYPASSRLS) é só pras rotas /platform/* (leem/
+      # escrevem entre tenants por natureza). Migration `20260831_0070` cria as
+      # duas roles restritas na primeira vez que roda.
+      DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL:-postgresql+asyncpg://registro:registro@postgres:5432/registro}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://registro_app:registro-app-dev-only@postgres:5432/registro}
+      DATABASE_PLATFORM_URL: ${DATABASE_PLATFORM_URL:-postgresql+asyncpg://registro_platform:registro-platform-dev-only@postgres:5432/registro}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       JWT_SECRET: ${JWT_SECRET:-registro-development-only-change-me}
       SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-Registro@123}

@@ -33,6 +33,7 @@ Esta pasta é a fonte de verdade técnica, funcional e operacional do GEOP. A no
 ## Operação
 
 - [Docker Swarm e deploy](infra/deploy-swarm.md)
+- [Role restrita do Postgres (corrige RLS inerte)](infra/role-restrita-postgres.md)
 - [Deploy em novo domínio ou novo Swarm](infra/deploy-novo-dominio.md)
 - [Runbook de produção](infra/runbook-producao.md)
 - [Testes e critérios de aceite](infra/testes-integracao.md)

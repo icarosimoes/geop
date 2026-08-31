@@ -1441,3 +1441,238 @@ com uma conta Gmail real (`redacaog7bahia@gmail.com`, adicionada como usuário
 de teste na tela de consentimento) até confirmar `?oauth=connected`. Backups
 de `docker-stack.yml`/`.env.prod` mantidos na VPS (`*.bak-<timestamp>`) antes
 de cada alteração.
+
+## 2026-08-31 — Central de suporte (chamados) e achado crítico de RLS inerte reencontrado
+
+Segundo levantamento em `docs/aero-main` (System Settings, Support Tickets, Dashboard
+Builder), cruzado com o GEOP atual. Achados documentados em
+[oportunidades-legado-operacao.md](oportunidades-legado-operacao.md#6-central-de-suporte-chamados)
+e [backlog.md#p16](backlog.md#p16--segunda-leva-de-oportunidades-do-legado-2026-08-31).
+Ordem acordada com o usuário: central de suporte → indicadores mensais → conferência
+financeira de auditorias → controle de documentos (P15). Dynamic Forms/perdas/abastecimento
+seguem fora do núcleo — decisão já registrada em `oportunidades-legado-operacao.md` item 4,
+mantida após confirmação explícita do usuário.
+
+**Central de suporte — ciclo fechado (item 1 da leva):** o GEOP já tinha metade do fluxo
+(`POST /support/request` do tenant + `GET/PATCH /platform/support-requests` do admin); faltava
+o tenant nunca ver a resposta do próprio chamado. Adicionado `subject`/`priority` ao
+`SupportRequest` existente (migration `20260831_0069`, sem tabela nova), `GET
+/support/requests` para o tenant listar os próprios chamados, e `response_message`/
+`responded_by` no `PATCH` do admin — que agora dispara notificação in-app pro autor do
+chamado via `create_notification`. `web/components/help-button.tsx` ganhou aba "Meus
+chamados"; `admin/.../support-requests` ganhou campo de resposta inline por chamado. 6 testes
+novos em `test_support_requests.py` (CRUD, isolamento cross-tenant, isolamento entre usuários
+do mesmo tenant, resposta do admin com e sem notificação).
+
+**Bug pego durante a implementação, corrigido antes de commitar:** `notifications` tem RLS
+por tenant (`FORCE ROW LEVEL SECURITY`), mas a rota do admin da plataforma nunca passa por
+`current_user` — nada seta `app.current_company_id` nessa sessão. Chamar
+`create_notification` direto de `update_support_request_status` teria devolvido 500 em
+produção (Postgres real, RLS de fato ativo — ver achado abaixo sobre `NOSUPERUSER`) assim
+que um admin respondesse um chamado. Corrigido setando o GUC explicitamente pro tenant do
+chamado antes do insert, guardado por `session.bind.dialect.name == "postgresql"` (mesmo
+padrão já usado em `app/domain/timeclock/mobile_auth.py`).
+
+**Achado crítico ao validar esse fix — RLS continua inerte em RLS, não só nesse fluxo:**
+`docs/auditoria-2026-07-03.md` (C1) já tinha identificado isso em 03/07: a role `registro`
+usada pela API é criada pela imagem oficial do Postgres via `POSTGRES_USER=registro`, que a
+torna **superusuário** — e superusuário ignora RLS incondicionalmente, inclusive com `FORCE
+ROW LEVEL SECURITY`. Verificado agora de novo, direto no Postgres do dev (`\du registro` →
+`Superuser, ..., Bypass RLS`): a role continua superusuário quase dois meses depois do achado.
+Esse documento nunca foi linkado em `README.md` nem virou item no `backlog.md` — ficou órfão.
+Toda a defesa em profundidade do RLS (ADR-002, as 24 tabelas com `tenant_isolation`) está
+inerte; o isolamento entre tenants depende **inteiramente** do filtro `company_id` da
+aplicação, sem rede de proteção no banco. Não investiguei a role de produção (sem acesso
+SSH), mas ela é provisionada pelo mesmo mecanismo (`docker-stack.yml` também usa
+`POSTGRES_USER: registro`), então a suspeita é a mesma falha lá. Reportado ao usuário nesta
+sessão, que pediu para investigar/corrigir antes de seguir para os itens 2-4.
+
+**Investigação da correção — escopo real é maior do que "trocar a role":**
+
+1. **Migration `20260831_0070`** cria `registro_app` (`NOSUPERUSER NOBYPASSRLS NOCREATEDB
+   NOCREATEROLE`, sem posse das tabelas), com `GRANT SELECT/INSERT/UPDATE/DELETE` em todas as
+   tabelas/sequences existentes e `ALTER DEFAULT PRIVILEGES` pra tabelas futuras. Idempotente,
+   não reseta senha de role já existente. `app/core/config.py` ganhou `database_migration_url`
+   (+ `_file`); `alembic/env.py` prefere essa URL pra migrations, `app/core/database.py`
+   continua em `database_url` pro runtime — permite migration rodar como dona das tabelas e o
+   app rodar restrito, sem exigir as duas URLs configuradas (fallback pra uma role só).
+   Validado com prova real: subi a API (`docker run`, imagem `geop-api`) apontando
+   `DATABASE_URL` pra `registro_app` contra um Postgres de teste descartável
+   (`docker-compose.test.yml`) já migrado pela role dona — confirmado via `psql` direto que
+   `registro_app` só enxerga linhas do `company_id` setado via `set_config`, falha fail-closed
+   sem GUC nenhum, e a role antiga (`registro`, superusuário) continua enxergando tudo
+   independente de GUC (prova de que o isolamento real não vinha do RLS até agora).
+
+2. **Bug sistêmico descoberto ao testar de ponta a ponta:** `/auth/login` devolveu 500 assim
+   que a API rodou com `registro_app`. Causa: `current_user` (`app/core/auth.py`) e várias
+   rotas de `app/domain/auth/router.py` (`/auth/me`, `/auth/refresh`, `/auth/impersonate`,
+   `/auth/sso/exchange`, `/auth/set-password`) **consultam `users` (RLS) antes de setar o GUC**
+   — hoje elas decodificam o JWT (já validado por assinatura), pegam `company_id` do claim, e
+   só setam `app.current_company_id` **depois** de já ter lido o usuário. Com superusuário isso
+   nunca deu erro (RLS nem entrava em ação); com a role restrita, a primeira query de toda
+   rota autenticada quebra com "unrecognized configuration parameter". Mesmo bug em
+   `app/domain/timeclock/mobile_auth.py` (token do Portal do Colaborador) e em
+   `create_impersonation_ticket` (`app/domain/platform/service.py`, gera o ticket antes do
+   `/auth/impersonate` trocar por sessão real). O padrão correto já existe no próprio código
+   (`app/domain/email_client/router.py::oauth_callback` seta o GUC a partir do `state` token
+   **antes** de tocar o banco) — só não foi replicado nos outros pontos de entrada.
+
+3. **`find_active_users_by_email` (primeiro passo do login) é genuinamente cross-tenant por
+   email** — não dá pra saber o `company_id` antes de descobrir a quais empresas aquele e-mail
+   pertence (é o que sustenta o fluxo `422 multi_tenant` documentado no backlog). Nenhum GUC
+   único resolve isso. Vira candidato a uma function `SECURITY DEFINER` (dona = role de
+   migration, que já tem bypass) para esse único SELECT — não uma concessão de bypass geral.
+
+4. **O painel admin/plataforma inteiro precisa de leitura cross-tenant por design** — não é só
+   o `create_impersonation_ticket`. `app/domain/platform/service.py` consulta `User`,
+   `Subscription`, `Invoice`, `WorkOrder` (todas com RLS) em praticamente toda função de
+   billing/métricas/tenants, sem nunca passar por `current_user`. Dar a esse módulo a mesma
+   role restrita de tenant (`registro_app`) quebraria o painel inteiro. A forma correta é uma
+   **segunda role dedicada** (`registro_platform`, com `BYPASSRLS` concedido explicitamente —
+   não superusuário, só esse atributo) usada **só** pelas rotas `/platform/*`, com uma segunda
+   engine/`SessionLocal` e uma dependency `require_platform_session` paralela a
+   `require_session`. É exatamente a intenção original do ADR-002 ("rotas platform operam como
+   superuser com BYPASSRLS") — só que implementada sem querer no app inteiro, em vez de restrita
+   à rota certa.
+
+**Conclusão da investigação:** a migration/config já commitadas (`20260831_0070` +
+`database_migration_url`) são seguras e não mudam nada em produção sozinhas. O resto —
+reordenar o `set_config`, a function `SECURITY DEFINER`, e a segunda role/engine pro painel
+admin — é trabalho real adicional, maior que o estimado inicialmente. Reportado ao usuário,
+que pediu para continuar até terminar.
+
+**Implementação completa (mesma sessão, 2026-08-31):**
+
+1. **`app/core/rls.py::set_tenant_context`** — helper único, usado nos 7 pontos de entrada de
+   auth que tinham a ordem invertida: `current_user` (`app/core/auth.py`), `/auth/me`,
+   `/auth/refresh`, `/auth/impersonate`, `/auth/sso/exchange`, `/auth/set-password`
+   (`app/domain/auth/router.py`), `require_employee_session` (`mobile_auth.py`) e
+   `create_impersonation_ticket` (`platform/service.py`). `email_client/router.py::
+   oauth_callback` já fazia certo — só migrado pro helper por consistência.
+2. **Migration `20260831_0071`** — function `SECURITY DEFINER` `find_login_candidates(email,
+   company_id)` pro primeiro passo do login (cross-tenant por e-mail, sustenta o `422
+   multi_tenant`). Primeira versão retornava `SETOF users` e deixava a ORM fazer
+   `selectinload(Role)` depois — quebrou na prova real (`/auth/login` 500) porque essa segunda
+   query é separada, fora do bypass da function, sem um único `company_id` pra escopar via RLS
+   (o e-mail pode casar com mais de uma empresa). Corrigido: a function agora devolve nome da
+   empresa, role e permissões prontos numa `TABLE`, e `find_active_users_by_email`
+   (`app/domain/auth/repository.py`) mapeia direto pra `AuthenticatedUser`, sem ORM nenhuma
+   nesse caminho.
+3. **`registro_platform` (BYPASSRLS)** — segunda role (mesma migration `20260831_0070`,
+   generalizada pra criar as duas de uma vez), segunda engine/`SessionLocal`
+   (`app/core/database.py`) e dependency `require_platform_session`
+   (`app/core/dependencies.py`), trocada em bloco nas 32 ocorrências de `require_session` em
+   `platform/router.py` (`sed`). Motivo descoberto ao auditar `platform/service.py`: billing,
+   assinaturas, faturas e métricas leem `User`/`Subscription`/`Invoice`/`WorkOrder` (todas RLS)
+   de **todos** os tenants de uma vez — incompatível com a role de tenant único. `tests/
+   conftest.py` ganhou o mesmo override de `require_platform_session` que já tinha pra
+   `require_session` (mesma conexão nos testes; a distinção só existe fora deles).
+4. **`app/integrations/notifications.py::deliver_notifications`** — achado ao auditar
+   `asyncio.create_task`/`SessionLocal()` fora de request: essa função roda em background
+   (envio de email/WhatsApp) e abre sessão nova pra marcar `email_sent_at` — sem GUC, o update
+   em `notifications` (RLS) ia falhar silenciosamente (o bloco já tinha `try/except
+   Exception: logger.warning`, então não quebrava a resposta original, só parava de marcar
+   entrega). `PendingDelivery` ganhou `company_id`; 3 testes em `test_background_notifications.py`
+   ajustados (dataclass sem default nesse campo).
+5. **`app/seed.py` e `app/backfill_default_shifts.py`** — mesma auditoria de
+   `SessionLocal()`: criam `Company`/`User`/`Role`/`Subscription` pra múltiplos tenants de uma
+   vez, mesma natureza da role de migration. Trocados pra `MigrationSessionLocal`
+   (`app/core/database.py`, nova engine a partir de `database_migration_url`).
+
+**Prova de ponta a ponta, duas vezes:**
+
+- **Banco de teste descartável** (`docker-compose.test.yml`, rede conectada temporariamente a
+  `geop-api-1`): subi a API de verdade (`docker run` da imagem `geop-api`) com `DATABASE_URL`
+  em `registro_app`, `DATABASE_PLATFORM_URL` em `registro_platform`,
+  `DATABASE_MIGRATION_URL` em `registro`. Validado: login (função `SECURITY DEFINER`),
+  `/auth/me`, `/auth/refresh`, `/auth/impersonate` (ticket + troca), `/platform/auth/login`,
+  `/platform/metrics` e `/platform/support-requests` (cross-tenant, via `registro_platform`),
+  `python -m app.seed` num banco vazio (cria os dois tenants demo, login funciona depois).
+  Suíte completa (`pytest tests/`) rodada 3× em bancos frescos, sempre 612 passando + a mesma
+  falha pré-existente e não relacionada (`test_oauth_start_not_configured_by_default`, env var
+  real de Google OAuth no container de dev vazando pro teste).
+- **Dev real** (`geop-api-1`/`geop-postgres-1`, os containers que o usuário usa no dia a dia):
+  `docker-compose.yml` atualizado com as três URLs (`DATABASE_URL` agora em `registro_app`);
+  `docker compose up -d --build api` recriou o container, migrations rodaram sozinhas
+  (criaram as duas roles novas nesse banco de dev pela primeira vez). Testado com token real
+  gerado pro usuário `icaro@registro.local` (tenant 1) e `ana@registro.local` (tenant 2):
+  `/auth/me`, `/registries` (tenant 1 vê `Local A`/`Local B`/`Local Teste`; tenant 2 vê só
+  `Local do Tenant B` — isolamento real confirmado, não só em teoria) e `/dashboard/metrics`.
+  Sem regressão observada.
+
+**Nota à parte, não relacionada a este trabalho:** o banco de dev tem usuários com
+e-mail/timestamp batendo com fixtures de teste (`a@test.com`, `desativado@erp.com.br`,
+`admin.novo@erp.com.br`, criados hoje às 01:45, antes do início desta sessão) — parece
+resíduo de uma sessão anterior que rodou testes contra o banco de dev por engano, ou
+verificação manual não limpa depois. Não investigado nem limpo por estar fora do escopo
+desta entrega; mencionado aqui só como registro.
+
+**Documentação:** runbook completo (o que mudou, como validar, rollout de produção em duas
+etapas com comandos exatos) em
+[role-restrita-postgres.md](infra/role-restrita-postgres.md); ADR-002 ganhou seção de
+atualização corrigindo a nota técnica original (confundia `FORCE ROW LEVEL SECURITY` com o
+atributo de role `BYPASSRLS` — são mecanismos diferentes); `auditoria-2026-07-03.md` (C1) e
+`plataforma-saas.md` marcados como corrigidos no código/dev, pendentes em produção;
+`backlog.md` (P16) atualizado.
+
+**O que fica pra decisão do usuário:** produção continua com a role superusuário única —
+nada foi tocado lá (sem acesso SSH). O rollout de produção precisa gerar senhas novas pras
+duas roles restritas, criar secrets novos no Swarm e atualizar `docker-stack.yml` — passo a
+passo completo no runbook, mas a execução é manual.
+
+## 2026-08-31 — Timeline nos chamados de suporte (e dois bugs de RLS a mais, achados testando)
+
+Pedido do usuário: cada resposta de um chamado de suporte vira uma linha de timeline, igual
+ao resto do sistema (ordens de serviço, solicitações fiscais, etc.).
+
+**O problema de fundo:** quem responde um chamado é um `PlatformUser` (admin da plataforma),
+não um `User` do tenant — e `AuditEvent.user_id` era `NOT NULL` com FK pra `users.id`. Não dá
+pra gravar o `id` de um `PlatformUser` ali (tabela errada, e mesmo que o número coincidisse
+seria atribuir a resposta ao usuário errado).
+
+**Solução:** `AuditEvent.user_id` virou opcional (migration `20260831_0072`) e ganhou
+`actor_name` — usado quando não há `User` correspondente. `get_timeline`/`get_timeline_cursor`
+(`app/domain/timeline/service.py`) trocaram `join` por `outerjoin` e caem pro `actor_name`
+quando não há usuário. `support_request` virou um `entity_type` válido de timeline, com uma
+regra a mais que o resto não tem: é escopado por **dono do registro**
+(`SupportRequest.user_id`), não só por empresa — um chamado é pessoal, outro usuário do mesmo
+tenant não pode ler nem comentar (`verify_entity_access` ganhou parâmetro `user_id` opcional,
+`OWNER_SCOPED_ENTITY_TYPES` marca quais entity_types usam essa regra extra).
+
+`update_support_request_status` (`platform/service.py`) agora grava dois tipos de evento: um
+`update` quando o status muda (`{"status": {"from": ..., "to": ...}}`) e um `comment` quando
+tem `response_message`, ambos atribuídos a `"Suporte · {nome do admin}"`. Endpoint novo
+`GET /platform/support-requests/{id}/timeline` pro painel ver a tratativa completa (inclusive
+comentários que o próprio tenant tiver adicionado via `/timeline/support_request/{id}/comment`
+— o tenant pode responder pelo endpoint genérico de timeline, que já existia, sem precisar de
+rota nova). Frontend: `web/components/help-button.tsx` ganhou thread expansível por chamado
+("Meus chamados" → clica → mostra timeline + campo de resposta); `admin/support-requests`
+ganhou "Ver tratativa" equivalente. 8 testes novos em `test_support_requests.py`.
+
+**Dois bugs de RLS a mais, achados testando isso de ponta a ponta (não específicos de chamados
+de suporte — afetavam o app inteiro assim que a role restrita entrasse em produção):**
+
+1. **`set_tenant_context` usava `is_local=true` (`SET LOCAL`), não `is_local=false`** — some no
+   primeiro `commit()` da request. `add_comment` (`timeline/service.py`) faz `record_event` +
+   `commit()` e depois reconsulta o evento — essa segunda query já caía fora do escopo do GUC,
+   e explodia com "invalid input syntax for type integer" (o GUC "existe" pro backend depois de
+   usado uma vez, só que com valor vazio, em vez de "unrecognized configuration parameter").
+   **Isso quebrava `POST /timeline/{entity_type}/{entity_id}/comment` pra qualquer entidade**
+   (ordens de serviço, solicitações fiscais, procedimentos, reuniões, turnos, funcionários) sob
+   a role restrita — não só suporte. Corrigido trocando pra `is_local=false` (escopo de
+   sessão), que é o par certo do `RESET app.current_company_id` que já existia no `finally` de
+   `require_session` (esse `RESET` só faz sentido pra limpar estado de sessão — a intenção
+   original sempre foi sessão, o `true` é que estava errado).
+2. **`record_event` não retornava o evento criado** — forçava esse padrão de "commit, depois
+   reconsulta" em `add_comment`. Agora retorna o `AuditEvent` (com `id`/`created_at` já
+   populados via `session.flush()`, sem query extra); `add_comment` usa o retorno direto. Os
+   ~137 outros call sites de `record_event` não usavam o valor de retorno (era `-> None`),
+   então a mudança de assinatura é aditiva, sem quebra.
+
+Ambos só apareceram porque a role restrita (`registro_app`) está realmente em vigor no dev
+local desde a entrega anterior — com o superusuário de antes, RLS nunca barrava nada e esses
+dois bugs eram inofensivos. Validado de ponta a ponta na API real (`geop-api-1`): comentário
+do tenant, resposta do admin com mudança de status, leitura da timeline pelos dois lados, e
+confirmado que `POST /timeline/work_order/{id}/comment` (não relacionado a suporte) também
+voltou a funcionar. Suíte completa: 618 testes passando (612 + 8 novos, menos 2 substituídos —
+mesma falha pré-existente e não relacionada de sempre).

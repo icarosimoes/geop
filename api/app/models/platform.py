@@ -118,10 +118,14 @@ class SupportRequest(Base, TenantMixin, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    subject: Mapped[str | None] = mapped_column(String(160))
+    priority: Mapped[str] = mapped_column(String(10), default="MEDIA")
     contact_name: Mapped[str] = mapped_column(String(160))
     contact_whatsapp: Mapped[str] = mapped_column(String(30))
     message: Mapped[str | None] = mapped_column(String(2000))
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    response_message: Mapped[str | None] = mapped_column(String(2000))
+    responded_by: Mapped[int | None] = mapped_column(ForeignKey("platform_users.id"))
     company: Mapped[Company] = relationship(lazy="selectin")
 
 

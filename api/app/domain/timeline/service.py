@@ -14,6 +14,7 @@ from app.models import (
     ModuleRecord,
     Procedure,
     ShiftReport,
+    SupportRequest,
     User,
     WorkOrder,
 )
@@ -29,6 +30,7 @@ VALID_ENTITY_TYPES = {
     "manutencao",
     "mural",
     "employee",
+    "support_request",
 }
 
 ENTITY_MODEL_MAP: dict[str, Any] = {
@@ -38,7 +40,13 @@ ENTITY_MODEL_MAP: dict[str, Any] = {
     "meeting": Meeting,
     "shift_report": ShiftReport,
     "employee": Employee,
+    "support_request": SupportRequest,
 }
+
+# Chamados de suporte são pessoais (só o autor + a plataforma veem/comentam) —
+# diferente do resto do timeline, que é por empresa. `verify_entity_access`
+# aplica esse filtro extra só pra este entity_type quando `user_id` é passado.
+OWNER_SCOPED_ENTITY_TYPES = {"support_request"}
 
 MODULE_SLUG_ENTITY_TYPES = {
     "inspecoes",
@@ -49,13 +57,19 @@ MODULE_SLUG_ENTITY_TYPES = {
 
 
 async def verify_entity_access(
-    session: AsyncSession, entity_type: str, entity_id: int, company_id: int
+    session: AsyncSession,
+    entity_type: str,
+    entity_id: int,
+    company_id: int,
+    user_id: int | None = None,
 ) -> bool:
     if entity_type in ENTITY_MODEL_MAP:
         model = ENTITY_MODEL_MAP[entity_type]
         filters = [model.id == entity_id, model.company_id == company_id]
         if hasattr(model, "deleted_at"):
             filters.append(model.deleted_at.is_(None))
+        if entity_type in OWNER_SCOPED_ENTITY_TYPES and user_id is not None:
+            filters.append(model.user_id == user_id)
         exists = await session.scalar(select(model.id).where(*filters))
     elif entity_type in MODULE_SLUG_ENTITY_TYPES:
         exists = await session.scalar(
@@ -71,6 +85,30 @@ async def verify_entity_access(
     return exists is not None
 
 
+def _serialize_event(event: AuditEvent, user_name: str | None) -> dict:
+    message = None
+    changes = None
+    if event.event_type == "comment":
+        message = event.diff.get("message") if event.diff else None
+    elif event.event_type == "attachment_add":
+        message = f'Anexou "{event.diff.get("filename", "?")}"' if event.diff else None
+    elif event.event_type == "attachment_remove":
+        message = f'Removeu anexo "{event.diff.get("filename", "?")}"' if event.diff else None
+    elif event.diff:
+        changes = event.diff
+    return {
+        "id": event.id,
+        "event_type": event.event_type,
+        # user_name vem do join com User (ator do tenant); actor_name é o
+        # fallback pra atores sem linha em `users` (ex.: admin da plataforma) —
+        # ver app/models/operations.py::AuditEvent.
+        "user": user_name or event.actor_name or "—",
+        "message": message,
+        "changes": changes,
+        "created_at": event.created_at,
+    }
+
+
 async def get_timeline(
     session: AsyncSession,
     company_id: int,
@@ -80,7 +118,7 @@ async def get_timeline(
     rows = (
         await session.execute(
             select(AuditEvent, User.name)
-            .join(User, User.id == AuditEvent.user_id)
+            .outerjoin(User, User.id == AuditEvent.user_id)
             .where(
                 AuditEvent.company_id == company_id,
                 AuditEvent.entity_type == entity_type,
@@ -89,30 +127,7 @@ async def get_timeline(
             .order_by(AuditEvent.created_at.asc(), AuditEvent.id.asc())
         )
     ).all()
-
-    items = []
-    for event, user_name in rows:
-        message = None
-        changes = None
-        if event.event_type == "comment":
-            message = event.diff.get("message") if event.diff else None
-        elif event.event_type == "attachment_add":
-            message = f'Anexou "{event.diff.get("filename", "?")}"' if event.diff else None
-        elif event.event_type == "attachment_remove":
-            message = f'Removeu anexo "{event.diff.get("filename", "?")}"' if event.diff else None
-        elif event.diff:
-            changes = event.diff
-        items.append(
-            {
-                "id": event.id,
-                "event_type": event.event_type,
-                "user": user_name,
-                "message": message,
-                "changes": changes,
-                "created_at": event.created_at,
-            }
-        )
-    return items
+    return [_serialize_event(event, user_name) for event, user_name in rows]
 
 
 async def get_timeline_cursor(
@@ -136,7 +151,7 @@ async def get_timeline_cursor(
     rows = (
         await session.execute(
             select(AuditEvent, User.name)
-            .join(User, User.id == AuditEvent.user_id)
+            .outerjoin(User, User.id == AuditEvent.user_id)
             .where(*filters)
             .order_by(AuditEvent.created_at.asc(), AuditEvent.id.asc())
             .limit(limit + 1)
@@ -145,29 +160,7 @@ async def get_timeline_cursor(
 
     has_more = len(rows) > limit
     rows = rows[:limit]
-
-    items = []
-    for event, user_name in rows:
-        message = None
-        changes = None
-        if event.event_type == "comment":
-            message = event.diff.get("message") if event.diff else None
-        elif event.event_type == "attachment_add":
-            message = f'Anexou "{event.diff.get("filename", "?")}"' if event.diff else None
-        elif event.event_type == "attachment_remove":
-            message = f'Removeu anexo "{event.diff.get("filename", "?")}"' if event.diff else None
-        elif event.diff:
-            changes = event.diff
-        items.append(
-            {
-                "id": event.id,
-                "event_type": event.event_type,
-                "user": user_name,
-                "message": message,
-                "changes": changes,
-                "created_at": event.created_at,
-            }
-        )
+    items = [_serialize_event(event, user_name) for event, user_name in rows]
 
     next_cursor = None
     if has_more and items:
@@ -186,7 +179,7 @@ async def add_comment(
     entity_id: int,
     message: str,
 ) -> dict:
-    await record_event(
+    event = await record_event(
         session,
         company_id=company_id,
         user_id=user_id,
@@ -194,19 +187,6 @@ async def add_comment(
         entity_id=entity_id,
         event_type="comment",
         diff={"message": message},
-    )
-    await session.commit()
-
-    event = await session.scalar(
-        select(AuditEvent)
-        .where(
-            AuditEvent.company_id == company_id,
-            AuditEvent.entity_type == entity_type,
-            AuditEvent.entity_id == entity_id,
-            AuditEvent.event_type == "comment",
-        )
-        .order_by(AuditEvent.id.desc())
-        .limit(1)
     )
 
     module_labels = {
@@ -257,12 +237,13 @@ async def add_comment(
                 detail=message,
             )
 
-    from datetime import datetime
+    await session.commit()
 
+    assert event is not None  # event_type="comment" sempre tem diff não-vazio
     return {
-        "id": event.id if event else 0,
+        "id": event.id,
         "event_type": "comment",
         "user": user_name,
         "message": message,
-        "created_at": event.created_at if event else datetime.now(),
+        "created_at": event.created_at,
     }

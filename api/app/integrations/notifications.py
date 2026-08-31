@@ -40,6 +40,7 @@ class _WhatsAppTask:
 
 @dataclasses.dataclass
 class PendingDelivery:
+    company_id: int
     emails: list[_EmailTask]
     whatsapp: list[_WhatsAppTask]
     brevo_config: dict
@@ -269,6 +270,7 @@ async def prepare_notifications(
         return None
 
     return PendingDelivery(
+        company_id=company_id,
         emails=email_tasks,
         whatsapp=whatsapp_tasks,
         brevo_config=dict(brevo),
@@ -309,8 +311,14 @@ async def deliver_notifications(pending: PendingDelivery) -> None:
                     logger.warning("whatsapp_send_failed", phone=wt.phone)
 
     if notification_ids_sent and SessionLocal:
+        from app.core.rls import set_tenant_context
+
         try:
             async with SessionLocal() as session:
+                # Sessão nova, aberta em background (fora do request original) —
+                # sem isso, `notifications` (RLS) rejeita o SELECT/UPDATE abaixo
+                # sob a role restrita (ver docs/auditoria-2026-07-03.md#c1).
+                await set_tenant_context(session, pending.company_id)
                 now = datetime.now()
                 for nid in notification_ids_sent:
                     notif = await session.get(Notification, nid)

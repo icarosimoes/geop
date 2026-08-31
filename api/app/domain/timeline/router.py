@@ -53,7 +53,7 @@ async def get_timeline_cursor_endpoint(
 ) -> TimelineCursorResponse:
     if entity_type not in VALID_ENTITY_TYPES:
         raise HTTPException(status_code=400, detail={"code": "invalid_entity_type"})
-    if not await verify_entity_access(session, entity_type, entity_id, user.company_id):
+    if not await verify_entity_access(session, entity_type, entity_id, user.company_id, user.id):
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
     result = await get_timeline_cursor(
@@ -75,7 +75,7 @@ async def get_timeline_endpoint(
 ) -> TimelineResponse:
     if entity_type not in VALID_ENTITY_TYPES:
         raise HTTPException(status_code=400, detail={"code": "invalid_entity_type"})
-    if not await verify_entity_access(session, entity_type, entity_id, user.company_id):
+    if not await verify_entity_access(session, entity_type, entity_id, user.company_id, user.id):
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
     items = await get_timeline(session, user.company_id, entity_type, entity_id)
@@ -94,7 +94,7 @@ async def add_comment_endpoint(
         raise HTTPException(status_code=400, detail={"code": "invalid_entity_type"})
     if not body.message.strip():
         raise HTTPException(status_code=422, detail={"code": "empty_message"})
-    if not await verify_entity_access(session, entity_type, entity_id, user.company_id):
+    if not await verify_entity_access(session, entity_type, entity_id, user.company_id, user.id):
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
     result = await add_comment(

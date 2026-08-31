@@ -51,4 +51,12 @@ Herdam isolamento via FK CASCADE da tabela pai.
 ## Notas técnicas
 
 - PostgreSQL não aceita bind params em `SET` — usar f-string com `int()` validado
-- `FORCE ROW LEVEL SECURITY` é necessário porque o owner do banco tem `BYPASSRLS` por default
+- `FORCE ROW LEVEL SECURITY` é necessário porque, por padrão, o *owner* de uma tabela não é filtrado pelas próprias policies RLS dela (precisa de `FORCE` pra isso valer também pro owner). Isso é um mecanismo **diferente** do atributo de role `BYPASSRLS`: um superusuário do Postgres ignora RLS incondicionalmente — `FORCE` não muda isso. Essa distinção não estava clara na redação original desta ADR (ver atualização abaixo).
+
+## Atualização (2026-08-31) — RLS estava inerte desde a implementação
+
+Achado em `docs/auditoria-2026-07-03.md#c1`, reconfirmado nesta data: a role `registro` usada pela API é criada como **superusuário** pela imagem oficial do Postgres (`POSTGRES_USER=registro`). Superusuário ignora RLS incondicionalmente — as 24+ policies `tenant_isolation` desta ADR nunca filtraram nada; o isolamento entre tenants dependia inteiramente do filtro `company_id` da aplicação, sem a camada extra de defesa que esta ADR pretendia.
+
+A frase "Rotas platform (admin) funcionam sem filtro — owner tem `BYPASSRLS`" (Consequências, acima) descrevia a intenção certa, implementada errado: o app inteiro rodava com essa role, não só as rotas `/platform/*`.
+
+Corrigido com três roles (`registro` só migration, `registro_app` restrita pra tenant, `registro_platform` com `BYPASSRLS` só pras rotas `/platform/*`), reordenação do `set_config` nos pontos de entrada de auth, e uma function `SECURITY DEFINER` pro único SELECT genuinamente cross-tenant (login por e-mail, antes de saber a empresa). Detalhes completos, incluindo o rollout em produção (ainda não aplicado), em [role-restrita-postgres.md](../infra/role-restrita-postgres.md).

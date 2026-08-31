@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.rate_limit import limiter
+from app.core.rls import set_tenant_context
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -82,6 +83,7 @@ async def me(
     try:
         claims = decode_access_token(token, settings.jwt_secret)
         user_id, company_id = int(claims["sub"]), int(claims["company_id"])
+        await set_tenant_context(session, company_id)
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401,
@@ -111,6 +113,7 @@ async def refresh(
     try:
         claims = decode_refresh_token(body.refresh_token, settings.jwt_secret)
         user_id, company_id = int(claims["sub"]), int(claims["company_id"])
+        await set_tenant_context(session, company_id)
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401,
@@ -159,6 +162,7 @@ async def impersonate(
     try:
         claims = decode_impersonation_token(body.ticket, settings.jwt_secret)
         user_id, company_id = int(claims["sub"]), int(claims["company_id"])
+        await set_tenant_context(session, company_id)
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401,
@@ -224,6 +228,7 @@ async def sso_exchange(
         # TTL de 60s) não tem "role" — trata como não-admin, comportamento igual
         # ao de antes dessa mudança.
         erpsolid_role = claims.get("role")
+        await set_tenant_context(session, company_id)
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=400,
@@ -292,6 +297,7 @@ async def set_password(
         claims = decode_invite_token(body.token, settings.jwt_secret)
         user_id = int(claims["sub"])
         company_id = int(claims["company_id"])
+        await set_tenant_context(session, company_id)
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=401,

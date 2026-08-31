@@ -32,6 +32,7 @@ async def test_prepare_notifications_returns_none_without_recipients(session):
 @pytest.mark.asyncio
 async def test_deliver_notifications_sends_emails():
     pending = PendingDelivery(
+        company_id=1,
         emails=[
             _EmailTask(
                 notification_id=None,
@@ -63,6 +64,7 @@ async def test_deliver_notifications_sends_emails():
 @pytest.mark.asyncio
 async def test_deliver_notifications_sends_whatsapp():
     pending = PendingDelivery(
+        company_id=1,
         emails=[],
         whatsapp=[_WhatsAppTask(phone="5511999999999", text="Olá")],
         brevo_config={},
@@ -84,6 +86,7 @@ async def test_deliver_notifications_sends_whatsapp():
 @pytest.mark.asyncio
 async def test_deliver_notifications_handles_email_failure():
     pending = PendingDelivery(
+        company_id=1,
         emails=[
             _EmailTask(
                 notification_id=None,

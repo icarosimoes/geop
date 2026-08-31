@@ -146,7 +146,7 @@ async def session(test_session_factory):
 def app(test_session_factory):
     from app.core.auth import current_user
     from app.core.config import Settings, get_settings
-    from app.core.dependencies import require_session
+    from app.core.dependencies import require_platform_session, require_session
     from app.core.security import decode_access_token
     from app.main import app as fastapi_app
 
@@ -210,6 +210,10 @@ def app(test_session_factory):
 
     fastapi_app.dependency_overrides[get_settings] = lambda: test_settings
     fastapi_app.dependency_overrides[require_session] = _test_session
+    # Testes usam a mesma conexão pras rotas /platform/* — a distinção
+    # registro_app/registro_platform (BYPASSRLS) só existe fora dos testes; ver
+    # app/core/database.py e docs/infra/role-restrita-postgres.md.
+    fastapi_app.dependency_overrides[require_platform_session] = _test_session
     fastapi_app.dependency_overrides[current_user] = _current_user_test
 
     yield fastapi_app
