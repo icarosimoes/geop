@@ -113,7 +113,7 @@ services:
         delay: 30s
 
   api:
-    image: ghcr.io/icarosimoes/registro/api:${IMAGE_TAG:-latest}
+    image: ghcr.io/icarosimoes/geop/api:${IMAGE_TAG:-latest}
     logging:
       driver: json-file
       options:
@@ -172,7 +172,7 @@ services:
         - traefik.http.services.registro-api.loadbalancer.server.port=8000
 
   web:
-    image: ghcr.io/icarosimoes/registro/web:${IMAGE_TAG:-latest}
+    image: ghcr.io/icarosimoes/geop/web:${IMAGE_TAG:-latest}
     logging:
       driver: json-file
       options:
@@ -206,7 +206,7 @@ services:
         - traefik.http.services.registro-web.loadbalancer.server.port=3000
 
   admin:
-    image: ghcr.io/icarosimoes/registro/admin:${IMAGE_TAG:-latest}
+    image: ghcr.io/icarosimoes/geop/admin:${IMAGE_TAG:-latest}
     logging:
       driver: json-file
       options:
@@ -234,7 +234,7 @@ services:
         - traefik.http.services.registro-admin.loadbalancer.server.port=3001
 
   colaborador:
-    image: ghcr.io/icarosimoes/registro/colaborador:${IMAGE_TAG:-latest}
+    image: ghcr.io/icarosimoes/geop/colaborador:${IMAGE_TAG:-latest}
     logging:
       driver: json-file
       options:
