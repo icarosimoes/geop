@@ -58,14 +58,18 @@ async def find_active_users_by_email(
     ver docstring da migration.
     """
     rows = (
-        await session.execute(
-            text("SELECT * FROM find_login_candidates(:email, :company_id)").bindparams(
-                bindparam("email", type_=String),
-                bindparam("company_id", type_=Integer),
-            ),
-            {"email": email.lower(), "company_id": company_id},
+        (
+            await session.execute(
+                text("SELECT * FROM find_login_candidates(:email, :company_id)").bindparams(
+                    bindparam("email", type_=String),
+                    bindparam("company_id", type_=Integer),
+                ),
+                {"email": email.lower(), "company_id": company_id},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [
         AuthenticatedUser(
             id=row["id"],

@@ -66,12 +66,8 @@ def _create_or_configure_role(
         conn.execute(sa.text(f"CREATE ROLE {role} LOGIN PASSWORD '{escaped_password}'"))
 
     bypass_clause = "BYPASSRLS" if bypass_rls else "NOBYPASSRLS"
-    conn.execute(
-        sa.text(
-            f"ALTER ROLE {role} NOSUPERUSER {bypass_clause} "
-            "NOCREATEDB NOCREATEROLE NOREPLICATION"
-        )
-    )
+    conn.execute(sa.text(f"ALTER ROLE {role} NOSUPERUSER {bypass_clause}"))
+    conn.execute(sa.text(f"ALTER ROLE {role} NOCREATEDB NOCREATEROLE NOREPLICATION"))
     conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {role}"))
     conn.execute(
         sa.text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role}")

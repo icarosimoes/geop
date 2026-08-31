@@ -269,12 +269,17 @@ async def test_admin_response_creates_timeline_entries(session):
     from app.models import AuditEvent
 
     events = (
-        await session.execute(
-            select(AuditEvent).where(
-                AuditEvent.entity_type == "support_request", AuditEvent.entity_id == request_id
+        (
+            await session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.entity_type == "support_request",
+                    AuditEvent.entity_id == request_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert all(e.user_id is None and e.actor_name == "Suporte · Bruna" for e in events)
 
 
@@ -433,7 +438,6 @@ async def test_platform_reads_full_ticket_timeline(client, session):
     assert r.status_code == 200
     items = r.json()
     assert any(
-        i["event_type"] == "comment" and i["message"] == "Recebido, vamos verificar."
-        for i in items
+        i["event_type"] == "comment" and i["message"] == "Recebido, vamos verificar." for i in items
     )
     assert any(i["user"] == "Suporte · Carlos" for i in items)

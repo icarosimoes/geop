@@ -21,9 +21,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "support_requests", sa.Column("subject", sa.String(length=160), nullable=True)
-    )
+    op.add_column("support_requests", sa.Column("subject", sa.String(length=160), nullable=True))
     op.add_column(
         "support_requests",
         sa.Column("priority", sa.String(length=10), server_default="MEDIA", nullable=False),
@@ -32,9 +30,7 @@ def upgrade() -> None:
         "support_requests",
         sa.Column("response_message", sa.String(length=2000), nullable=True),
     )
-    op.add_column(
-        "support_requests", sa.Column("responded_by", sa.Integer(), nullable=True)
-    )
+    op.add_column("support_requests", sa.Column("responded_by", sa.Integer(), nullable=True))
     op.create_foreign_key(
         "fk_support_requests_responded_by",
         "support_requests",
@@ -46,9 +42,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_support_requests_responded_by", "support_requests", type_="foreignkey"
-    )
+    op.drop_constraint("fk_support_requests_responded_by", "support_requests", type_="foreignkey")
     op.drop_column("support_requests", "responded_by")
     op.drop_column("support_requests", "response_message")
     op.drop_column("support_requests", "priority")
