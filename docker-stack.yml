@@ -134,6 +134,9 @@ services:
       S3_SECRET_KEY_FILE: /run/secrets/registro_s3_secret_key
       S3_BUCKET: registro-attachments
       S3_PUBLIC_URL: https://${REGISTRO_WEB_HOST}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET_FILE: /run/secrets/google_oauth_client_secret
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
     secrets:
       - registro_database_url
       - registro_jwt_secret
@@ -141,6 +144,7 @@ services:
       - erpsolid_sso_shared_secret
       - registro_s3_access_key
       - registro_s3_secret_key
+      - google_oauth_client_secret
     networks:
       - registro-internal
       - traefik-public
@@ -300,4 +304,6 @@ secrets:
   registro_s3_access_key:
     external: true
   registro_s3_secret_key:
+    external: true
+  google_oauth_client_secret:
     external: true
