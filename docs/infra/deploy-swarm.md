@@ -55,6 +55,20 @@ REGISTRO_ADMIN_HOST=painel.geop.solidsd.com.br
 REGISTRO_COLABORADOR_HOST=colaborador.geop.solidsd.com.br
 REGISTRO_WEB_ORIGIN=https://geop.solidsd.com.br
 IMAGE_TAG=sha-<sha-completo>
+GOOGLE_OAUTH_CLIENT_ID=<client id do Google Cloud Console>
+GOOGLE_OAUTH_REDIRECT_URI=https://api.geop.solidsd.com.br/api/v1/email-client/oauth/callback
+```
+
+`GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_REDIRECT_URI` só são necessários se o login com
+Google (Gmail OAuth) do email_client estiver em uso — ver
+[gmail-oauth-setup.md](../integracoes/gmail-oauth-setup.md). Sem eles,
+`POST /email-client/oauth/start` responde `400 oauth_not_configured` e o resto do
+email_client continua funcionando normalmente. O client secret **não** vai no
+`.env.prod` — é um Docker secret separado (`google_oauth_client_secret`), criado uma
+única vez:
+
+```bash
+printf '%s' "<client secret do Google Cloud Console>" | docker secret create google_oauth_client_secret -
 ```
 
 A API é publicada em `api.geop.solidsd.com.br`; seus endpoints permanecem sob `/api/v1`.
