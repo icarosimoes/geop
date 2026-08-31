@@ -13,8 +13,12 @@ AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-# Full access ao Gmail via IMAP/SMTP — é o único scope que autoriza XOAUTH2 no IMAP.
-SCOPE = "https://mail.google.com/"
+# https://mail.google.com/ é o scope que autoriza XOAUTH2 no IMAP (full access ao
+# Gmail). "email" vem junto só pra identificar a conta autorizada via
+# fetch_userinfo() — sem ele, o endpoint oauth2/v2/userinfo rejeita o access_token
+# com 401 "missing required authentication credential" (token sem escopo de
+# identidade não é aceito ali, mesmo sendo um token válido pro Gmail).
+SCOPE = "https://mail.google.com/ email"
 
 
 class GoogleOAuthError(Exception):

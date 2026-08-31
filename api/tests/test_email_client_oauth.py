@@ -83,7 +83,7 @@ async def test_oauth_start_returns_authorize_url(app, client):
     url = r.json()["authorize_url"]
     assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
     assert "client_id=test-client-id" in url
-    assert "scope=https%3A%2F%2Fmail.google.com%2F" in url
+    assert "scope=https%3A%2F%2Fmail.google.com%2F+email" in url
     assert "state=" in url
 
 
