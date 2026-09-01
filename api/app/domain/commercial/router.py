@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -437,6 +438,29 @@ async def cancel_quote_endpoint(
     return _to_quote_out(detail, settings, user.company_id)
 
 
+@router.get("/quotes/{quote_id}/pdf")
+async def quote_pdf_endpoint(
+    quote_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("commercial.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> StreamingResponse:
+    from app.domain.commercial.pdf import generate_quote_pdf
+
+    detail = await _get_quote_detail_or_404(session, user.company_id, quote_id)
+    buf = generate_quote_pdf(
+        company_name=user.company_name,
+        quote=detail.quote,
+        customer_name=detail.customer_name or "—",
+        items=detail.items,
+    )
+    filename = f"orcamento_{detail.quote.number or detail.quote.id}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Sales
 # ---------------------------------------------------------------------------
@@ -504,6 +528,32 @@ async def update_sale_endpoint(
     detail = await _get_sale_detail_or_404(session, user.company_id, sale_id)
     invoiced, received = await _invoice_totals(session, sale_id)
     return _to_sale_out(detail, invoiced, received)
+
+
+@router.get("/sales/{sale_id}/pdf")
+async def sale_pdf_endpoint(
+    sale_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("commercial.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+) -> StreamingResponse:
+    from app.domain.commercial.pdf import generate_sale_pdf
+    from app.domain.commercial.service import _quote_items
+
+    detail = await _get_sale_detail_or_404(session, user.company_id, sale_id)
+    quote_items = await _quote_items(session, detail.sale.quote_id)
+    buf = generate_sale_pdf(
+        company_name=user.company_name,
+        sale=detail.sale,
+        customer_name=detail.customer_name or "—",
+        quote_items=quote_items,
+        invoices=detail.invoices,
+    )
+    filename = f"venda_{detail.sale.number or detail.sale.id}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

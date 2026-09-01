@@ -364,6 +364,9 @@ export function QuoteManager() {
                 {selectedQuote.status === "enviado" && (
                   <button type="button" className="secondary-button" onClick={() => handleCancel(selectedQuote.id)}><Ban size={14} /> Cancelar envio</button>
                 )}
+                <a className="secondary-button" href={`/api/commercial/quotes/${selectedQuote.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                  <FileText size={14} /> Exportar PDF
+                </a>
               </div>
 
               {selectedQuote.acceptance_url && (

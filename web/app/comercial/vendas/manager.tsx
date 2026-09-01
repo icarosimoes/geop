@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Search, X, Plus, ShoppingCart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X, Plus, ShoppingCart, FileText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { SaleDetail, SalesInvoice, SaleSummary } from "./actions";
 import {
@@ -180,6 +180,12 @@ function SaleDetailPanel({ sale, onChanged }: { sale: SaleDetail; onChanged: () 
       <div className="customer-badges">
         <span className={`status ${SALE_STATUS_CLASS[sale.status] ?? "status-neutral"}`}>{SALE_STATUS_LABEL[sale.status] ?? sale.status}</span>
         <span className={`status ${INSTALL_STATUS_CLASS[sale.installation_status] ?? "status-neutral"}`}>Instalação: {INSTALL_STATUS_LABEL[sale.installation_status] ?? sale.installation_status}</span>
+      </div>
+
+      <div style={{ marginBottom: "var(--sp-3)" }}>
+        <a className="secondary-button" href={`/api/commercial/sales/${sale.id}/pdf`} target="_blank" rel="noopener noreferrer">
+          <FileText size={14} /> Exportar PDF
+        </a>
       </div>
 
       <div className="form-grid">

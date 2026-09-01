@@ -206,7 +206,10 @@ Base local: `http://localhost:8000/api/v1`. OpenAPI: `http://localhost:8000/docs
 | `PATCH` | `/commercial/invoices/{id}` | `commercial.edit` | atualiza fatura |
 | `POST` | `/commercial/invoices/{id}/payments` | `commercial.edit` | registra recebimento (quita a fatura automaticamente) |
 | `GET` | `/commercial/funnel` | `commercial.view` | agregados de orçado/aprovado/entregue/faturado/recebido |
+| `GET` | `/commercial/quotes/{id}/pdf` | `commercial.view` | PDF do orçamento |
+| `GET` | `/commercial/sales/{id}/pdf` | `commercial.view` | PDF da venda (itens, entrega/instalação, faturas) |
 | `GET` | `/public/quotes/{token}` | pública (token JWT no path) | visualização do orçamento pelo cliente, sem login |
+| `GET` | `/public/quotes/{token}/pdf` | pública (token JWT no path) | PDF do orçamento pelo cliente, sem login |
 | `POST` | `/public/quotes/{token}/accept` | pública (token JWT no path) | cliente aprova o orçamento — cria a venda |
 | `POST` | `/public/quotes/{token}/reject` | pública (token JWT no path) | cliente recusa o orçamento |
 

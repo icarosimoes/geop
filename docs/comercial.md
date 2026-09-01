@@ -192,6 +192,19 @@ Prefixo `/commercial` (autenticado, tenant) e `/public/quotes` (sem autenticaç�
 | `POST` | `/public/quotes/{token}/accept` | token JWT no path | aprova (`{decision_note?}`) — cria a `Sale` |
 | `POST` | `/public/quotes/{token}/reject` | token JWT no path | recusa (`{decision_note?}`) |
 
+### PDF
+
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/commercial/quotes/{id}/pdf` | `commercial.view` | PDF do orçamento (itens, totais, condições) |
+| `GET` | `/commercial/sales/{id}/pdf` | `commercial.view` | PDF da venda (itens do orçamento de origem, status de entrega/instalação, faturas + recebido por fatura) |
+| `GET` | `/public/quotes/{token}/pdf` | token JWT no path | mesmo PDF do orçamento, acessível pelo cliente sem login |
+
+Gerados com `reportlab` (`app/domain/commercial/pdf.py`), mesmo padrão de
+`work_orders/pdf.py`/`meetings/pdf.py` — `SimpleDocTemplate` A4, sem logo/timbre. Dinheiro
+formatado em pt-BR (`R$ 1.234,56`) sem depender de `locale` do sistema (não instalado nas
+imagens de container), trocando separador manualmente.
+
 ### `GET /commercial/funnel`
 
 ```json
@@ -215,9 +228,9 @@ acumulado do tenant).
 | Rota | Descrição |
 |---|---|
 | `/cadastros/clientes` | CRUD de clientes — mesmo padrão visual de `/cadastros/fornecedores`, sem sub-entidade de contatos |
-| `/comercial/orcamentos` | Lista + criar/editar (itens dinâmicos com totais calculados no cliente) + modal de detalhe com ações (enviar/cancelar) e link de aceite copiável |
-| `/comercial/vendas` | Lista + modal de detalhe: status da venda, status/datas de instalação, faturas embutidas com formulário de nova fatura e registro de recebimento inline |
-| `/orcamento/[token]` | **Página pública, fora do `AppLayout`/login** — o cliente vê o orçamento e aprova/recusa. Liberada explicitamente no `middleware.ts` (`PUBLIC_PREFIXES = ["/orcamento/"]`) |
+| `/comercial/orcamentos` | Lista + criar/editar (itens dinâmicos com totais calculados no cliente) + modal de detalhe com ações (enviar/cancelar), link de aceite copiável e "Exportar PDF" |
+| `/comercial/vendas` | Lista + modal de detalhe: status da venda, status/datas de instalação, "Exportar PDF", faturas embutidas com formulário de nova fatura e registro de recebimento inline |
+| `/orcamento/[token]` | **Página pública, fora do `AppLayout`/login** — o cliente vê o orçamento, baixa o PDF e aprova/recusa. Liberada explicitamente no `middleware.ts` (`PUBLIC_PREFIXES = ["/orcamento/"]`) |
 
 Widget "Funil comercial" no dashboard (`components/commercial-funnel-card.tsx`), buscado via
 `GET /commercial/funnel` em `dashboard/page.tsx` — card oculto se a requisição falhar (usuário
@@ -235,6 +248,18 @@ mais largo que `.tenant-login-card` (420px) pra caber a tabela de itens.
 `docker-compose.yml` (`./web/app`, `./web/components`, `./web/lib`) — uma mudança nele só entra
 em vigor com `docker compose build web` (não basta `docker restart`), igual o `api/pyproject.toml`
 já documentado pro serviço `api`.
+
+### Download de PDF
+
+Os três PDFs (orçamento autenticado, venda, orçamento público) são baixados por um `<a
+href target="_blank">` puro (`.secondary-button`) apontando pra uma Route Handler própria em
+`web/app/api/...` — mesmo padrão do PDF de ordem de serviço (`web/app/api/work-orders/[id]/pdf/
+route.ts`). Necessário porque um `<a>` não manda header `Authorization`: as rotas autenticadas
+(`/api/commercial/quotes/[id]/pdf`, `/api/commercial/sales/[id]/pdf`) leem o cookie httpOnly
+via `getValidToken()` e repassam como Bearer pro fetch server-side; a pública
+(`/api/public/quotes/[token]/pdf`) não precisa de token nenhum, mas ainda passa pelo proxy
+porque o browser do cliente não resolve o hostname interno do container da API (`api:8000`,
+usado por `API_URL` em dev) — só o server-side do Next.js resolve.
 
 ## Migrations
 
@@ -256,7 +281,6 @@ o `list_contracts_for_erpsolid`/`upsert_*_from_erpsolid` de referência).
 - Sem envio automático de e-mail ao cliente quando o orçamento é enviado — o link fica só na
   tela pra copiar manualmente. A integração Brevo já existe (`app/integrations/brevo.py`,
   usada em `users/service.py::invite_user`) e seria o próximo passo natural.
-- Sem geração de PDF do orçamento/venda.
 - Sem rate limit no endpoint público de aceite (`/public/quotes/*`) — os demais endpoints
   sensíveis do projeto (login, refresh) usam slowapi; este não tem, por ora.
 - `QuoteItem.stock_item_id` é só referência — aceitar um orçamento com itens tipo "produto"
