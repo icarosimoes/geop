@@ -1,13 +1,26 @@
 """Testes do pipeline comercial: Cliente -> Orçamento -> Aceite (link público) ->
 Venda -> Faturamento -> Cobrança, e isolamento cross-tenant."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
+from app.core.rate_limit import limiter
 from app.core.security import create_quote_acceptance_token
 from tests.conftest import JWT_SECRET, TENANT_A, TENANT_B, auth_header
 
 PREFIX = "/api/v1/commercial"
 PUBLIC_PREFIX = "/api/v1/public/quotes"
+
+
+@pytest.fixture(autouse=True)
+def _reset_public_quotes_rate_limit():
+    """/public/quotes/* tem rate limit (10-30/minute); sem reset, os vários
+    testes deste arquivo somados (+ o teste dedicado de 429 abaixo) estourariam
+    o limite dentro da mesma janela — mesmo padrão de test_timeclock_mobile.py."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 def _customer_body(name="Cliente Teste", **kw):
@@ -244,3 +257,113 @@ async def test_sale_pdf_and_public_quote_pdf(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
+
+
+async def _set_tenant_brevo_config(session, value: dict) -> None:
+    """Upsert em `company_settings` (chave `brevo`) pra TENANT_A — via `select`
+    primeiro porque o teste roda contra o Postgres compartilhado de dev e a
+    linha, uma vez commitada, sobrevive entre testes (não há rollback depois
+    de um `commit()` explícito). Ver `_clear_tenant_brevo_config` — quem chama
+    esta função é responsável por limpar no final do teste."""
+    from sqlalchemy import select
+
+    from app.models import CompanySetting
+
+    row = await session.scalar(
+        select(CompanySetting).where(
+            CompanySetting.company_id == TENANT_A, CompanySetting.key == "brevo"
+        )
+    )
+    if row:
+        row.value = value
+    else:
+        session.add(CompanySetting(company_id=TENANT_A, key="brevo", value=value))
+    await session.commit()
+
+
+async def _clear_tenant_brevo_config(session) -> None:
+    from sqlalchemy import delete
+
+    from app.models import CompanySetting
+
+    await session.execute(
+        delete(CompanySetting).where(
+            CompanySetting.company_id == TENANT_A, CompanySetting.key == "brevo"
+        )
+    )
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_send_quote_emails_customer_when_brevo_configured(client, session):
+    """`send_quote` dispara um email pro cliente com o link de aceite quando há
+    config de Brevo (por tenant, aqui) e o cliente tem email cadastrado."""
+    await _set_tenant_brevo_config(
+        session,
+        {
+            "api_key": "tenant-level-key",
+            "from_address": "vendas@tenant.com",
+            "from_name": "Tenant Vendas",
+        },
+    )
+    try:
+        customer_id = await _create_customer(client)
+        quote = await _create_quote(client, customer_id)
+        quote_id = quote["id"]
+
+        with patch("app.integrations.brevo.send_email", new_callable=AsyncMock) as mock_send:
+            r = await client.post(f"{PREFIX}/quotes/{quote_id}/send", headers=auth_header(TENANT_A))
+            assert r.status_code == 200
+
+        mock_send.assert_awaited_once()
+        kwargs = mock_send.call_args.kwargs
+        assert kwargs["api_key"] == "tenant-level-key"
+        assert kwargs["from_address"] == "vendas@tenant.com"
+        assert kwargs["to_email"] == "cliente@teste.com"
+        assert "/orcamento/" in kwargs["html"]
+    finally:
+        await _clear_tenant_brevo_config(session)
+
+
+@pytest.mark.asyncio
+async def test_send_quote_email_failure_does_not_break_send(client, session):
+    """Um Brevo fora do ar não pode reverter o envio do orçamento — best effort."""
+    await _set_tenant_brevo_config(session, {"api_key": "tenant-level-key"})
+    try:
+        customer_id = await _create_customer(client)
+        quote = await _create_quote(client, customer_id)
+        quote_id = quote["id"]
+
+        with patch(
+            "app.integrations.brevo.send_email",
+            new_callable=AsyncMock,
+            side_effect=Exception("Brevo down"),
+        ):
+            r = await client.post(f"{PREFIX}/quotes/{quote_id}/send", headers=auth_header(TENANT_A))
+
+        assert r.status_code == 200
+        assert r.json()["quote"]["status"] == "enviado"
+    finally:
+        await _clear_tenant_brevo_config(session)
+
+
+@pytest.mark.asyncio
+async def test_public_accept_rate_limited(client):
+    """`POST /public/quotes/{token}/accept` é limitado a 10/minuto por IP — a
+    11a chamada na mesma janela deve devolver 429, mesmo repetindo o mesmo
+    token (que já cai em 422 invalid_state depois da 1a aceitação)."""
+    customer_id = await _create_customer(client)
+    quote = await _create_quote(client, customer_id)
+    quote_id = quote["id"]
+    r = await client.post(f"{PREFIX}/quotes/{quote_id}/send", headers=auth_header(TENANT_A))
+    assert r.status_code == 200
+    token = _public_token(quote_id)
+
+    statuses = [
+        (await client.post(f"{PUBLIC_PREFIX}/{token}/accept", json={})).status_code
+        for _ in range(11)
+    ]
+
+    assert statuses[0] == 200
+    assert statuses[1:10] == [422] * 9
+    assert statuses[10] == 429

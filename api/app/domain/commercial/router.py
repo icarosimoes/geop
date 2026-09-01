@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
-from app.core.security import create_quote_acceptance_token
 from app.domain.auth.repository import AuthenticatedUser
 from app.domain.commercial.schemas import (
     CommercialFunnel,
@@ -40,6 +39,7 @@ from app.domain.commercial.service import (
     QuoteDetail,
     SaleDetail,
     _invoice_totals,
+    build_acceptance_url,
     cancel_quote,
     create_customer,
     create_invoice,
@@ -64,13 +64,6 @@ from app.domain.commercial.service import (
 from app.models import SalesPayment
 
 router = APIRouter(prefix="/commercial", tags=["commercial"])
-
-
-def _acceptance_url(settings: Settings, company_id: int, quote_id: int) -> str:
-    token = create_quote_acceptance_token(
-        quote_id=quote_id, company_id=company_id, secret=settings.jwt_secret
-    )
-    return f"{settings.registro_web_url}/orcamento/{token}"
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +109,9 @@ def _to_quote_out(detail: QuoteDetail, settings: Settings, company_id: int) -> Q
             for i in detail.items
         ],
         acceptance_url=(
-            _acceptance_url(settings, company_id, quote.id) if quote.status == "enviado" else None
+            build_acceptance_url(settings, company_id, quote.id)
+            if quote.status == "enviado"
+            else None
         ),
         created_at=quote.created_at,
         updated_at=quote.updated_at,
@@ -405,7 +400,7 @@ async def send_quote_endpoint(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QuoteSendResponse:
     try:
-        quote = await send_quote(session, user.company_id, user.id, quote_id)
+        quote = await send_quote(session, user.company_id, user.id, quote_id, settings)
     except InvalidStateError as exc:
         raise HTTPException(
             status_code=422, detail={"code": "invalid_state", "message": exc.message}
@@ -415,7 +410,7 @@ async def send_quote_endpoint(
     detail = await _get_quote_detail_or_404(session, user.company_id, quote_id)
     return QuoteSendResponse(
         quote=_to_quote_out(detail, settings, user.company_id),
-        acceptance_url=_acceptance_url(settings, user.company_id, quote_id),
+        acceptance_url=build_acceptance_url(settings, user.company_id, quote_id),
     )
 
 

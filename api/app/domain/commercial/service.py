@@ -6,10 +6,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, NamedTuple
 
+import structlog
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
+from app.core.config import Settings
+from app.core.security import create_quote_acceptance_token
 from app.models import (
     Company,
     Customer,
@@ -20,6 +23,8 @@ from app.models import (
     SalesPayment,
     User,
 )
+
+logger = structlog.get_logger()
 
 
 class InvalidStateError(Exception):
@@ -433,8 +438,88 @@ async def delete_quote(session: AsyncSession, company_id: int, user_id: int, quo
     return True
 
 
+def build_acceptance_url(settings: Settings, company_id: int, quote_id: int) -> str:
+    token = create_quote_acceptance_token(
+        quote_id=quote_id, company_id=company_id, secret=settings.jwt_secret
+    )
+    return f"{settings.registro_web_url}/orcamento/{token}"
+
+
+def _format_brl(value: Decimal) -> str:
+    return f"R$ {value:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+
+async def _send_quote_email(
+    session: AsyncSession, company_id: int, quote: Quote, settings: Settings
+) -> None:
+    """Dispara o email com o link de aceite pro cliente. Melhor esforço: uma
+    falha no Brevo (ou cliente sem email cadastrado) não pode reverter o envio
+    do orçamento em si, que já foi commitado antes desta chamada."""
+    row = (
+        await session.execute(
+            select(Customer.name, Customer.email).where(Customer.id == quote.customer_id)
+        )
+    ).one_or_none()
+    if not row or not row.email:
+        logger.info(
+            "quote_email_skipped_no_customer_email", quote_id=quote.id, company_id=company_id
+        )
+        return
+
+    company_name = await session.scalar(select(Company.name).where(Company.id == company_id)) or ""
+
+    from app.domain.platform.service import get_effective_email_config
+    from app.domain.settings.router import get_company_setting
+    from app.integrations.brevo import send_email
+
+    brevo = await get_company_setting(session, company_id, "brevo")
+    api_key = brevo.get("api_key")
+    from_address = brevo.get("from_address")
+    from_name = brevo.get("from_name")
+    if not api_key:
+        (
+            platform_api_key,
+            platform_from_address,
+            platform_from_name,
+        ) = await get_effective_email_config(session, settings)
+        api_key = platform_api_key
+        from_address = from_address or platform_from_address
+        from_name = from_name or platform_from_name
+    if not api_key:
+        logger.info("quote_email_skipped_no_brevo_key", quote_id=quote.id, company_id=company_id)
+        return
+    from_address = from_address or "noreply@registro.app"
+    from_name = from_name or company_name or "GEOP"
+
+    acceptance_url = build_acceptance_url(settings, company_id, quote.id)
+    valid_until_line = (
+        f"<p>Válido até {quote.valid_until.strftime('%d/%m/%Y')}.</p>" if quote.valid_until else ""
+    )
+    html = (
+        f"<h2>Orçamento {quote.number or quote.id}</h2>"
+        f"<p>Olá {row.name},</p>"
+        f"<p>{company_name} enviou um novo orçamento pra você: <strong>{quote.title}</strong>.</p>"
+        f"<p>Valor total: {_format_brl(quote.total)}</p>"
+        f"{valid_until_line}"
+        f'<p><a href="{acceptance_url}">Ver orçamento e decidir</a></p>'
+        f"<p>Este link é pessoal e não requer login.</p>"
+    )
+    try:
+        await send_email(
+            api_key=api_key,
+            from_address=from_address,
+            from_name=from_name,
+            to_email=row.email,
+            to_name=row.name,
+            subject=f"Orçamento {quote.number or quote.id} — {company_name}",
+            html=html,
+        )
+    except Exception:
+        logger.warning("quote_email_send_failed", quote_id=quote.id, company_id=company_id)
+
+
 async def send_quote(
-    session: AsyncSession, company_id: int, user_id: int, quote_id: int
+    session: AsyncSession, company_id: int, user_id: int, quote_id: int, settings: Settings
 ) -> Quote | None:
     quote = await _get_quote(session, company_id, quote_id)
     if not quote:
@@ -457,6 +542,7 @@ async def send_quote(
     )
     await session.commit()
     await session.refresh(quote)
+    await _send_quote_email(session, company_id, quote, settings)
     return quote
 
 

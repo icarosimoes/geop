@@ -92,6 +92,19 @@ token novo automaticamente.
 Aprovar cria a `Sale` no mesmo evento — não existe uma etapa manual de "converter orçamento em
 venda".
 
+Ao enviar, `send_quote` (`app/domain/commercial/service.py`) também dispara um email pro
+cliente com o `acceptance_url`, via `app/integrations/brevo.py` — mesma integração usada em
+`users/service.py::invite_user`. Config Brevo é resolvida por tenant primeiro
+(`get_company_setting(session, company_id, "brevo")`), caindo pra `get_effective_email_config`
+(config de plataforma) se a empresa não tiver a própria, igual `integrations/notifications.py`.
+Melhor esforço: cliente sem `email` cadastrado ou nenhuma chave Brevo configurada (nem por
+tenant, nem por plataforma) só loga (`quote_email_skipped_*`) e segue — uma falha de envio
+nunca reverte a transição de status do orçamento, que já foi commitada antes.
+
+O endpoint público (`/public/quotes/*`) tem rate limit por IP via slowapi, mesmo limiter usado
+em login/refresh (`app/core/rate_limit.py`): 30/min pra visualizar (`GET /{token}`), 15/min pro
+PDF (`GET /{token}/pdf`) e 10/min pra decidir (`POST /{token}/accept` e `/reject`).
+
 ### Sale (Venda)
 
 Criada 1:1 com o `Quote` aceito (`quote_id` único). Cobre entrega e instalação como estágios da
@@ -278,11 +291,6 @@ o `list_contracts_for_erpsolid`/`upsert_*_from_erpsolid` de referência).
 
 ## Limitações conhecidas / próximos passos sugeridos
 
-- Sem envio automático de e-mail ao cliente quando o orçamento é enviado — o link fica só na
-  tela pra copiar manualmente. A integração Brevo já existe (`app/integrations/brevo.py`,
-  usada em `users/service.py::invite_user`) e seria o próximo passo natural.
-- Sem rate limit no endpoint público de aceite (`/public/quotes/*`) — os demais endpoints
-  sensíveis do projeto (login, refresh) usam slowapi; este não tem, por ora.
 - `QuoteItem.stock_item_id` é só referência — aceitar um orçamento com itens tipo "produto"
   não deduz `StockItem.current_quantity` automaticamente.
 - Numeração (`ORC-`/`VDA-`/`FAT-{ano}-{sequencial}`) é por contagem simples, sem lock — colisão

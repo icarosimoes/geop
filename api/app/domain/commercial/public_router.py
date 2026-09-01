@@ -9,12 +9,13 @@ from typing import Annotated
 
 import jwt
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
+from app.core.rate_limit import limiter
 from app.core.rls import set_tenant_context
 from app.core.security import decode_quote_acceptance_token
 from app.domain.commercial.schemas import PublicQuoteDecision, PublicQuoteOut, QuoteItemOut
@@ -79,7 +80,9 @@ def _to_public_quote_out(detail: PublicQuoteDetail) -> PublicQuoteOut:
 
 
 @router.get("/{token}", response_model=PublicQuoteOut)
+@limiter.limit("30/minute")
 async def get_public_quote(
+    request: Request,
     token: str,
     session: Annotated[AsyncSession, Depends(require_session)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -92,7 +95,9 @@ async def get_public_quote(
 
 
 @router.get("/{token}/pdf")
+@limiter.limit("15/minute")
 async def get_public_quote_pdf(
+    request: Request,
     token: str,
     session: Annotated[AsyncSession, Depends(require_session)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -118,7 +123,9 @@ async def get_public_quote_pdf(
 
 
 @router.post("/{token}/accept", response_model=PublicQuoteOut)
+@limiter.limit("10/minute")
 async def accept_public_quote(
+    request: Request,
     token: str,
     body: PublicQuoteDecision,
     session: Annotated[AsyncSession, Depends(require_session)],
@@ -128,7 +135,9 @@ async def accept_public_quote(
 
 
 @router.post("/{token}/reject", response_model=PublicQuoteOut)
+@limiter.limit("10/minute")
 async def reject_public_quote(
+    request: Request,
     token: str,
     body: PublicQuoteDecision,
     session: Annotated[AsyncSession, Depends(require_session)],
