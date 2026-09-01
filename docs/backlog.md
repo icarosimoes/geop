@@ -565,9 +565,14 @@ Detalhamento completo em [comercial.md](comercial.md).
   Sozinho, esse segundo fix derrubou a suíte de 123 falhas pra 65 (restantes são dados órfãos
   de execuções anteriores contra o Postgres de dev compartilhado — ver P11.5 acima e
   [mapa.md](mapa.md#limitações-conhecidas) — não regressão desta mudança).
-- [ ] **E-mail automático ao cliente no envio do orçamento** — hoje o link fica só na tela pra
-  copiar manualmente; a integração Brevo já existe (`app/integrations/brevo.py`), plugar em
-  `send_quote`.
+- [x] **E-mail automático ao cliente no envio do orçamento (2026-09-01)** — ✅
+  `send_quote` (`app/domain/commercial/service.py`) dispara email pro cliente via
+  `app/integrations/brevo.py` com o link de aceite (`build_acceptance_url`, extraído do
+  router pra ser reaproveitado), assim que o orçamento vira `enviado`. Config Brevo por
+  tenant (`get_company_setting(..., "brevo")`) com fallback pra `get_effective_email_config`
+  (config de plataforma), mesmo padrão de `integrations/notifications.py`. Melhor esforço:
+  cliente sem email cadastrado ou Brevo sem chave configurada só loga e segue — nunca reverte
+  o envio do orçamento em si.
 - [x] **PDF do orçamento/venda (2026-09-01)** — ✅ `app/domain/commercial/pdf.py` (reportlab,
   mesmo padrão de `work_orders/pdf.py`/`meetings/pdf.py`): `GET /commercial/quotes/{id}/pdf`,
   `GET /commercial/sales/{id}/pdf` (autenticados) e `GET /public/quotes/{token}/pdf` (mesmo
@@ -576,7 +581,9 @@ Detalhamento completo em [comercial.md](comercial.md).
   `web/app/api/public/quotes/[token]/pdf/route.ts`) — um `<a href>` puro não manda
   `Authorization`, e o browser do cliente não resolve o hostname interno da API mesmo pro
   endpoint público. 2 testes novos em `test_commercial.py` (8 no total).
-- [ ] **Rate limit no endpoint público de aceite** (`/public/quotes/*`) — os demais endpoints
-  sensíveis do projeto (login, refresh) usam slowapi; este não tem ainda.
+- [x] **Rate limit no endpoint público de aceite (2026-09-01)** — ✅
+  `app/domain/commercial/public_router.py` usa o mesmo `limiter` (slowapi) de login/refresh:
+  `GET /public/quotes/{token}` 30/min, `GET /public/quotes/{token}/pdf` 15/min,
+  `POST /public/quotes/{token}/accept` e `/reject` 10/min cada — por IP.
 - [ ] **Integração com ERP Solid** (push de venda/fatura/recebimento) — campos
   `erpsolid_external_id` já existem, seguir o padrão de `app/domain/integrations_erpsolid/`.
