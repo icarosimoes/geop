@@ -568,7 +568,14 @@ Detalhamento completo em [comercial.md](comercial.md).
 - [ ] **E-mail automático ao cliente no envio do orçamento** — hoje o link fica só na tela pra
   copiar manualmente; a integração Brevo já existe (`app/integrations/brevo.py`), plugar em
   `send_quote`.
-- [ ] **PDF do orçamento/venda**.
+- [x] **PDF do orçamento/venda (2026-09-01)** — ✅ `app/domain/commercial/pdf.py` (reportlab,
+  mesmo padrão de `work_orders/pdf.py`/`meetings/pdf.py`): `GET /commercial/quotes/{id}/pdf`,
+  `GET /commercial/sales/{id}/pdf` (autenticados) e `GET /public/quotes/{token}/pdf` (mesmo
+  PDF do orçamento, sem login). Frontend: botão "Exportar PDF"/"Baixar PDF" nos três lugares,
+  via Route Handler proxy própria (`web/app/api/commercial/.../pdf/route.ts`,
+  `web/app/api/public/quotes/[token]/pdf/route.ts`) — um `<a href>` puro não manda
+  `Authorization`, e o browser do cliente não resolve o hostname interno da API mesmo pro
+  endpoint público. 2 testes novos em `test_commercial.py` (8 no total).
 - [ ] **Rate limit no endpoint público de aceite** (`/public/quotes/*`) — os demais endpoints
   sensíveis do projeto (login, refresh) usam slowapi; este não tem ainda.
 - [ ] **Integração com ERP Solid** (push de venda/fatura/recebimento) — campos

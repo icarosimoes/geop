@@ -207,3 +207,40 @@ async def test_cross_tenant_cannot_see_other_customer(client):
     customer_id = await _create_customer(client, company_id=TENANT_A)
     r = await client.get(f"{PREFIX}/customers/{customer_id}", headers=auth_header(TENANT_B))
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_quote_pdf(client):
+    customer_id = await _create_customer(client)
+    quote = await _create_quote(client, customer_id)
+
+    r = await client.get(f"{PREFIX}/quotes/{quote['id']}/pdf", headers=auth_header(TENANT_A))
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
+async def test_sale_pdf_and_public_quote_pdf(client):
+    customer_id = await _create_customer(client)
+    quote = await _create_quote(client, customer_id)
+    quote_id = quote["id"]
+
+    r = await client.post(f"{PREFIX}/quotes/{quote_id}/send", headers=auth_header(TENANT_A))
+    assert r.status_code == 200
+
+    token = _public_token(quote_id)
+    r = await client.get(f"{PUBLIC_PREFIX}/{token}/pdf")
+    assert r.status_code == 200
+    assert r.content[:4] == b"%PDF"
+
+    r = await client.post(f"{PUBLIC_PREFIX}/{token}/accept", json={})
+    assert r.status_code == 200
+
+    sales = await client.get(f"{PREFIX}/sales", headers=auth_header(TENANT_A))
+    sale = next(s for s in sales.json()["items"] if s["customer_id"] == customer_id)
+
+    r = await client.get(f"{PREFIX}/sales/{sale['id']}/pdf", headers=auth_header(TENANT_A))
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"

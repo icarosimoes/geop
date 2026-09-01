@@ -10,6 +10,7 @@ from typing import Annotated
 import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -88,6 +89,32 @@ async def get_public_quote(
     if not detail:
         raise HTTPException(status_code=404, detail={"code": "not_found"})
     return _to_public_quote_out(detail)
+
+
+@router.get("/{token}/pdf")
+async def get_public_quote_pdf(
+    token: str,
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StreamingResponse:
+    from app.domain.commercial.pdf import generate_quote_pdf
+
+    quote_id, company_id = await _resolve_token(token, session, settings)
+    detail = await get_quote_for_public(session, company_id, quote_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail={"code": "not_found"})
+    buf = generate_quote_pdf(
+        company_name=detail.company_name,
+        quote=detail.quote,
+        customer_name=detail.customer_name,
+        items=detail.items,
+    )
+    filename = f"orcamento_{detail.quote.number or detail.quote.id}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{token}/accept", response_model=PublicQuoteOut)

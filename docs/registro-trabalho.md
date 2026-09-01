@@ -1915,3 +1915,41 @@ aceite), `/comercial/vendas`, e a página pública `/orcamento/[token]` renderiz
 do orçamento criado, com o botão "Aprovar orçamento". `pytest tests/`: 65 falhas (era 123 antes
 do fix de RLS do harness, ver acima) — nenhuma em `test_commercial.py` nem em qualquer arquivo
 tocado por esta mudança.
+
+## 2026-09-01 — PDF de orçamento e venda
+
+Pedido do usuário, follow-up direto do módulo comercial (P17 do backlog): exportar orçamento e
+venda em PDF, inclusive pelo link público sem login.
+
+`app/domain/commercial/pdf.py` segue exatamente o molde de `work_orders/pdf.py`/
+`meetings/pdf.py` (reportlab, `SimpleDocTemplate` A4, sem logo/timbre): `generate_quote_pdf`
+(cabeçalho, tabela de itens, totais, condições/observações) e `generate_sale_pdf` (dados da
+venda, itens do orçamento de origem via `quote_id`, faturas com valor recebido por fatura).
+Formatação de dinheiro em pt-BR (`R$ 1.234,56`) sem `locale` do sistema — troca manual de
+separador, mesmo truque já usado em export Excel do projeto.
+
+Três endpoints: `GET /commercial/quotes/{id}/pdf`, `GET /commercial/sales/{id}/pdf`
+(autenticados, `commercial.view`) e `GET /public/quotes/{token}/pdf` (mesmo PDF do orçamento,
+autenticado só pelo token — reaproveita `_resolve_token`/`set_tenant_context` do
+`public_router.py` já existente).
+
+**Frontend**: botão "Exportar PDF"/"Baixar PDF" nos três lugares (`/comercial/orcamentos`,
+`/comercial/vendas`, `/orcamento/[token]`), sempre um `<a href target="_blank">` puro (classe
+`.secondary-button`) — nunca `fetch`+blob, mesmo padrão já usado pro PDF de ordem de serviço em
+`components/kanban-board.tsx`. Precisou de 3 Route Handlers proxy novas
+(`web/app/api/commercial/quotes/[id]/pdf/route.ts`, `.../sales/[id]/pdf/route.ts`,
+`web/app/api/public/quotes/[token]/pdf/route.ts`): um `<a>` não manda header `Authorization`,
+então as duas primeiras leem o cookie httpOnly via `getValidToken()` e repassam como Bearer; a
+pública não precisa de token nenhum, mas passa pelo proxy do mesmo jeito porque o browser do
+cliente não resolve o hostname interno do container da API (`api:8000`, usado por `API_URL`
+em dev) — só o server-side do Next.js resolve.
+
+**Testes**: 2 casos novos em `test_commercial.py` (8 no total) — PDF do orçamento autenticado
+(`content-type: application/pdf`, assinatura `%PDF`) e PDF da venda + PDF público via o mesmo
+fluxo de aceite já coberto.
+
+**Validação**: `ruff check .`, `ruff format --check .` e `mypy app/ --ignore-missing-imports`
+limpos; `npx tsc --noEmit` limpo em `web/`; os 3 PDFs baixados de ponta a ponta via `curl` direto
+na API (200, `%PDF` nos primeiros bytes) e visualmente pelo navegador real com o driver
+Playwright do projeto — screenshot dos três botões ("Exportar PDF"/"Baixar PDF") nos três
+lugares, sem erro de console.

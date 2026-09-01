@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, XCircle, Building2 } from "lucide-react";
+import { CheckCircle2, XCircle, Building2, FileText } from "lucide-react";
 import { useState } from "react";
 import type { PublicQuote } from "./actions";
 import { decidePublicQuoteAction } from "./actions";
@@ -40,8 +40,13 @@ export function QuoteView({ token, initial }: { token: string; initial: PublicQu
           <p>Orçamento {quote.number ?? ""} para {quote.customer_name}</p>
         </header>
 
-        <div className={`status quote-public-status status-${quote.status === "aceito" ? "done" : quote.status === "recusado" || quote.expired ? "danger" : "waiting"}`}>
-          {quote.expired ? "Orçamento expirado" : STATUS_LABEL[quote.status] ?? quote.status}
+        <div className="quote-public-status-row">
+          <div className={`status status-${quote.status === "aceito" ? "done" : quote.status === "recusado" || quote.expired ? "danger" : "waiting"}`}>
+            {quote.expired ? "Orçamento expirado" : STATUS_LABEL[quote.status] ?? quote.status}
+          </div>
+          <a className="secondary-button" href={`/api/public/quotes/${token}/pdf`} target="_blank" rel="noopener noreferrer">
+            <FileText size={14} /> Baixar PDF
+          </a>
         </div>
 
         {quote.description && <p className="quote-public-desc">{quote.description}</p>}
@@ -124,7 +129,7 @@ export function QuoteView({ token, initial }: { token: string; initial: PublicQu
         .quote-public-header h1 { margin: var(--sp-2) 0 4px; }
         .quote-public-header p { color: var(--muted); margin: 0; }
         .quote-public-company { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--font-sm); font-weight: 600; }
-        .quote-public-status { display: inline-block; margin: var(--sp-3) 0; }
+        .quote-public-status-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; margin: var(--sp-3) 0; }
         .quote-public-desc { white-space: pre-wrap; margin: var(--sp-3) 0; }
         .cell-sub { font-size: var(--font-xs); color: var(--muted); }
         .quote-totals { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin: var(--sp-4) 0; }
