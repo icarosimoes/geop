@@ -17,6 +17,7 @@ from app.domain.commercial.schemas import (
     CustomerOut,
     CustomerSummary,
     CustomerUpdate,
+    IcpSignatureOut,
     QuoteCreate,
     QuoteItemOut,
     QuoteListResponse,
@@ -38,6 +39,7 @@ from app.domain.commercial.service import (
     InvalidStateError,
     QuoteDetail,
     SaleDetail,
+    SignatureError,
     _invoice_totals,
     build_acceptance_url,
     cancel_quote,
@@ -56,6 +58,7 @@ from app.domain.commercial.service import (
     list_sales,
     register_payment,
     send_quote,
+    start_icp_signature,
     update_customer,
     update_invoice,
     update_quote,
@@ -113,6 +116,9 @@ def _to_quote_out(detail: QuoteDetail, settings: Settings, company_id: int) -> Q
             if quote.status == "enviado"
             else None
         ),
+        signature_method=detail.signature.method if detail.signature else None,
+        signature_status=detail.signature.status if detail.signature else None,
+        signature_signed_at=detail.signature.signed_at if detail.signature else None,
         created_at=quote.created_at,
         updated_at=quote.updated_at,
     )
@@ -414,6 +420,26 @@ async def send_quote_endpoint(
     )
 
 
+@router.post("/quotes/{quote_id}/signature/icp", response_model=IcpSignatureOut)
+async def start_icp_signature_endpoint(
+    quote_id: int,
+    user: Annotated[AuthenticatedUser, require_permission("commercial.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> IcpSignatureOut:
+    try:
+        sign_url = await start_icp_signature(session, user.company_id, quote_id, settings)
+    except InvalidStateError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": "invalid_state", "message": exc.message}
+        ) from exc
+    except SignatureError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+    return IcpSignatureOut(sign_url=sign_url)
+
+
 @router.post("/quotes/{quote_id}/cancel", response_model=QuoteOut)
 async def cancel_quote_endpoint(
     quote_id: int,
@@ -447,6 +473,7 @@ async def quote_pdf_endpoint(
         quote=detail.quote,
         customer_name=detail.customer_name or "—",
         items=detail.items,
+        signature=detail.signature,
     )
     filename = f"orcamento_{detail.quote.number or detail.quote.id}.pdf"
     return StreamingResponse(

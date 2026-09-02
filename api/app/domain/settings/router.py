@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.audit import record_event
+from app.core.config import Settings, get_settings
 from app.core.dependencies import require_session
 from app.core.permissions import require_permission
+from app.core.security import create_esignature_webhook_token
 from app.domain.auth.repository import AuthenticatedUser
 from app.models import Company, CompanySetting
 
@@ -226,6 +228,65 @@ async def brevo_test_send(
             detail={"code": "send_failed", "status": result.get("status")},
         )
     return {"status": "sent", "message_id": result.get("messageId")}
+
+
+# ── Assinatura eletrônica ICP-Brasil (Clicksign) ──
+#
+# Só um provedor por ora (ver app/integrations/esignature/) — `provider` fica
+# fixo em "clicksign" no schema, mas a API já devolve o campo pra quando um
+# segundo provedor for suportado.
+
+
+class EsignatureConfigIn(BaseModel):
+    api_key: str
+
+
+class EsignatureRead(BaseModel):
+    has_credentials: bool
+    provider: str = "clicksign"
+    webhook_url: str | None = None
+
+
+def _esignature_webhook_url(settings: Settings, company_id: int) -> str:
+    token = create_esignature_webhook_token(company_id=company_id, secret=settings.jwt_secret)
+    return f"{settings.api_public_url}/public/quotes/webhooks/clicksign/{token}"
+
+
+@router.get("/esignature", response_model=EsignatureRead)
+async def get_esignature(
+    user: Annotated[AuthenticatedUser, require_permission("settings.view")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> EsignatureRead:
+    row = await _get_setting(session, user.company_id, "esignature")
+    value = row.value if row else {}
+    if not value.get("api_key"):
+        return EsignatureRead(has_credentials=False)
+    return EsignatureRead(
+        has_credentials=True,
+        webhook_url=_esignature_webhook_url(settings, user.company_id),
+    )
+
+
+@router.post("/esignature", response_model=EsignatureRead)
+async def save_esignature(
+    body: EsignatureConfigIn,
+    user: Annotated[AuthenticatedUser, require_permission("settings.edit")],
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> EsignatureRead:
+    row = await _get_setting(session, user.company_id, "esignature")
+    new_value = {"provider": "clicksign", "api_key": body.api_key}
+    if row:
+        row.value = new_value
+        flag_modified(row, "value")
+    else:
+        session.add(CompanySetting(company_id=user.company_id, key="esignature", value=new_value))
+    await session.commit()
+    return EsignatureRead(
+        has_credentials=bool(body.api_key),
+        webhook_url=_esignature_webhook_url(settings, user.company_id),
+    )
 
 
 # ── Destinatários de notificação por módulo ──

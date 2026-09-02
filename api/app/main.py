@@ -24,6 +24,7 @@ from app.domain.check_suites.router import router as check_suites_router
 from app.domain.checklists.router import router as checklists_router
 from app.domain.commercial.public_router import router as commercial_public_router
 from app.domain.commercial.router import router as commercial_router
+from app.domain.commercial.webhook_router import router as commercial_webhook_router
 from app.domain.contracts.router import router as contracts_router
 from app.domain.dashboard.router import router as dashboard_router
 from app.domain.email_client.router import router as email_client_router
@@ -169,6 +170,7 @@ v1_router.include_router(handoffs_router)
 v1_router.include_router(contracts_router)
 v1_router.include_router(commercial_router)
 v1_router.include_router(commercial_public_router)
+v1_router.include_router(commercial_webhook_router)
 v1_router.include_router(timeclock_router)
 v1_router.include_router(timeclock_mobile_router)
 v1_router.include_router(timeclock_webhook_router)

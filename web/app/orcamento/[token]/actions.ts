@@ -61,3 +61,43 @@ export async function decidePublicQuoteAction(
     return { ok: false, error: "Erro de conexão." };
   }
 }
+
+export async function requestSignatureOtpAction(
+  token: string, signerName: string, signerDocument: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${apiUrl}/public/quotes/${token}/signature/otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ signer_name: signerName, signer_document: signerDocument }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err?.detail?.message ?? "Erro ao enviar o código." };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function confirmSignatureOtpAction(
+  token: string, code: string
+): Promise<{ ok: boolean; data?: PublicQuote; error?: string }> {
+  try {
+    const res = await fetch(`${apiUrl}/public/quotes/${token}/signature/otp/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err?.detail?.message ?? "Erro ao confirmar assinatura." };
+    }
+    return { ok: true, data: await res.json() };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}

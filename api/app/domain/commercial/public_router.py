@@ -18,12 +18,22 @@ from app.core.dependencies import require_session
 from app.core.rate_limit import limiter
 from app.core.rls import set_tenant_context
 from app.core.security import decode_quote_acceptance_token
-from app.domain.commercial.schemas import PublicQuoteDecision, PublicQuoteOut, QuoteItemOut
+from app.domain.commercial.schemas import (
+    PublicQuoteDecision,
+    PublicQuoteOut,
+    QuoteItemOut,
+    SignatureOtpConfirm,
+    SignatureOtpRequest,
+    SignatureOtpRequestOut,
+)
 from app.domain.commercial.service import (
     InvalidStateError,
     PublicQuoteDetail,
+    SignatureError,
+    confirm_signature_otp,
     decide_quote,
     get_quote_for_public,
+    request_signature_otp,
 )
 
 logger = structlog.get_logger()
@@ -113,6 +123,7 @@ async def get_public_quote_pdf(
         quote=detail.quote,
         customer_name=detail.customer_name,
         items=detail.items,
+        signature=detail.signature,
     )
     filename = f"orcamento_{detail.quote.number or detail.quote.id}.pdf"
     return StreamingResponse(
@@ -165,6 +176,65 @@ async def _decide(
         raise HTTPException(status_code=404, detail={"code": "not_found"})
 
     logger.info("quote_decided", quote_id=quote_id, company_id=company_id, approved=approved)
+    detail = await get_quote_for_public(session, company_id, quote_id)
+    assert detail is not None
+    return _to_public_quote_out(detail)
+
+
+@router.post("/{token}/signature/otp", response_model=SignatureOtpRequestOut)
+@limiter.limit("5/minute")
+async def request_signature_otp_endpoint(
+    request: Request,
+    token: str,
+    body: SignatureOtpRequest,
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SignatureOtpRequestOut:
+    quote_id, company_id = await _resolve_token(token, session, settings)
+    try:
+        signature = await request_signature_otp(
+            session,
+            company_id,
+            quote_id,
+            settings,
+            signer_name=body.signer_name,
+            signer_document=body.signer_document,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except InvalidStateError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": "invalid_state", "message": exc.message}
+        ) from exc
+    except SignatureError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+    return SignatureOtpRequestOut(status=signature.status, otp_sent_at=signature.otp_sent_at)
+
+
+@router.post("/{token}/signature/otp/confirm", response_model=PublicQuoteOut)
+@limiter.limit("10/minute")
+async def confirm_signature_otp_endpoint(
+    request: Request,
+    token: str,
+    body: SignatureOtpConfirm,
+    session: Annotated[AsyncSession, Depends(require_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> PublicQuoteOut:
+    quote_id, company_id = await _resolve_token(token, session, settings)
+    try:
+        await confirm_signature_otp(session, company_id, quote_id, body.code)
+    except InvalidStateError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": "invalid_state", "message": exc.message}
+        ) from exc
+    except SignatureError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
+    logger.info("quote_signed", quote_id=quote_id, company_id=company_id, method="simples")
     detail = await get_quote_for_public(session, company_id, quote_id)
     assert detail is not None
     return _to_public_quote_out(detail)

@@ -12,7 +12,12 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.models import Quote, QuoteItem, Sale, SalesInvoice
+from app.models import Quote, QuoteItem, QuoteSignature, Sale, SalesInvoice
+
+SIGNATURE_METHOD_LABELS = {
+    "simples": "Assinatura eletrônica simples (código de confirmação por e-mail)",
+    "icp_brasil": "Certificado digital ICP-Brasil (MP 2.200-2/2001)",
+}
 
 QUOTE_STATUS_LABELS = {
     "rascunho": "Rascunho",
@@ -131,12 +136,54 @@ def _totals_table(subtotal: Decimal, discount_amount: Decimal, total: Decimal) -
     return t
 
 
+def _signature_section(signature: QuoteSignature, s: dict) -> list:
+    """Página de evidência anexada ao PDF já assinado — mesma prática de
+    Clicksign/Autentique. O hash em `document_hash` se refere ao PDF SEM esta
+    seção (calculado antes de anexá-la, ver
+    commercial/service.py::confirm_signature_otp/start_icp_signature) — ela é
+    só um resumo legível pra humano da evidência já registrada, não faz parte
+    do conteúdo assinado em si."""
+    elements: list = [
+        Paragraph("Registro de assinatura eletrônica", s["h2"]),
+    ]
+    rows = [
+        ["Método", SIGNATURE_METHOD_LABELS.get(signature.method, signature.method)],
+        ["Signatário", signature.signer_name or "—"],
+        ["CPF", signature.signer_document or "—"],
+        ["E-mail", signature.signer_email or "—"],
+        [
+            "Assinado em",
+            signature.signed_at.strftime("%d/%m/%Y %H:%M:%S") if signature.signed_at else "—",
+        ],
+        ["Endereço IP", signature.ip_address or "—"],
+        ["Hash SHA-256 do documento", signature.document_hash or "—"],
+    ]
+    if signature.method == "icp_brasil" and signature.certificate_info:
+        rows.append(["Provedor", signature.provider or "—"])
+        for key, value in signature.certificate_info.items():
+            rows.append([f"Certificado — {key}", str(value)])
+    t = Table(rows, colWidths=[5 * cm, 11 * cm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    elements.append(t)
+    return elements
+
+
 def generate_quote_pdf(
     *,
     company_name: str,
     quote: Quote,
     customer_name: str,
     items: list[QuoteItem],
+    signature: QuoteSignature | None = None,
 ) -> io.BytesIO:
     buf, doc = _base_doc()
     s = _styles()
@@ -184,6 +231,9 @@ def generate_quote_pdf(
     if quote.notes:
         elements.append(Paragraph("Observações", s["h2"]))
         elements.append(Paragraph(quote.notes, s["body"]))
+
+    if signature and signature.status == "assinado":
+        elements.extend(_signature_section(signature, s))
 
     doc.build(elements)
     buf.seek(0)

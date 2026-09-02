@@ -599,6 +599,32 @@ export async function testBrevoSettings(to: string): Promise<MutationResult> {
   return { ok: true, data: await response.json() };
 }
 
+// --- Assinatura eletrônica ICP-Brasil (Clicksign) ---
+
+export interface EsignatureSettings {
+  has_credentials: boolean;
+  provider?: string;
+  webhook_url?: string | null;
+}
+
+export async function getEsignatureSettings(): Promise<EsignatureSettings> {
+  const response = await authedFetch("/settings/esignature");
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { has_credentials: false };
+  }
+  return response.json();
+}
+
+export async function saveEsignatureSettings(body: { api_key: string }): Promise<MutationResult> {
+  const response = await authedFetch("/settings/esignature", { method: "POST", body: JSON.stringify(body) });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("unauthorized");
+    return { ok: false, error: "Erro ao salvar configurações de assinatura eletrônica." };
+  }
+  return { ok: true, data: await response.json() };
+}
+
 // --- Dados do Estabelecimento ---
 
 export interface CompanyInfo {

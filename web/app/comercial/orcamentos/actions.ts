@@ -69,6 +69,9 @@ export type QuoteDetail = {
   decision_note: string | null;
   items: QuoteItem[];
   acceptance_url: string | null;
+  signature_method: "simples" | "icp_brasil" | null;
+  signature_status: string | null;
+  signature_signed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -150,6 +153,20 @@ export async function cancelQuoteAction(id: number): Promise<{ ok: boolean; erro
       return { ok: false, error: err?.detail?.message ?? "Erro ao cancelar orçamento." };
     }
     return { ok: true };
+  } catch {
+    return { ok: false, error: "Erro de conexão." };
+  }
+}
+
+export async function startIcpSignatureAction(id: number): Promise<{ ok: boolean; error?: string; sign_url?: string }> {
+  try {
+    const res = await authFetch(`/commercial/quotes/${id}/signature/icp`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err?.detail?.message ?? "Erro ao solicitar assinatura ICP-Brasil." };
+    }
+    const data = await res.json();
+    return { ok: true, sign_url: data.sign_url };
   } catch {
     return { ok: false, error: "Erro de conexão." };
   }

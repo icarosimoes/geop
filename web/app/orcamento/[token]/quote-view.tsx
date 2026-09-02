@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, XCircle, Building2, FileText } from "lucide-react";
+import { CheckCircle2, XCircle, Building2, FileText, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { PublicQuote } from "./actions";
-import { decidePublicQuoteAction } from "./actions";
+import { confirmSignatureOtpAction, decidePublicQuoteAction, requestSignatureOtpAction } from "./actions";
 
 function formatCurrency(value: string): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
@@ -13,12 +13,18 @@ const STATUS_LABEL: Record<string, string> = {
   enviado: "Aguardando sua decisão", aceito: "Aprovado", recusado: "Recusado", expirado: "Expirado",
 };
 
+type SignStep = "idle" | "form" | "otp";
+
 export function QuoteView({ token, initial }: { token: string; initial: PublicQuote }) {
   const [quote, setQuote] = useState(initial);
   const [decisionNote, setDecisionNote] = useState("");
-  const [loading, setLoading] = useState<"accept" | "reject" | null>(null);
+  const [loading, setLoading] = useState<"accept" | "reject" | "otp-send" | "otp-confirm" | null>(null);
   const [error, setError] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [signStep, setSignStep] = useState<SignStep>("idle");
+  const [signerName, setSignerName] = useState("");
+  const [signerDocument, setSignerDocument] = useState("");
+  const [otpCode, setOtpCode] = useState("");
 
   const canDecide = quote.status === "enviado" && !quote.expired;
 
@@ -29,6 +35,33 @@ export function QuoteView({ token, initial }: { token: string; initial: PublicQu
     setLoading(null);
     if (!res.ok || !res.data) { setError(res.error ?? "Erro ao registrar sua decisão."); return; }
     setQuote(res.data);
+  }
+
+  async function handleSendOtp() {
+    if (signerName.trim().length < 3 || signerDocument.trim().length < 11) {
+      setError("Informe seu nome completo e CPF.");
+      return;
+    }
+    setLoading("otp-send");
+    setError("");
+    const res = await requestSignatureOtpAction(token, signerName.trim(), signerDocument.trim());
+    setLoading(null);
+    if (!res.ok) { setError(res.error ?? "Erro ao enviar o código."); return; }
+    setSignStep("otp");
+  }
+
+  async function handleConfirmOtp() {
+    if (otpCode.trim().length !== 6) {
+      setError("Informe o código de 6 dígitos recebido por e-mail.");
+      return;
+    }
+    setLoading("otp-confirm");
+    setError("");
+    const res = await confirmSignatureOtpAction(token, otpCode.trim());
+    setLoading(null);
+    if (!res.ok || !res.data) { setError(res.error ?? "Erro ao confirmar a assinatura."); return; }
+    setQuote(res.data);
+    setSignStep("idle");
   }
 
   return (
@@ -84,30 +117,64 @@ export function QuoteView({ token, initial }: { token: string; initial: PublicQu
 
         {error && <div className="kanban-form-error">{error}</div>}
 
-        {canDecide && (
+        {canDecide && signStep === "idle" && !showRejectForm && (
           <div className="quote-public-actions">
-            {!showRejectForm ? (
-              <>
-                <button type="button" className="quote-accept-button" disabled={loading !== null} onClick={() => handleDecide(true)}>
-                  <CheckCircle2 size={18} /> {loading === "accept" ? "Enviando…" : "Aprovar orçamento"}
-                </button>
-                <button type="button" className="secondary-button" disabled={loading !== null} onClick={() => setShowRejectForm(true)}>
-                  <XCircle size={18} /> Recusar
-                </button>
-              </>
-            ) : (
-              <div className="quote-reject-form">
-                <label>Motivo da recusa (opcional)
-                  <textarea rows={2} value={decisionNote} onChange={(e) => setDecisionNote(e.target.value)} />
-                </label>
-                <div className="quote-public-actions">
-                  <button type="button" onClick={() => setShowRejectForm(false)}>Voltar</button>
-                  <button type="button" className="secondary-button" style={{ color: "var(--red)" }} disabled={loading !== null} onClick={() => handleDecide(false)}>
-                    {loading === "reject" ? "Enviando…" : "Confirmar recusa"}
-                  </button>
-                </div>
-              </div>
-            )}
+            <button type="button" className="quote-accept-button" disabled={loading !== null} onClick={() => setSignStep("form")}>
+              <ShieldCheck size={18} /> Assinar e aprovar
+            </button>
+            <button type="button" className="secondary-button" disabled={loading !== null} onClick={() => setShowRejectForm(true)}>
+              <XCircle size={18} /> Recusar
+            </button>
+          </div>
+        )}
+
+        {canDecide && signStep === "form" && (
+          <div className="quote-signature-form">
+            <p className="cell-sub">
+              Informe seus dados — enviaremos um código de confirmação por e-mail pra validar sua
+              assinatura. Isso registra nome, CPF, data/hora e um hash do documento como evidência.
+            </p>
+            <label>Nome completo
+              <input type="text" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
+            </label>
+            <label>CPF
+              <input type="text" value={signerDocument} onChange={(e) => setSignerDocument(e.target.value)} placeholder="000.000.000-00" />
+            </label>
+            <div className="quote-public-actions">
+              <button type="button" onClick={() => setSignStep("idle")}>Voltar</button>
+              <button type="button" className="quote-accept-button" disabled={loading !== null} onClick={handleSendOtp}>
+                {loading === "otp-send" ? "Enviando…" : "Enviar código de confirmação"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {canDecide && signStep === "otp" && (
+          <div className="quote-signature-form">
+            <p className="cell-sub">Enviamos um código de 6 dígitos por e-mail. Informe abaixo pra confirmar sua assinatura.</p>
+            <label>Código de confirmação
+              <input type="text" inputMode="numeric" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="000000" />
+            </label>
+            <div className="quote-public-actions">
+              <button type="button" onClick={handleSendOtp} disabled={loading !== null}>Reenviar código</button>
+              <button type="button" className="quote-accept-button" disabled={loading !== null} onClick={handleConfirmOtp}>
+                <CheckCircle2 size={18} /> {loading === "otp-confirm" ? "Confirmando…" : "Confirmar assinatura"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {canDecide && showRejectForm && (
+          <div className="quote-reject-form">
+            <label>Motivo da recusa (opcional)
+              <textarea rows={2} value={decisionNote} onChange={(e) => setDecisionNote(e.target.value)} />
+            </label>
+            <div className="quote-public-actions">
+              <button type="button" onClick={() => setShowRejectForm(false)}>Voltar</button>
+              <button type="button" className="secondary-button" style={{ color: "var(--red)" }} disabled={loading !== null} onClick={() => handleDecide(false)}>
+                {loading === "reject" ? "Enviando…" : "Confirmar recusa"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -146,6 +213,7 @@ export function QuoteView({ token, initial }: { token: string; initial: PublicQu
         .quote-accept-button:hover { background: var(--blue-hover); }
         .quote-accept-button:disabled { opacity: .6; cursor: not-allowed; }
         .quote-reject-form { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+        .quote-signature-form { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; margin-top: var(--sp-5); }
         .quote-public-thanks { margin-top: var(--sp-4); color: var(--muted); }
       `}</style>
     </main>

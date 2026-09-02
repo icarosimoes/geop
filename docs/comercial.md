@@ -105,6 +105,59 @@ O endpoint público (`/public/quotes/*`) tem rate limit por IP via slowapi, mesm
 em login/refresh (`app/core/rate_limit.py`): 30/min pra visualizar (`GET /{token}`), 15/min pro
 PDF (`GET /{token}/pdf`) e 10/min pra decidir (`POST /{token}/accept` e `/reject`).
 
+### Assinatura eletrônica (validade jurídica)
+
+Evolução do aceite simples acima: o cliente pode "assinar" o orçamento em vez de só clicar em
+aceitar, com dois métodos (tabela `quote_signatures`, 1:1 com `quotes` via `quote_id` único —
+`app/models/commercial.py::QuoteSignature`). Ambos terminam chamando o mesmo
+`decide_quote(..., approved=True)` de sempre — não duplicam a criação da `Sale`.
+
+| Método | Como funciona | Base legal |
+|---|---|---|
+| `simples` (padrão) | Cliente informa nome + CPF, recebe um código de 6 dígitos por e-mail (OTP, válido 10 min, 5 tentativas), confirma. Hash SHA-256 do PDF + IP + user-agent ficam registrados como evidência. | Código Civil art. 219 (manifestação de vontade) — sem custo de terceiro. |
+| `icp_brasil` (opcional) | Um usuário interno solicita (`POST /commercial/quotes/{id}/signature/icp`); o cliente assina no site do provedor com certificado ICP-Brasil — A1/A3 ou **certificado em nuvem** (Certisign, Soluti, Serasa, Safeweb, Valid, BRy). | MP 2.200-2/2001 art. 10 §1º — presunção legal de autenticidade. |
+
+O caminho `icp_brasil` delega a um provedor já credenciado junto às Autoridades Certificadoras —
+hoje só **Clicksign** (`app/integrations/esignature/clicksign.py`), atrás da interface
+`ESignatureProvider` (`app/integrations/esignature/base.py`) pra permitir trocar/adicionar
+provedor sem tocar no resto do domínio. Exige a API key da Clicksign configurada em
+`GET/POST /settings/esignature` (mesmo padrão de `/settings/brevo`/`/settings/evolution`, tabela
+`company_settings`, chave `"esignature"`).
+
+**Fluxo `simples`** (público, sem login, mesmo token de aceite):
+
+```
+POST /public/quotes/{token}/signature/otp          {signer_name, signer_document}
+  → gera OTP, envia por e-mail (Brevo, mesma resolução de config de `send_quote`)
+POST /public/quotes/{token}/signature/otp/confirm   {code}
+  → confirma, calcula hash do PDF, marca QuoteSignature "assinado", chama decide_quote(True)
+  → guarda o PDF final (conteúdo + página de evidência) como Attachment (entity_type="quote")
+```
+
+**Fluxo `icp_brasil`** (autenticado, disparado por um usuário interno):
+
+```
+POST /commercial/quotes/{id}/signature/icp
+  → cria envelope na Clicksign com o PDF do orçamento, devolve {sign_url}
+  → usuário interno envia esse link ao cliente (mesmo canal do link de aceite)
+  → cliente assina no site da Clicksign (escolhe certificado A1/A3 ou em nuvem)
+  → Clicksign chama o webhook (URL por tenant, token assinado com `company_id`,
+    ver create_esignature_webhook_token em app/core/security.py):
+    POST /public/quotes/webhooks/clicksign/{webhook_token}
+  → baixa o PDF assinado, guarda como Attachment, marca "assinado", chama decide_quote(True)
+```
+
+O PDF do orçamento (`generate_quote_pdf`, autenticado e público) ganha uma seção "Registro de
+assinatura eletrônica" quando a `QuoteSignature` está `assinado` — nome/CPF/e-mail do signatário,
+data/hora, IP, hash SHA-256 e, no caso ICP-Brasil, dados do certificado. O hash registrado é
+sempre do PDF **sem** essa seção (calculado antes de ela existir) — a seção é só o resumo legível
+da evidência já gravada, não faz parte do conteúdo hasheado.
+
+⚠️ **Limitação conhecida**: o formato exato dos endpoints da Clicksign em `clicksign.py` segue a
+documentação pública da API v3 no momento em que foi escrito — provedores externos mudam API sem
+aviso. Testar contra uma conta/sandbox real da Clicksign antes de habilitar pra um tenant em
+produção.
+
 ### Sale (Venda)
 
 Criada 1:1 com o `Quote` aceito (`quote_id` único). Cobre entrega e instalação como estágios da
@@ -204,6 +257,16 @@ Prefixo `/commercial` (autenticado, tenant) e `/public/quotes` (sem autenticaç�
 | `GET` | `/public/quotes/{token}` | token JWT no path | visualização do orçamento pro cliente |
 | `POST` | `/public/quotes/{token}/accept` | token JWT no path | aprova (`{decision_note?}`) — cria a `Sale` |
 | `POST` | `/public/quotes/{token}/reject` | token JWT no path | recusa (`{decision_note?}`) |
+| `POST` | `/public/quotes/{token}/signature/otp` | token JWT no path | `{signer_name, signer_document}` — envia código por e-mail |
+| `POST` | `/public/quotes/{token}/signature/otp/confirm` | token JWT no path | `{code}` — confirma, assina e aprova (chama `decide_quote`) |
+| `POST` | `/public/quotes/webhooks/clicksign/{webhook_token}` | token JWT no path (por tenant) | webhook da Clicksign — evento de assinatura ICP-Brasil |
+
+### Assinatura ICP-Brasil (autenticado)
+
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `POST` | `/commercial/quotes/{id}/signature/icp` | `commercial.edit` | Cria envelope na Clicksign, devolve `{sign_url}` |
+| `GET`/`POST` | `/settings/esignature` | `settings.view`/`settings.edit` | Configura a API key da Clicksign; `GET` devolve `webhook_url` pra colar no painel do provedor |
 
 ### PDF
 
@@ -241,9 +304,10 @@ acumulado do tenant).
 | Rota | Descrição |
 |---|---|
 | `/cadastros/clientes` | CRUD de clientes — mesmo padrão visual de `/cadastros/fornecedores`, sem sub-entidade de contatos |
-| `/comercial/orcamentos` | Lista + criar/editar (itens dinâmicos com totais calculados no cliente) + modal de detalhe com ações (enviar/cancelar), link de aceite copiável e "Exportar PDF" |
+| `/comercial/orcamentos` | Lista + criar/editar (itens dinâmicos com totais calculados no cliente) + modal de detalhe com ações (enviar/cancelar), link de aceite copiável, botão "Solicitar assinatura ICP-Brasil" (quando a Clicksign está configurada) e "Exportar PDF" |
 | `/comercial/vendas` | Lista + modal de detalhe: status da venda, status/datas de instalação, "Exportar PDF", faturas embutidas com formulário de nova fatura e registro de recebimento inline |
-| `/orcamento/[token]` | **Página pública, fora do `AppLayout`/login** — o cliente vê o orçamento, baixa o PDF e aprova/recusa. Liberada explicitamente no `middleware.ts` (`PUBLIC_PREFIXES = ["/orcamento/"]`) |
+| `/orcamento/[token]` | **Página pública, fora do `AppLayout`/login** — o cliente vê o orçamento, baixa o PDF e assina (nome + CPF → código por e-mail → confirmar) ou recusa. Liberada explicitamente no `middleware.ts` (`PUBLIC_PREFIXES = ["/orcamento/"]`) |
+| `/configuracoes` | Aba de integrações ganha `EsignatureSettingsSection` — API key da Clicksign + `webhook_url` gerado pra colar no painel do provedor |
 
 Widget "Funil comercial" no dashboard (`components/commercial-funnel-card.tsx`), buscado via
 `GET /commercial/funnel` em `dashboard/page.tsx` — card oculto se a requisição falhar (usuário
@@ -279,6 +343,7 @@ usado por `API_URL` em dev) — só o server-side do Next.js resolve.
 | Revisão | Descrição |
 |---|---|
 | `20260831_0075` | Criação de `customers`, `quotes`, `quote_items`, `sales`, `sales_invoices`, `sales_payments` (todas com RLS `ENABLE`+`FORCE`) e seed das permissões `commercial.view/create/edit/delete` |
+| `20260902_0076` | Criação de `quote_signatures` (RLS `ENABLE`+`FORCE`), sem novas permissões (reaproveita `commercial.edit`/`.view`) |
 
 ## Preparação pra integração com ERP Solid (não conectada ainda)
 
@@ -296,3 +361,9 @@ o `list_contracts_for_erpsolid`/`upsert_*_from_erpsolid` de referência).
 - Numeração (`ORC-`/`VDA-`/`FAT-{ano}-{sequencial}`) é por contagem simples, sem lock — colisão
   teórica sob criação concorrente no mesmo tenant/ano, aceito como risco baixo (mesmo padrão
   já usado em `contracts/service.py::_generate_contract_number`).
+- A integração com a Clicksign (`app/integrations/esignature/clicksign.py`) depende de cada
+  tenant ter sua própria conta/API key — sem uma conta de sandbox real pra testar contra a API
+  atual, o formato exato de payload fica sujeito a ajuste na primeira ativação em produção.
+- O estado do fluxo de OTP (`otp_enviado` aguardando código) não é refletido pro navegador do
+  cliente entre requests — um refresh da página `/orcamento/[token]` no meio do fluxo faz o
+  cliente recomeçar do passo "informar nome/CPF" (pode solicitar um novo código depois de 60s).
