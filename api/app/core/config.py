@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     erpsolid_sso_shared_secret: str | None = None
     erpsolid_sso_shared_secret_file: str | None = None
     registro_web_url: str = "http://localhost:3000"
+    # URL pública da própria API (alcançável da internet), pra montar callback
+    # de webhook que provedor externo chama (ex.: Clicksign — ver
+    # commercial/service.py::start_icp_signature). Diferente de
+    # `registro_web_url` (frontend) e do `API_URL` interno usado pelo Next.js
+    # pra falar com a API dentro da rede Docker.
+    api_public_url: str = "http://localhost:8000/api/v1"
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = "registro"
     s3_access_key_file: str | None = None

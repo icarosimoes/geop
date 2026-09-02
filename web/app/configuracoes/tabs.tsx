@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Clock, Landmark, Plug, Shield, ShieldCheck, User } from "lucide-react";
 import type { TenantUser } from "@/lib/api";
-import { CompanySettingsSection, BrevoSettingsSection, EvolutionSettingsSection, TimeclockSettingsSection, ProfileForm } from "@/components/settings-sections";
+import { CompanySettingsSection, BrevoSettingsSection, EvolutionSettingsSection, EsignatureSettingsSection, TimeclockSettingsSection, ProfileForm } from "@/components/settings-sections";
 import { OperationalModule } from "@/components/operational-module";
 import { RoleManager } from "@/components/role-manager";
 import type { ModuleDefinition } from "@/lib/module-definitions";
@@ -91,6 +91,7 @@ export function SettingsTabs({
           <div className="settings-form">
             <BrevoSettingsSection />
             <EvolutionSettingsSection />
+            <EsignatureSettingsSection />
           </div>
         )}
         {activeTab === "conta" && <ProfileForm user={user} onSaved={showToast} />}

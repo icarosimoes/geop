@@ -2,22 +2,26 @@
 Faturamento -> Cobrança. Ver app/models/commercial.py para o desenho das tabelas.
 """
 
-from datetime import date, datetime
+import hashlib
+import secrets
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, NamedTuple
 
+import bcrypt
 import structlog
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import compute_diff, record_event
 from app.core.config import Settings
-from app.core.security import create_quote_acceptance_token
+from app.core.security import create_esignature_webhook_token, create_quote_acceptance_token
 from app.models import (
     Company,
     Customer,
     Quote,
     QuoteItem,
+    QuoteSignature,
     Sale,
     SalesInvoice,
     SalesPayment,
@@ -25,6 +29,21 @@ from app.models import (
 )
 
 logger = structlog.get_logger()
+
+OTP_RESEND_COOLDOWN = timedelta(seconds=60)
+OTP_EXPIRY = timedelta(minutes=10)
+OTP_MAX_ATTEMPTS = 5
+
+
+class SignatureError(Exception):
+    """Erro de negócio do fluxo de assinatura (código expirado/errado demais
+    vezes, etc.) — o router traduz pra HTTP 422, mesmo padrão de
+    `InvalidStateError`."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 class InvalidStateError(Exception):
@@ -292,6 +311,7 @@ class QuoteDetail(NamedTuple):
     customer_name: str | None
     responsible_name: str | None
     items: list[QuoteItem]
+    signature: QuoteSignature | None
 
 
 async def _get_quote(session: AsyncSession, company_id: int, quote_id: int) -> Quote | None:
@@ -331,7 +351,8 @@ async def get_quote(session: AsyncSession, company_id: int, quote_id: int) -> Qu
         else None
     )
     items = await _quote_items(session, quote_id)
-    return QuoteDetail(quote, customer_name, responsible_name, items)
+    signature = await _get_signature(session, company_id, quote_id)
+    return QuoteDetail(quote, customer_name, responsible_name, items, signature)
 
 
 async def create_quote(
@@ -579,6 +600,7 @@ class PublicQuoteDetail(NamedTuple):
     company_name: str
     items: list[QuoteItem]
     expired: bool
+    signature: QuoteSignature | None
 
 
 async def get_quote_for_public(
@@ -595,7 +617,10 @@ async def get_quote_for_public(
     expired = bool(
         quote.status == "enviado" and quote.valid_until and quote.valid_until < date.today()
     )
-    return PublicQuoteDetail(quote, customer_name or "", company_name or "", items, expired)
+    signature = await _get_signature(session, company_id, quote_id)
+    return PublicQuoteDetail(
+        quote, customer_name or "", company_name or "", items, expired, signature
+    )
 
 
 async def _generate_sale_number(session: AsyncSession, company_id: int) -> str:
@@ -662,6 +687,398 @@ async def decide_quote(
     await session.commit()
     await session.refresh(quote)
     return quote
+
+
+# ---------------------------------------------------------------------------
+# Assinatura eletrônica (evolução do aceite público acima)
+#
+# Dois métodos, ambos terminando em `decide_quote(..., approved=True)` — não
+# duplicam a criação da `Sale`:
+#   - "simples": nome + CPF do cliente + código de 6 dígitos enviado por
+#     e-mail (OTP), com hash do PDF/IP/user-agent como trilha de evidência.
+#     Sem custo de terceiro; validade jurídica pelo Código Civil (art. 219),
+#     não pela presunção forte da MP 2.200-2/2001.
+#   - "icp_brasil": delega a um provedor credenciado junto às Autoridades
+#     Certificadoras (hoje: Clicksign, ver app/integrations/esignature/),
+#     cobrindo certificado A1/A3 e certificado em nuvem — dá a presunção da
+#     MP 2.200-2/2001. Só é iniciado por um usuário interno
+#     (POST /commercial/quotes/{id}/signature/icp), o cliente assina no site
+#     do provedor e o resultado volta por webhook.
+# ---------------------------------------------------------------------------
+
+
+async def _get_signature(
+    session: AsyncSession, company_id: int, quote_id: int
+) -> QuoteSignature | None:
+    return await session.scalar(  # type: ignore[no-any-return]
+        select(QuoteSignature).where(
+            QuoteSignature.quote_id == quote_id,
+            QuoteSignature.company_id == company_id,
+        )
+    )
+
+
+async def _get_or_create_signature(
+    session: AsyncSession, company_id: int, quote_id: int, method: str
+) -> QuoteSignature:
+    signature = await _get_signature(session, company_id, quote_id)
+    if signature:
+        signature.method = method
+        return signature
+    signature = QuoteSignature(company_id=company_id, quote_id=quote_id, method=method)
+    session.add(signature)
+    await session.flush()
+    return signature
+
+
+def _generate_otp_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+async def request_signature_otp(
+    session: AsyncSession,
+    company_id: int,
+    quote_id: int,
+    settings: Settings,
+    *,
+    signer_name: str,
+    signer_document: str,
+    ip: str | None,
+    user_agent: str | None,
+) -> QuoteSignature:
+    quote = await _get_quote(session, company_id, quote_id)
+    if not quote:
+        raise InvalidStateError("Orçamento não encontrado.")
+    if quote.status != "enviado":
+        raise InvalidStateError("Este orçamento não está mais aguardando decisão.")
+
+    row = (
+        await session.execute(select(Customer.email).where(Customer.id == quote.customer_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise SignatureError(
+            "no_customer_email",
+            "Cliente sem e-mail cadastrado — não é possível enviar o código de confirmação.",
+        )
+
+    signature = await _get_or_create_signature(session, company_id, quote_id, "simples")
+    if signature.otp_sent_at and datetime.now(UTC).replace(tzinfo=None) - signature.otp_sent_at < (
+        OTP_RESEND_COOLDOWN
+    ):
+        raise SignatureError("otp_cooldown", "Aguarde um minuto antes de reenviar o código.")
+
+    code = _generate_otp_code()
+    signature.signer_name = signer_name
+    signature.signer_document = signer_document
+    signature.signer_email = row
+    signature.ip_address = ip
+    signature.user_agent = user_agent
+    signature.otp_code_hash = bcrypt.hashpw(code.encode(), bcrypt.gensalt()).decode()
+    signature.otp_sent_at = datetime.now(UTC).replace(tzinfo=None)
+    signature.otp_attempts = 0
+    signature.status = "otp_enviado"
+
+    company_name = await session.scalar(select(Company.name).where(Company.id == company_id)) or ""
+    await _send_otp_email(session, company_id, quote, row, code, company_name, settings)
+
+    await session.commit()
+    await session.refresh(signature)
+    return signature
+
+
+async def _send_otp_email(
+    session: AsyncSession,
+    company_id: int,
+    quote: Quote,
+    to_email: str,
+    code: str,
+    company_name: str,
+    settings: Settings,
+) -> None:
+    from app.domain.platform.service import get_effective_email_config
+    from app.domain.settings.router import get_company_setting
+    from app.integrations.brevo import send_email
+
+    brevo = await get_company_setting(session, company_id, "brevo")
+    api_key = brevo.get("api_key")
+    from_address = brevo.get("from_address")
+    from_name = brevo.get("from_name")
+    if not api_key:
+        (
+            platform_api_key,
+            platform_from_address,
+            platform_from_name,
+        ) = await get_effective_email_config(session, settings)
+        api_key = platform_api_key
+        from_address = from_address or platform_from_address
+        from_name = from_name or platform_from_name
+    if not api_key:
+        logger.warning("signature_otp_email_skipped_no_brevo_key", quote_id=quote.id)
+        raise SignatureError(
+            "email_not_configured", "Envio de e-mail não configurado — contate o fornecedor."
+        )
+    from_address = from_address or "noreply@registro.app"
+    from_name = from_name or company_name or "GEOP"
+
+    html = (
+        f"<h2>Código de confirmação — {quote.number or quote.id}</h2>"
+        f"<p>Use o código abaixo pra confirmar sua assinatura do orçamento "
+        f"<strong>{quote.title}</strong>:</p>"
+        f"<p style='font-size:28px;font-weight:bold;letter-spacing:4px'>{code}</p>"
+        f"<p>Válido por 10 minutos. Se você não solicitou isso, ignore este e-mail.</p>"
+    )
+    try:
+        result = await send_email(
+            api_key=api_key,
+            from_address=from_address,
+            from_name=from_name,
+            to_email=to_email,
+            subject=f"Código de confirmação — {quote.number or quote.id}",
+            html=html,
+        )
+    except Exception as exc:
+        logger.warning("signature_otp_email_send_failed", quote_id=quote.id)
+        raise SignatureError("email_send_failed", "Falha ao enviar o e-mail com o código.") from exc
+    # `send_email` (app/integrations/brevo.py) não levanta em falha HTTP — devolve
+    # {"error": True, ...} — achado ao testar este fluxo manualmente contra uma API
+    # key inválida: sem este check, um erro 401 do Brevo virava "código enviado"
+    # silenciosamente pro cliente, que nunca recebia nada.
+    if result.get("error"):
+        logger.warning(
+            "signature_otp_email_send_failed", quote_id=quote.id, status=result.get("status")
+        )
+        raise SignatureError("email_send_failed", "Falha ao enviar o e-mail com o código.")
+
+
+async def confirm_signature_otp(
+    session: AsyncSession, company_id: int, quote_id: int, code: str
+) -> Quote:
+    quote = await _get_quote(session, company_id, quote_id)
+    if not quote:
+        raise InvalidStateError("Orçamento não encontrado.")
+    signature = await _get_signature(session, company_id, quote_id)
+    if not signature or not signature.otp_code_hash or signature.status != "otp_enviado":
+        raise SignatureError("no_otp_pending", "Solicite um código antes de confirmar.")
+    otp_age = datetime.now(UTC).replace(tzinfo=None) - (signature.otp_sent_at or datetime.min)
+    if otp_age > OTP_EXPIRY:
+        raise SignatureError("otp_expired", "Código expirado — solicite um novo.")
+    if signature.otp_attempts >= OTP_MAX_ATTEMPTS:
+        raise SignatureError("otp_locked", "Muitas tentativas — solicite um novo código.")
+
+    if not bcrypt.checkpw(code.encode(), signature.otp_code_hash.encode()):
+        signature.otp_attempts += 1
+        await session.commit()
+        raise SignatureError("otp_invalid", "Código incorreto.")
+
+    from app.domain.attachments.service import create_attachment
+    from app.domain.commercial.pdf import generate_quote_pdf
+
+    items = await _quote_items(session, quote_id)
+    customer_name = signature.signer_name or ""
+    company_name = await session.scalar(select(Company.name).where(Company.id == company_id)) or ""
+    base_pdf = generate_quote_pdf(
+        company_name=company_name, quote=quote, customer_name=customer_name, items=items
+    ).getvalue()
+
+    signature.status = "assinado"
+    signature.otp_verified_at = datetime.now(UTC).replace(tzinfo=None)
+    signature.signed_at = signature.otp_verified_at
+    signature.document_hash = hashlib.sha256(base_pdf).hexdigest()
+
+    # PDF final com a página de evidência anexada, guardado como Attachment —
+    # o hash acima se refere só ao `base_pdf` (sem essa página), calculado
+    # ANTES dela existir (ver docstring de `_signature_section` em pdf.py).
+    final_pdf = generate_quote_pdf(
+        company_name=company_name,
+        quote=quote,
+        customer_name=customer_name,
+        items=items,
+        signature=signature,
+    ).getvalue()
+    if quote.created_by_user_id:
+        attachment = await create_attachment(
+            session,
+            company_id,
+            quote.created_by_user_id,
+            entity_type="quote",
+            entity_id=quote.id,
+            filename=f"orcamento_assinado_{quote.number or quote.id}.pdf",
+            content_type="application/pdf",
+            data=final_pdf,
+            skip_audit=True,
+        )
+        if not isinstance(attachment, str):
+            signature.signed_pdf_attachment_id = attachment.id
+
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=None,
+        actor_name=f"{signature.signer_name} (assinatura eletrônica)",
+        entity_type="quote",
+        entity_id=quote.id,
+        event_type="signature_confirmed",
+        diff={
+            "method": "simples",
+            "signer_document": signature.signer_document,
+            "document_hash": signature.document_hash,
+        },
+    )
+    await session.flush()
+
+    decided = await decide_quote(session, company_id, quote_id, True, None)
+    assert decided is not None
+    return decided
+
+
+async def start_icp_signature(
+    session: AsyncSession, company_id: int, quote_id: int, settings: Settings
+) -> str:
+    """Só via rota autenticada — dispara o envelope Clicksign e devolve o
+    `sign_url` que o usuário interno envia ao cliente (mesmo canal de e-mail
+    do aceite simples)."""
+    from app.domain.settings.router import get_company_setting
+
+    quote = await _get_quote(session, company_id, quote_id)
+    if not quote:
+        raise InvalidStateError("Orçamento não encontrado.")
+    if quote.status != "enviado":
+        raise InvalidStateError("Este orçamento não está mais aguardando decisão.")
+
+    esign = await get_company_setting(session, company_id, "esignature")
+    api_key = esign.get("api_key")
+    if not api_key:
+        raise SignatureError(
+            "not_configured", "Configure a integração de assinatura ICP-Brasil antes de usar."
+        )
+
+    customer = (
+        await session.execute(
+            select(Customer.name, Customer.email, Customer.document).where(
+                Customer.id == quote.customer_id
+            )
+        )
+    ).one_or_none()
+    if not customer or not customer.email:
+        raise SignatureError(
+            "no_customer_email", "Cliente sem e-mail cadastrado — obrigatório pro provedor."
+        )
+
+    from app.domain.commercial.pdf import generate_quote_pdf
+    from app.integrations.esignature import clicksign
+
+    items = await _quote_items(session, quote_id)
+    company_name = await session.scalar(select(Company.name).where(Company.id == company_id)) or ""
+    pdf_bytes = generate_quote_pdf(
+        company_name=company_name, quote=quote, customer_name=customer.name, items=items
+    ).getvalue()
+
+    webhook_token = create_esignature_webhook_token(
+        company_id=company_id, secret=settings.jwt_secret
+    )
+    callback_url = f"{settings.api_public_url}/public/quotes/webhooks/clicksign/{webhook_token}"
+
+    result = await clicksign.create_envelope(
+        api_key=api_key,
+        pdf_bytes=pdf_bytes,
+        filename=f"orcamento_{quote.number or quote.id}.pdf",
+        signer_name=customer.name,
+        signer_email=customer.email,
+        signer_document=customer.document,
+        callback_url=callback_url,
+    )
+
+    signature = await _get_or_create_signature(session, company_id, quote_id, "icp_brasil")
+    signature.status = "pendente"
+    signature.provider = "clicksign"
+    signature.provider_envelope_id = result.external_id
+    signature.signer_name = customer.name
+    signature.signer_email = customer.email
+    signature.signer_document = customer.document
+    signature.document_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=None,
+        actor_name="Sistema (assinatura ICP-Brasil solicitada)",
+        entity_type="quote",
+        entity_id=quote.id,
+        event_type="icp_signature_requested",
+        diff={"provider_envelope_id": result.external_id},
+    )
+    await session.commit()
+    return result.sign_url
+
+
+async def handle_clicksign_webhook(
+    session: AsyncSession, company_id: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    from app.domain.attachments.service import create_attachment
+    from app.domain.settings.router import get_company_setting
+    from app.integrations.esignature import clicksign
+
+    event = clicksign.parse_webhook(payload)
+    signature = await session.scalar(
+        select(QuoteSignature).where(
+            QuoteSignature.company_id == company_id,
+            QuoteSignature.provider_envelope_id == event.external_id,
+        )
+    )
+    if not signature:
+        return {"status": "ignored", "reason": "unknown_envelope"}
+    if signature.status == "assinado":
+        return {"status": "already_processed"}
+    if event.status != "signed":
+        signature.status = "recusado" if event.status == "refused" else signature.status
+        await session.commit()
+        return {"status": "noop", "provider_status": event.status}
+
+    quote = await _get_quote(session, company_id, signature.quote_id)
+    if not quote:
+        return {"status": "ignored", "reason": "quote_not_found"}
+
+    esign = await get_company_setting(session, company_id, "esignature")
+    api_key = esign.get("api_key", "")
+    signed_pdf = await clicksign.download_signed_document(
+        api_key=api_key, external_id=event.external_id
+    )
+
+    signature.status = "assinado"
+    signature.signed_at = datetime.now(UTC).replace(tzinfo=None)
+    signature.certificate_info = event.certificate_info
+
+    if quote.created_by_user_id:
+        attachment = await create_attachment(
+            session,
+            company_id,
+            quote.created_by_user_id,
+            entity_type="quote",
+            entity_id=quote.id,
+            filename=f"orcamento_assinado_{quote.number or quote.id}.pdf",
+            content_type="application/pdf",
+            data=signed_pdf,
+        )
+        if not isinstance(attachment, str):
+            signature.signed_pdf_attachment_id = attachment.id
+    else:
+        logger.warning(
+            "clicksign_signed_pdf_not_attached_no_creator", quote_id=quote.id, company_id=company_id
+        )
+
+    await record_event(
+        session,
+        company_id=company_id,
+        user_id=None,
+        actor_name=f"{signature.signer_name} (assinatura ICP-Brasil)",
+        entity_type="quote",
+        entity_id=quote.id,
+        event_type="signature_confirmed",
+        diff={"method": "icp_brasil", "provider": "clicksign"},
+    )
+
+    await decide_quote(session, company_id, signature.quote_id, True, None)
+    return {"status": "signed"}
 
 
 # ---------------------------------------------------------------------------

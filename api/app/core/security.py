@@ -306,3 +306,24 @@ def decode_quote_acceptance_token(token: str, secret: str) -> dict[str, Any]:
     if payload.get("type") != "quote_acceptance":
         raise jwt.InvalidTokenError("tipo de token inválido")
     return payload
+
+
+def create_esignature_webhook_token(*, company_id: int, secret: str) -> str:
+    """URL fixa que o tenant cola no painel do provedor de assinatura (Clicksign)
+    pra receber os eventos do envelope — não expira (é configurado uma vez, fora
+    do fluxo de request/response) e não carrega `sub` de usuário, só o
+    `company_id` pra permitir `set_tenant_context` antes de resolver o webhook
+    (mesmo motivo do claim em `create_quote_acceptance_token`)."""
+    payload: dict[str, Any] = {
+        "company_id": company_id,
+        "type": "esignature_webhook",
+        "iat": datetime.now(UTC),
+    }
+    return jwt.encode(payload, secret, algorithm=ALGORITHM)
+
+
+def decode_esignature_webhook_token(token: str, secret: str) -> dict[str, Any]:
+    payload: dict[str, Any] = jwt.decode(token, secret, algorithms=[ALGORITHM])
+    if payload.get("type") != "esignature_webhook":
+        raise jwt.InvalidTokenError("tipo de token inválido")
+    return payload

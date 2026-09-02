@@ -1,14 +1,19 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Search, Plus, X, Trash2, Send, Ban, Copy, Check, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Plus, X, Trash2, Send, Ban, Copy, Check, FileText, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CustomerOption } from "@/app/cadastros/clientes/actions";
 import { listCustomerOptionsAction } from "@/app/cadastros/clientes/actions";
 import type { QuoteDetail, QuoteItem, QuoteSummary } from "./actions";
 import {
   cancelQuoteAction, createQuoteAction, deleteQuoteAction, getQuoteAction,
-  listQuotesAction, sendQuoteAction, updateQuoteAction,
+  listQuotesAction, sendQuoteAction, startIcpSignatureAction, updateQuoteAction,
 } from "./actions";
+
+const SIGNATURE_METHOD_LABEL: Record<string, string> = {
+  simples: "Assinatura eletrônica simples",
+  icp_brasil: "Certificado digital ICP-Brasil",
+};
 
 function formatCurrency(value: string | null): string {
   if (value == null) return "—";
@@ -175,6 +180,9 @@ export function QuoteManager() {
   const [selectedQuote, setSelectedQuote] = useState<QuoteDetail | null>(null);
   const [modalMode, setModalMode] = useState<"none" | "form" | "detail">("none");
   const [copied, setCopied] = useState(false);
+  const [icpSignUrl, setIcpSignUrl] = useState<string | null>(null);
+  const [icpLoading, setIcpLoading] = useState(false);
+  const [icpError, setIcpError] = useState("");
 
   useEffect(() => {
     refresh(1, "", "");
@@ -194,6 +202,8 @@ export function QuoteManager() {
     setSelectedQuote(detail);
     setModalMode("detail");
     setCopied(false);
+    setIcpSignUrl(null);
+    setIcpError("");
   }
 
   function closeModal() {
@@ -237,6 +247,16 @@ export function QuoteManager() {
     if (!res.ok) { alert(res.error ?? "Erro ao excluir."); return; }
     closeModal();
     await refresh();
+  }
+
+  async function handleStartIcp(id: number) {
+    setIcpLoading(true);
+    setIcpError("");
+    const res = await startIcpSignatureAction(id);
+    setIcpLoading(false);
+    if (!res.ok || !res.sign_url) { setIcpError(res.error ?? "Erro ao solicitar assinatura ICP-Brasil."); return; }
+    await openDetail(id);
+    setIcpSignUrl(res.sign_url);
   }
 
   function copyLink(url: string) {
@@ -362,12 +382,27 @@ export function QuoteManager() {
                   </>
                 )}
                 {selectedQuote.status === "enviado" && (
-                  <button type="button" className="secondary-button" onClick={() => handleCancel(selectedQuote.id)}><Ban size={14} /> Cancelar envio</button>
+                  <>
+                    <button type="button" className="secondary-button" onClick={() => handleCancel(selectedQuote.id)}><Ban size={14} /> Cancelar envio</button>
+                    <button type="button" className="secondary-button" disabled={icpLoading} onClick={() => handleStartIcp(selectedQuote.id)}>
+                      <ShieldCheck size={14} /> {icpLoading ? "Solicitando…" : "Solicitar assinatura ICP-Brasil"}
+                    </button>
+                  </>
                 )}
                 <a className="secondary-button" href={`/api/commercial/quotes/${selectedQuote.id}/pdf`} target="_blank" rel="noopener noreferrer">
                   <FileText size={14} /> Exportar PDF
                 </a>
               </div>
+
+              {icpError && <div className="kanban-form-error">{icpError}</div>}
+
+              {selectedQuote.signature_method && (
+                <p className="cell-sub">
+                  Assinatura: {SIGNATURE_METHOD_LABEL[selectedQuote.signature_method] ?? selectedQuote.signature_method}
+                  {" — "}{selectedQuote.signature_status === "assinado" ? "concluída" : "pendente"}
+                  {selectedQuote.signature_signed_at ? ` em ${selectedQuote.signature_signed_at}` : ""}
+                </p>
+              )}
 
               {selectedQuote.acceptance_url && (
                 <div className="quote-link-box">
@@ -375,6 +410,18 @@ export function QuoteManager() {
                   <div className="quote-link-copy">
                     <input readOnly value={selectedQuote.acceptance_url} onClick={(e) => (e.target as HTMLInputElement).select()} />
                     <button type="button" className="icon-button" onClick={() => copyLink(selectedQuote.acceptance_url!)}>
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {icpSignUrl && (
+                <div className="quote-link-box">
+                  <span>Link de assinatura ICP-Brasil (envie ao cliente):</span>
+                  <div className="quote-link-copy">
+                    <input readOnly value={icpSignUrl} onClick={(e) => (e.target as HTMLInputElement).select()} />
+                    <button type="button" className="icon-button" onClick={() => copyLink(icpSignUrl)}>
                       {copied ? <Check size={14} /> : <Copy size={14} />}
                     </button>
                   </div>

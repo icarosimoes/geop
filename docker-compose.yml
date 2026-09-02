@@ -75,6 +75,7 @@ services:
       ENVIRONMENT: development
       WEB_ORIGINS: http://localhost:3000,http://localhost:3001
       REGISTRO_WEB_URL: ${REGISTRO_WEB_URL:-http://localhost:3000}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:8000/api/v1}
       # Três roles, três propósitos (ver docs/infra/role-restrita-postgres.md e
       # docs/auditoria-2026-07-03.md#c1): `registro` é dona das tabelas — só
       # `alembic upgrade head` (rodado pelo comando de startup do container) usa

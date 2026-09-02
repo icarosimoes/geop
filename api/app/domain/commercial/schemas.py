@@ -141,6 +141,9 @@ class QuoteOut(BaseModel):
     decision_note: str | None
     items: list[QuoteItemOut] = []
     acceptance_url: str | None = None
+    signature_method: str | None = None
+    signature_status: str | None = None
+    signature_signed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -219,6 +222,29 @@ class PublicQuoteOut(BaseModel):
 
 class PublicQuoteDecision(BaseModel):
     decision_note: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Assinatura eletrônica do orçamento
+# ---------------------------------------------------------------------------
+
+
+class SignatureOtpRequest(BaseModel):
+    signer_name: str = Field(..., min_length=3, max_length=255)
+    signer_document: str = Field(..., min_length=11, max_length=20)
+
+
+class SignatureOtpRequestOut(BaseModel):
+    status: str
+    otp_sent_at: datetime | None
+
+
+class SignatureOtpConfirm(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class IcpSignatureOut(BaseModel):
+    sign_url: str
 
 
 # ---------------------------------------------------------------------------

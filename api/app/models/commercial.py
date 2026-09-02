@@ -9,8 +9,20 @@ domínio inteiramente)."""
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TenantMixin, TimestampMixin
@@ -19,6 +31,8 @@ QUOTE_STATUSES = ("rascunho", "enviado", "aceito", "recusado", "expirado", "canc
 SALE_STATUSES = ("confirmada", "entregue", "concluida", "cancelada")
 INSTALLATION_STATUSES = ("pendente", "agendada", "em_andamento", "concluida", "cancelada")
 INVOICE_STATUSES = ("pendente", "faturada", "paga", "atrasada", "cancelada")
+SIGNATURE_METHODS = ("simples", "icp_brasil")
+SIGNATURE_STATUSES = ("pendente", "otp_enviado", "assinado", "recusado", "expirado")
 
 
 class Customer(Base, TenantMixin, TimestampMixin):
@@ -131,6 +145,45 @@ class Sale(Base, TenantMixin, TimestampMixin):
     # app/domain/integrations_erpsolid/) — não lido/escrito por nada ainda.
     erpsolid_external_id: Mapped[str | None] = mapped_column(String(60))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class QuoteSignature(Base, TenantMixin, TimestampMixin):
+    """Evidência de assinatura do orçamento pelo cliente — 1:1 com `Quote`
+    (`quote_id` único). `method="simples"` é o padrão (sem custo de terceiro):
+    nome/CPF do signatário + confirmação por código enviado por e-mail (OTP),
+    com hash do PDF e IP/user-agent como trilha de auditoria (ver
+    commercial/service.py::request_signature_otp/confirm_signature_otp).
+    `method="icp_brasil"` delega a assinatura a um provedor credenciado junto
+    às ACs (Certisign, Soluti, Serasa, Safeweb, Valid, BRy — inclusive
+    certificado em nuvem) via `app/integrations/esignature/`, dando a
+    presunção legal de autenticidade da MP 2.200-2/2001 (ver
+    commercial/service.py::start_icp_signature/handle_clicksign_webhook)."""
+
+    __tablename__ = "quote_signatures"
+    __table_args__ = (Index("ix_quote_signatures_provider_envelope", "provider_envelope_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id", ondelete="CASCADE"), unique=True)
+    method: Mapped[str] = mapped_column(String(20), default="simples")
+    status: Mapped[str] = mapped_column(String(20), default="pendente", index=True)
+    signer_name: Mapped[str | None] = mapped_column(String(255))
+    signer_document: Mapped[str | None] = mapped_column(String(20))  # CPF
+    signer_email: Mapped[str | None] = mapped_column(String(255))
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    document_hash: Mapped[str | None] = mapped_column(String(64))  # sha256 hex do PDF
+    otp_code_hash: Mapped[str | None] = mapped_column(String(100))
+    otp_sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    otp_verified_at: Mapped[datetime | None] = mapped_column(DateTime)
+    otp_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    provider: Mapped[str | None] = mapped_column(String(30))  # "clicksign"
+    provider_envelope_id: Mapped[str | None] = mapped_column(String(120))
+    provider_signer_id: Mapped[str | None] = mapped_column(String(120))
+    certificate_info: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    signed_pdf_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("attachments.id", ondelete="SET NULL")
+    )
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class SalesInvoice(Base, TenantMixin, TimestampMixin):

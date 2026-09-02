@@ -3,10 +3,11 @@
 import { Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TenantUser } from "@/lib/api";
-import type { EvolutionSettings, BrevoSettings, CompanyInfo, RegistryOption, TimeclockSettings } from "@/app/actions";
+import type { EvolutionSettings, BrevoSettings, EsignatureSettings, CompanyInfo, RegistryOption, TimeclockSettings } from "@/app/actions";
 import {
   getEvolutionSettings, saveEvolutionSettings,
   getBrevoSettings, saveBrevoSettings, testBrevoSettings,
+  getEsignatureSettings, saveEsignatureSettings,
   getTimeclockSettings, saveTimeclockSettings,
   fetchRegistryOptions,
 } from "@/app/actions";
@@ -302,6 +303,63 @@ export function EvolutionSettingsSection() {
       <label>URL da instância<input name="evo_api_url" type="url" required placeholder="https://evo.suaempresa.com" defaultValue={config?.api_url ?? ""}/></label>
       <label>API Key<input name="evo_api_key" type="password" required placeholder="Chave de autenticação"/><small className="field-hint">Evolution → Manager → Global API Key ou API Key da instância</small></label>
       <label>Nome da instância<input name="evo_instance" type="text" required placeholder="instancia-padrao" defaultValue={config?.instance ?? ""}/><small className="field-hint">Nome exato da instância criada no painel da Evolution API</small></label>
+    </section>
+    <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar conexão"}</button>
+  </form>;
+}
+
+export function EsignatureSettingsSection() {
+  const [config, setConfig] = useState<EsignatureSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    getEsignatureSettings().then(setConfig).catch(() => setConfig({ has_credentials: false }));
+  }, []);
+
+  function copyWebhook() {
+    if (!config?.webhook_url) return;
+    navigator.clipboard.writeText(config.webhook_url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return <form className="settings-evolution" onSubmit={async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setFeedback(null);
+    const fd = new FormData(e.currentTarget);
+    const result = await saveEsignatureSettings({ api_key: String(fd.get("esign_api_key")) });
+    setSaving(false);
+    if (result.ok) {
+      const updated = await getEsignatureSettings().catch(() => ({ has_credentials: true }));
+      setConfig(updated);
+      setFeedback("Configuração salva com sucesso.");
+    } else {
+      setFeedback(result.error ?? "Erro ao salvar.");
+    }
+  }}>
+    <section>
+      <h2>Assinatura digital ICP-Brasil (Clicksign)</h2>
+      <p>
+        Permite que o cliente assine orçamentos com certificado digital ICP-Brasil — A1/A3 ou
+        certificado em nuvem (Certisign, Soluti, Serasa, Safeweb, Valid, BRy) — com validade
+        jurídica plena (MP 2.200-2/2001). Sem essa configuração, o cliente ainda pode assinar
+        pelo método simples (código por e-mail), sem custo.
+      </p>
+      {config?.has_credentials && !feedback && <p className="settings-connected">Conectado</p>}
+      {feedback && <p className={feedback.includes("sucesso") ? "settings-connected" : "settings-error"}>{feedback}</p>}
+      <label>API Key da Clicksign<input name="esign_api_key" type="password" required placeholder={config?.has_credentials ? "Configurada — preencha para trocar" : "Token de acesso da Clicksign"}/></label>
+      {config?.has_credentials && config.webhook_url && (
+        <label>URL de webhook (cole no painel da Clicksign)
+          <div className="quote-link-copy">
+            <input readOnly value={config.webhook_url} onClick={(e) => (e.target as HTMLInputElement).select()} />
+            <button type="button" className="icon-button" onClick={copyWebhook}>{copied ? "✓" : "Copiar"}</button>
+          </div>
+        </label>
+      )}
     </section>
     <button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar conexão"}</button>
   </form>;
