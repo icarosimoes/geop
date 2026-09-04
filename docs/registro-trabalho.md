@@ -1953,3 +1953,69 @@ limpos; `npx tsc --noEmit` limpo em `web/`; os 3 PDFs baixados de ponta a ponta 
 na API (200, `%PDF` nos primeiros bytes) e visualmente pelo navegador real com o driver
 Playwright do projeto — screenshot dos três botões ("Exportar PDF"/"Baixar PDF") nos três
 lugares, sem erro de console.
+
+## 2026-09-04 — Limpeza de branches obsoletas e Skills do Claude Code portadas de erpsolid/aloji
+
+### Limpeza de branches remotas
+
+Auditoria pedida pelo usuário ("vê o que está pendente"): das 23 branches remotas não
+mergeadas em `main` (`git branch -r --no-merged main`), nenhuma tinha conteúdo real — todas
+já haviam sido incorporadas via squash/cherry-pick sob outro hash (confirmado lendo o código
+atual, não só a entrada de `docs/registro-trabalho.md` de 2026-08-30 que já documentava essa
+mesma varredura). Todas as 23 apagadas do remoto (`git push origin --delete`); a maioria já
+não existia mais no GitHub (branches de PR fechada), só desatualizada no `git branch -r`
+local. `git branch -r --no-merged main` ficou vazio depois do `fetch --prune`.
+
+Corrigido de passagem: item de `docs/backlog.md` (seção P13) que marcava
+`has_credentials: true` incondicional em `save_brevo`/`save_evolution` como pendente —
+já corrigido em produção desde a PR #19 (`has_credentials=bool(body.api_key)`), confirmado
+por grep no código atual.
+
+### Skills do Claude Code: revisão de `~/dev/erpsolid` e `~/dev/aloji`
+
+Pedido do usuário: revisar os agentes/skills desses dois projetos irmãos (mesma stack
+FastAPI+Next.js) e trazer pro GEOP o que fosse viável. O GEOP não tinha nenhuma Skill/Agent
+do Claude Code até então (`.claude/` só continha `worktrees`/`scheduled_tasks.lock`) — já
+existia, porém, uma camada de documentação equivalente em `docs/agentes/*.md` (adaptada do
+Aloji em 2026-08-14, formato condensado sem gatilho automático).
+
+Cada skill dos dois projetos foi lida por completo e checada contra o código real do GEOP
+antes de decidir portar — não copiada às cegas. Resultado, em `.claude/skills/`:
+
+- **`geop-saas`**: RLS do GEOP tem mecanismo próprio (3 roles Postgres — `registro`/
+  `registro_app`/`registro_platform` —, GUC `app.current_company_id`, sem `bypass_rls()`
+  como helper reaproveitável) — reescrita do zero a partir de `api/app/core/rls.py` e dos
+  incidentes já documentados (RLS inerte, `is_local` errado, ordem de GUC em pontos de
+  entrada de auth, `RETURNING`+RLS), não uma tradução do `jarvis-saas` de nenhum dos dois
+  projetos (mecanismos incompatíveis nos dois).
+- **`geop-performance`**: confirmado que o GEOP é o inverso do erpsolid/Aloji em um ponto
+  central — 32 das 35 `page.tsx` de `web/app/` são Server Component de verdade, não Client
+  Component com fetch via `useEffect`. Guia reescrito pro padrão real (Server Component +
+  `actions.ts` por feature), mantendo as regras universais (Promise.all, agregação SQL,
+  N+1) com referência a onde já estão aplicadas no GEOP (`dashboard/service.py`,
+  `commercial/service.py::funnel`, `roles/service.py::selectinload`).
+- **`geop-seguranca`**: confirmado que `pip-audit` já roda no CI (`ci.yml`, job "API —
+  pip-audit") mas `npm audit` de `web/`/`admin`/`colaborador` não — gap real, documentado
+  como tal em vez de assumido.
+- **`geop-infra`** (novo, sem equivalente em `docs/agentes/`): adaptado de
+  `jarvis-infra-disco.md` do Aloji pra topologia real do GEOP (stack `registro`,
+  `/opt/registro`, serviços `registro_*`, hosts `*.geop.solidsd.com.br`), incluindo os
+  incidentes reais já registrados aqui (Redis 0/1 réplicas de 2026-07-14, `IMAGE_TAG`
+  desatualizado do rebranding de 2026-08-14).
+- **`geop-backlog`** (novo): metodologia de `jarvis-backlog` do erpsolid, genérica o
+  suficiente pra portar quase sem alteração — é a mesma disciplina já aplicada na limpeza
+  de branches acima (verificar contra o código antes de confiar no que já está escrito).
+
+**Descartados deliberadamente** (avaliados, não portados — motivo documentado em
+`docs/agentes/README.md`): `jarvis-financeiro` (GEOP não tem domínio de Payables/
+Receivables/DRE), `jarvis-asaas`/`jarvis-channex`/`jarvis-motor-reservas`/`jarvis-crm` do
+Aloji (motor de reservas, channel manager e CRM de hóspede não existem no GEOP — o Asaas
+do GEOP é só cobrança da própria assinatura SaaS, já coberto por `jarvis-asaas.md`
+existente), `jarvis-layout-crud` do erpsolid (arquitetura de frontend incompatível: Client
+Component + `actions.ts` único por projeto lá, Server Component + `actions.ts` por feature
+aqui), `jarvis-teste-e2e` do erpsolid (script de invariantes específico do domínio
+financeiro — candidato a adaptar futuramente pro módulo comercial, não construído agora).
+
+`docs/agentes/README.md` atualizado com a relação entre as duas camadas (docs condensados
+vs. Skills operacionais com gatilho automático) — os `docs/agentes/*.md` existentes não
+foram reescritos, continuam corretos e servem como a versão resumida.

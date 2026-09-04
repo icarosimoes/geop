@@ -452,7 +452,7 @@ feito normalmente; CI e `Publish images` seguem falhando por billing. Deploy man
 
 - [x] `POST /settings/brevo/test` — envia e-mail de teste com a config já salva do tenant.
 - [x] Seção "Testar envio" na aba Integrações de `/configuracoes` (`web/`), só visível com `has_credentials: true`.
-- [ ] `save_brevo`/`save_evolution` (`api/app/domain/settings/router.py`) retornam `has_credentials: true` incondicionalmente no `POST`, mesmo com campos vazios — só o `GET` seguinte corrige. Inconsistência pequena, não corrigida por estar fora do escopo desta rodada.
+- [x] `save_brevo`/`save_evolution` (`api/app/domain/settings/router.py`) retornam `has_credentials: true` incondicionalmente no `POST`, mesmo com campos vazios — só o `GET` seguinte corrige. Corrigido na PR #19 (`has_credentials=bool(body.api_key)`).
 - [ ] Sem verificação de que o remetente/domínio está autenticado (SPF/DKIM) na conta Brevo antes do teste — a API do Registro não tem visibilidade disso; documentado como limitação conhecida em `api-reference.md`.
 - [x] Tenant sem Brevo próprio cai para a config do painel admin (`get_effective_email_config`) em vez de simplesmente não enviar e-mail de notificação — cascata tenant → painel admin → env vars, testada em `test_prepare_notifications_falls_back_to_platform_brevo`.
 
