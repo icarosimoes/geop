@@ -48,7 +48,7 @@ export const TimelineEntrySchema = z.object({
   event_type: z.string(),
   user: z.string(),
   message: z.string().nullable(),
-  changes: z.record(z.object({ from: z.string(), to: z.string() })).nullable(),
+  changes: z.record(z.string(), z.object({ from: z.string(), to: z.string() })).nullable(),
   created_at: z.string(),
 });
 
