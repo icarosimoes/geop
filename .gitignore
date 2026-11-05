@@ -43,3 +43,8 @@ backups/
 *.log
 *.tmp
 *.swp
+
+# Obsidian (cofre em docs/): configuracao versionada, layout da janela e cache de cada maquina fora do git
+docs/.obsidian/workspace*.json
+docs/.obsidian/cache
+docs/.obsidian/plugins/
